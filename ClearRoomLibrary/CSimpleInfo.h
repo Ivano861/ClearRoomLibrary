@@ -44,6 +44,25 @@ namespace Unmanaged
 		void nikon_3700();
 		int minolta_z2();
 		void parse_phase_one(int base);
+		void parse_ciff(int offset, int length, int depth);
+		void ciff_block_1030();
+		void parse_fuji(int offset);
+		int parse_jpeg(int offset);
+		void parse_riff();
+		void parse_qt(int end);
+		void parse_smal(int offset, int fsize);
+		void parse_cine();
+		void parse_redcine();
+		void parse_rollei();
+		void parse_sinar_ia();
+		void parse_minolta(int base);
+		void parse_foveon();
+		char* foveon_gets(int offset, char* str, int len);
+		void parse_kodak_ifd(int base);
+		void parse_mos(int offset);
+
+		void sony_decrypt(unsigned* data, int len, int start, int key);
+		void linear_table(unsigned len);
 		void romm_coeff(float romm_cam[3][3]);
 
 
