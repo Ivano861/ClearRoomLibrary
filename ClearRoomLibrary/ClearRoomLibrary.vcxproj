@@ -91,9 +91,12 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeader>Use</PrecompiledHeader>
+      <AdditionalIncludeDirectories>
+      </AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalDependencies />
+      <AdditionalDependencies>
+      </AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -133,13 +136,27 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Info.h" />
+    <ClInclude Include="CDecoder.h" />
+    <ClInclude Include="CError.h" />
+    <ClInclude Include="CReader.h" />
+    <ClInclude Include="CSimpleInfo.h" />
+    <ClInclude Include="CWriter.h" />
+    <ClInclude Include="jhead.h" />
+    <ClInclude Include="ph1.h" />
+    <ClInclude Include="SimpleInfo.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Stdafx.h" />
+    <ClInclude Include="tiff_ifd.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AssemblyInfo.cpp" />
-    <ClCompile Include="Info.cpp" />
+    <ClCompile Include="CDecoder.cpp" />
+    <ClCompile Include="CError.cpp" />
+    <ClCompile Include="CReader.cpp" />
+    <ClCompile Include="CSimpleInfo.cpp" />
+    <ClCompile Include="CWriter.cpp" />
+    <ClCompile Include="jhead.cpp" />
+    <ClCompile Include="SimpleInfo.cpp" />
     <ClCompile Include="Stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
