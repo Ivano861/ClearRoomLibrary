@@ -305,8 +305,6 @@ void CSimpleInfo::GetInfo()
 		"Mamiya", "Minolta", "Motorola", "Kodak", "Konica", "Leica",
 		"Nikon", "Nokia", "Olympus", "Ricoh", "Pentax", "Phase One",
 		"Samsung", "Sigma", "Sinar", "Sony" };
-	int hlen, flen, fsize, zero_fsize = 1;
-	jhead jh;
 
 	tiff_flip = flip = filters = UINT_MAX;	/* unknown */
 	raw_height = raw_width = fuji_width = fuji_layout = cr2_slice[0] = 0;
@@ -347,13 +345,14 @@ void CSimpleInfo::GetInfo()
 	tiff_nifds = 0;
 
 	m_reader->SetOrder(m_reader->get2());
-	hlen = m_reader->get4();
+	int hlen = m_reader->get4();
 
 	m_reader->Seek(0, SEEK_SET);
 	char head[32];
 	m_reader->Read(head, 1, 32);
 	m_reader->Seek(0, SEEK_END);
-	flen = fsize = m_reader->GetPosition();
+	int flen = m_reader->GetPosition();
+	int fsize = flen;
 
 	char* cp;
 	if ((cp = (char *)memmem(head, 32, "MMMM", 4)) ||
@@ -526,6 +525,7 @@ void CSimpleInfo::GetInfo()
 	else if (!memcmp(head, "CI", 2))
 		parse_cine();
 
+	int zero_fsize = 1;
 	if (make[0] == 0)
 	{
 		zero_fsize = 0;
@@ -549,7 +549,8 @@ void CSimpleInfo::GetInfo()
 				filters = 0x1010101 * table[i].cf;
 				colors = 4 - !((filters & filters >> 1) & 0x5555);
 				load_flags = table[i].lf;
-				switch (tiff_bps = (fsize - data_offset) * 8 / (raw_width*raw_height))
+				tiff_bps = (fsize - data_offset) * 8 / (raw_width*raw_height);
+				switch (tiff_bps)
 				{
 				case 6:
 					load_raw = minolta_rd175_load_raw;
@@ -1236,6 +1237,7 @@ void CSimpleInfo::GetInfo()
 	}
 	else if (!strcmp(make, "Leaf"))
 	{
+		jhead jh;
 		maximum = 0x3fff;
 		m_reader->Seek(data_offset, SEEK_SET);
 		if (jhead::ljpeg_start(jh, *m_reader, dng_version, true) && jh.bits == 15)
@@ -1613,6 +1615,7 @@ void CSimpleInfo::GetInfo()
 	if (filters == UINT_MAX) filters = 0x94949494;
 	if (thumb_offset && !thumb_height)
 	{
+		jhead jh;
 		m_reader->Seek(thumb_offset, SEEK_SET);
 		if (jhead::ljpeg_start(jh, *m_reader, dng_version, true))
 		{
@@ -1683,13 +1686,12 @@ notraw:
 
 int CSimpleInfo::parse_tiff(int base)
 {
-	int doff;
-
 	m_reader->Seek(base, SEEK_SET);
 	m_reader->SetOrder(m_reader->get2());
 	if (m_reader->GetOrder() != 0x4949 && m_reader->GetOrder() != 0x4d4d)
 		return 0;
 	m_reader->get2();
+	int doff;
 	while ((doff = m_reader->get4()))
 	{
 		m_reader->Seek(doff + base, SEEK_SET);
@@ -1701,25 +1703,28 @@ int CSimpleInfo::parse_tiff(int base)
 
 int CSimpleInfo::parse_tiff_ifd(int base)
 {
-	unsigned entries, tag, type, len, plen = 16, save;
-	int ifd, use_cm = 0, cfa, i, j, c, ima_len = 0;
+	unsigned tag, type, len, plen = 16, save;
+	int cfa, i, j, c;
+	int ima_len = 0;
 	char software[64], *cbuf, *cp;
 	unsigned char cfa_pat[16], cfa_pc[] = { 0,1,2,3 }, tab[256];
 	double cc[4][4], cm[4][3], cam_xyz[4][3], num;
 	double ab[] = { 1,1,1,1 }, asn[] = { 0,0,0,0 }, xyz[] = { 1,1,1 };
 	unsigned sony_curve[] = { 0,0,0,0,0,4095 };
 	unsigned *buf, sony_offset = 0, sony_length = 0, sony_key = 0;
-	jhead jh;
 
 	if (tiff_nifds >= sizeof tiff_ifd / sizeof tiff_ifd[0])
 		return 1;
-	ifd = tiff_nifds++;
+	int ifd = tiff_nifds++;
 	for (j = 0; j < 4; j++)
 		for (i = 0; i < 4; i++)
 			cc[j][i] = i == j;
-	entries = m_reader->get2();
+	unsigned entries = m_reader->get2();
 	if (entries > 512)
 		return 1;
+
+	bool use_cm = false;
+
 	while (entries--)
 	{
 		tiff_get(base, &tag, &type, &len, &save);
@@ -1816,6 +1821,7 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 			if (!tiff_ifd[ifd].bps && tiff_ifd[ifd].offset > 0)
 			{
 				m_reader->Seek(tiff_ifd[ifd].offset, SEEK_SET);
+				jhead jh;
 				if (jhead::ljpeg_start(jh, *m_reader, dng_version, true))
 				{
 					tiff_ifd[ifd].comp = 6;
@@ -1951,7 +1957,8 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 			if ((plen = len) > 16)
 				plen = 16;
 			m_reader->Read(cfa_pat, 1, plen);
-			for (colors = cfa = i = 0; i < plen && colors < 4; i++)
+			colors = cfa = 0;
+			for (i = 0; i < plen && colors < 4; i++)
 			{
 				colors += !(cfa & (1 << cfa_pat[i]));
 				cfa |= 1 << cfa_pat[i];
@@ -2044,7 +2051,8 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 			ima_len = len;
 			break;
 		case 46279:
-			if (!ima_len) break;
+			if (!ima_len)
+				break;
 			m_reader->Seek(38, SEEK_CUR);
 		case 46274:
 			m_reader->Seek(40, SEEK_CUR);
@@ -2084,7 +2092,8 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 			break;
 		case 50454:			/* Sinar tag */
 		case 50455:
-			if (!(cbuf = (char *)malloc(len))) break;
+			if (!(cbuf = (char *)malloc(len)))
+				break;
 			m_reader->Read(cbuf, 1, len);
 			for (cp = cbuf - 1; cp && cp < cbuf + len; cp = strchr(cp, '\n'))
 				if (!strncmp(++cp, "Neutral ", 8))
@@ -2133,7 +2142,7 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 		guess_cfa_pc:
 			for (size_t c = 0; c < colors; c++)
 				tab[cfa_pc[c]] = c;
-			cdesc[c] = 0;
+			cdesc[colors] = 0;
 			for (i = 16; i--; )
 				filters = filters << 2 | tab[cfa_pat[i % plen]];
 			filters -= !filters;
@@ -2179,7 +2188,7 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 			for (size_t c = 0; c < colors; c++)
 				for (j = 0; j < 3; j++)
 					cm[c][j] = m_reader->getreal(type);
-			use_cm = 1;
+			use_cm = true;
 			break;
 		case 50723:			/* CameraCalibration1 */
 		case 50724:			/* CameraCalibration2 */
@@ -2281,11 +2290,11 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 
 void CSimpleInfo::parse_exif(int base)
 {
-	unsigned kodak, entries, tag, type, len, save, c;
+	unsigned tag, type, len, save;
 	double expo;
 
-	kodak = !strncmp(make, "EASTMAN", 7) && tiff_nifds < 3;
-	entries = m_reader->get2();
+	unsigned kodak = !strncmp(make, "EASTMAN", 7) && tiff_nifds < 3;
+	unsigned entries = m_reader->get2();
 	while (entries--)
 	{
 		tiff_get(base, &tag, &type, &len, &save);
@@ -2306,8 +2315,7 @@ void CSimpleInfo::parse_exif(int base)
 			break;
 		case 37377:
 			if ((expo = -m_reader->getreal(type)) < 128)
-			tiff_ifd[tiff_nifds - 1].shutter =
-			shutter = pow(2, expo);
+				tiff_ifd[tiff_nifds - 1].shutter = shutter = pow(2, expo);
 			break;
 		case 37378:
 			aperture = pow(2, m_reader->getreal(type) / 2);
@@ -2326,8 +2334,11 @@ void CSimpleInfo::parse_exif(int base)
 			break;
 		case 41730:
 			if (m_reader->get4() == 0x20002)
-				for (exif_cfa = c = 0; c < 8; c += 2)
+			{
+				exif_cfa = 0;
+				for (size_t c = 0; c < 8; c += 2)
 					exif_cfa |= m_reader->GetChar() * 0x01010101 << c;
+			}
 		}
 		m_reader->Seek(save, SEEK_SET);
 	}
@@ -2335,9 +2346,9 @@ void CSimpleInfo::parse_exif(int base)
 
 void CSimpleInfo::parse_gps(int base)
 {
-	unsigned entries, tag, type, len, save, c;
+	unsigned tag, type, len, save;
 
-	entries = m_reader->get2();
+	unsigned entries = m_reader->get2();
 	while (entries--)
 	{
 		tiff_get(base, &tag, &type, &len, &save);
@@ -2395,10 +2406,14 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 		0xbe,0x57,0x19,0x32,0x7e,0x2a,0xd0,0xb8,0xba,0x29,0x00,0x3c,0x52,0x7d,0xa8,0x49,
 		0x3b,0x2d,0xeb,0x25,0x49,0xfa,0xa3,0xaa,0x39,0xa7,0xc5,0xa7,0x50,0x11,0x36,0xfb,
 		0xc6,0x67,0x4a,0xf5,0xa5,0x12,0x65,0x7e,0xb0,0xdf,0xaf,0x4e,0xb3,0x61,0x7f,0x2f } };
-	unsigned offset = 0, entries, tag, type, len, save, c;
-	unsigned ver97 = 0, serial = 0, i, wbi = 0, wb[4] = { 0,0,0,0 };
-	unsigned char buf97[324], ci, cj, ck;
-	short morder, sorder = m_reader->GetOrder();
+	unsigned tag, type, len, save;
+	unsigned ver97 = 0;
+	unsigned serial = 0;
+	unsigned wbi = 0;
+	unsigned wb[4] = { 0,0,0,0 };
+	unsigned i;
+	unsigned char buf97[324];
+	short sorder = m_reader->GetOrder();
 	char buf[10];
 	/*
 	The MakerNote might have its own TIFF header (possibly with
@@ -2431,7 +2446,7 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 		m_reader->SetOrder(m_reader->get2());
 		if (m_reader->get2() != 42)
 			goto quit;
-		offset = m_reader->get4();
+		unsigned offset = m_reader->get4();
 		m_reader->Seek(offset - 8, SEEK_CUR);
 	}
 	else if (!strcmp(buf, "OLYMPUS") || !strcmp(buf, "PENTAX "))
@@ -2462,9 +2477,10 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 		if (!strncmp(make, "SAMSUNG", 7))
 			base = m_reader->GetPosition();
 	}
-	entries = m_reader->get2();
-	if (entries > 1000) return;
-	morder = m_reader->GetOrder();
+	unsigned entries = m_reader->get2();
+	if (entries > 1000)
+		return;
+	short morder = m_reader->GetOrder();
 	while (entries--)
 	{
 		m_reader->SetOrder(morder);
@@ -2504,7 +2520,8 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 				cam_mul[(c << 1 | c >> 1) & 3] = m_reader->getreal(type);
 		if (tag == 0xd && type == 7 && m_reader->get2() == 0xaaaa)
 		{
-			for (c = i = 2; (unsigned short)c != 0xbbbb && i < len; i++)
+			unsigned c = 2;
+			for (i = 2; (unsigned short)c != 0xbbbb && i < len; i++)
 				c = c << 8 | m_reader->GetChar();
 			while ((i += 4) < len - 5)
 				if (m_reader->get4() == 257 && (i = len) && (c = (m_reader->get4(), m_reader->GetChar())) < 3)
@@ -2541,12 +2558,15 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 			if (tag == 0x1c) tag = 0x1017;
 		}
 		if (tag == 0x1d)
+		{
+			unsigned c;
 			while ((c = m_reader->GetChar()) && c != EOF)
 				serial = serial * 10 + (isdigit(c) ? c - '0' : c % 10);
+		}
 		if (tag == 0x29 && type == 1)
 		{
-			c = wbi < 18 ? "012347800000005896"[wbi] - '0' : 0;
-			m_reader->Seek(8 + c * 32, SEEK_CUR);
+			unsigned y = wbi < 18 ? "012347800000005896"[wbi] - '0' : 0;
+			m_reader->Seek(8 + y * 32, SEEK_CUR);
 			for (size_t c = 0; c < 4; c++)
 				cam_mul[c ^ (c >> 1) ^ 1] = m_reader->get4();
 		}
@@ -2616,9 +2636,9 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 		}
 		if (tag == 0xa7 && (unsigned)(ver97 - 200) < 17)
 		{
-			ci = xlat[0][serial & 0xff];
-			cj = xlat[1][m_reader->GetChar() ^ m_reader->GetChar() ^ m_reader->GetChar() ^ m_reader->GetChar()];
-			ck = 0x60;
+			unsigned char ci = xlat[0][serial & 0xff];
+			unsigned char cj = xlat[1][m_reader->GetChar() ^ m_reader->GetChar() ^ m_reader->GetChar() ^ m_reader->GetChar()];
+			unsigned char ck = 0x60;
 			for (i = 0; i < 324; i++)
 				buf97[i] ^= (cj += ci * ck++);
 			i = "66666>666;6A;:;55"[ver97 - 200] - '0';
@@ -2642,7 +2662,7 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 		{		/* Nikon Capture Note */
 			m_reader->SetOrder(0x4949);
 			m_reader->Seek(22, SEEK_CUR);
-			for (offset = 22; offset + 22 < len; offset += 22 + i)
+			for (unsigned offset = 22; offset + 22 < len; offset += 22 + i)
 			{
 				tag = m_reader->get4();
 				m_reader->Seek(14, SEEK_CUR);
@@ -2729,9 +2749,9 @@ quit:
 
 void CSimpleInfo::parse_thumb_note(int base, unsigned toff, unsigned tlen)
 {
-	unsigned entries, tag, type, len, save;
+	unsigned tag, type, len, save;
 
-	entries = m_reader->get2();
+	unsigned entries = m_reader->get2();
 	while (entries--)
 	{
 		tiff_get(base, &tag, &type, &len, &save);
@@ -2743,15 +2763,15 @@ void CSimpleInfo::parse_thumb_note(int base, unsigned toff, unsigned tlen)
 
 void CSimpleInfo::get_timestamp(int reversed)
 {
-	struct tm t;
 	char str[20];
-	int i;
-
 	str[19] = 0;
 	if (reversed)
-		for (i = 19; i--; ) str[i] = m_reader->GetChar();
+		for (size_t i = 19; i--; )
+			str[i] = m_reader->GetChar();
 	else
 		m_reader->Read(str, 19, 1);
+
+	tm t;
 	memset(&t, 0, sizeof t);
 	if (sscanf_s(str, "%d:%d:%d %d:%d:%d", &t.tm_year, &t.tm_mon,
 		&t.tm_mday, &t.tm_hour, &t.tm_min, &t.tm_sec) != 6)
@@ -2775,13 +2795,13 @@ void CSimpleInfo::tiff_get(unsigned base, unsigned *tag, unsigned *type, unsigne
 
 void CSimpleInfo::apply_tiff()
 {
-	int max_samp = 0, ties = 0, os, ns, raw = -1, thm = -1, i;
-	struct jhead jh;
+	int max_samp = 0, ties = 0, raw = -1, thm = -1;
 
 	thumb_misc = 16;
 	if (thumb_offset)
 	{
 		m_reader->Seek(thumb_offset, SEEK_SET);
+		jhead jh;
 		if (jhead::ljpeg_start(jh, *m_reader, dng_version, true))
 		{
 			thumb_misc = jh.bits;
@@ -2789,19 +2809,19 @@ void CSimpleInfo::apply_tiff()
 			thumb_height = jh.high;
 		}
 	}
-	for (i = tiff_nifds; i--; )
+	for (size_t i = tiff_nifds; i--; )
 	{
 		if (tiff_ifd[i].shutter)
 			shutter = tiff_ifd[i].shutter;
 		tiff_ifd[i].shutter = shutter;
 	}
-	for (i = 0; i < tiff_nifds; i++)
+	for (size_t i = 0; i < tiff_nifds; i++)
 	{
 		if (max_samp < tiff_ifd[i].samples)
 			max_samp = tiff_ifd[i].samples;
 		if (max_samp > 3) max_samp = 3;
-		os = raw_width*raw_height;
-		ns = tiff_ifd[i].width*tiff_ifd[i].height;
+		int os = raw_width*raw_height;
+		int ns = tiff_ifd[i].width*tiff_ifd[i].height;
 		if (tiff_bps)
 		{
 			os *= tiff_bps;
@@ -2831,7 +2851,7 @@ void CSimpleInfo::apply_tiff()
 		tile_width = INT_MAX;
 	if (!tile_length)
 		tile_length = INT_MAX;
-	for (i = tiff_nifds; i--; )
+	for (size_t i = tiff_nifds; i--; )
 		if (tiff_ifd[i].flip)
 			tiff_flip = tiff_ifd[i].flip;
 	if (raw >= 0 && !load_raw)
@@ -2930,7 +2950,7 @@ void CSimpleInfo::apply_tiff()
 			is_raw = 0;
 		}
 	}
-	for (i = 0; i < tiff_nifds; i++)
+	for (size_t i = 0; i < tiff_nifds; i++)
 	{
 		if (i != raw && tiff_ifd[i].samples == max_samp &&
 			tiff_ifd[i].width * tiff_ifd[i].height / (SQR(tiff_ifd[i].bps) + 1) >
@@ -4933,7 +4953,7 @@ void CSimpleInfo::parse_rollei()
 {
 	char line[128];
 	char* val;
-	struct tm t;
+	tm t;
 
 	m_reader->Seek(0, SEEK_SET);
 	memset(&t, 0, sizeof t);

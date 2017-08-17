@@ -19,8 +19,6 @@ namespace Unmanaged
 		static void Release(CSimpleInfo* info);
 
 	private:
-		char* memmem(char* haystack, size_t haystacklen, char* needle, size_t needlelen);
-		char* strcasestr(char* haystack, const char* needle);
 		int parse_tiff(int base);
 		int parse_tiff_ifd(int base);
 		void parse_exif(int base);
@@ -65,6 +63,8 @@ namespace Unmanaged
 		void linear_table(unsigned len);
 		void romm_coeff(float romm_cam[3][3]);
 
+		char* memmem(char* haystack, size_t haystacklen, char* needle, size_t needlelen);
+		char* strcasestr(char* haystack, const char* needle);
 
 	public:
 		enum LoadRawType
@@ -140,10 +140,32 @@ namespace Unmanaged
 		static const size_t LenCDesc = 5;
 		static const size_t LenDesc = 512;
 
-		unsigned short raw_height, raw_width, height, width, top_margin, left_margin;
-		unsigned flip, tiff_flip, filters, colors;
+		char make[LenMake];
+		char model[LenModel];
+		char model2[LenModel2];
+		char artist[LenArtist];
+		char desc[LenDesc];
+		char cdesc[LenCDesc];
+		float flash_used;
+		float iso_speed;
+		float shutter;
+		float aperture;
+		float focal_len;
+		time_t timestamp;
+		unsigned short width;
+		unsigned short height;
+		unsigned colors;
+		int output_bps = 8;
+		unsigned flip;
+
+		unsigned tiff_flip, filters;
+		unsigned short raw_height, raw_width, top_margin, left_margin;
+		int output_color = 1, output_tiff = 0, med_passes = 0;
+
+		float canon_ev;
+
+
 		float cam_mul[4], pre_mul[4], cmatrix[3][4], rgb_cam[3][4];
-		float flash_used, canon_ev, iso_speed, shutter, aperture, focal_len;
 		unsigned short *raw_image, (*image)[4], cblack[4102];
 		off_t thumb_offset, meta_offset, profile_offset;
 		unsigned shot_order, kodak_cbpp, exif_cfa, unique_id;
@@ -153,7 +175,6 @@ namespace Unmanaged
 		unsigned black, maximum, mix_green, raw_color, zero_is_bad;
 		unsigned zero_after_ff, is_raw, dng_version, is_foveon, data_error;
 		unsigned tile_width, tile_length, gpsdata[32], load_flags;
-		char cdesc[LenCDesc], desc[LenDesc], make[LenMake], model[LenModel], model2[LenModel2], artist[LenArtist];
 		off_t strip_offset, data_offset;
 		unsigned short white[8][8], curve[0x10000], cr2_slice[3], sraw_mul[4];
 		double pixel_aspect, aber[4] = { 1,1,1,1 }, gamm[6] = { 0.45,4.5,0,0,0,0 };
@@ -162,8 +183,10 @@ namespace Unmanaged
 		int mask[8][4];
 		int half_size = 0, four_color_rgb = 0, document_mode = 0, highlight = 0;
 		int verbose = 0, use_auto_wb = 0, use_camera_wb = 0, use_camera_matrix = 1;
-		time_t timestamp;
-
+		float bright = 1, user_mul[4] = { 0,0,0,0 }, threshold = 0;
+		int no_auto_bright = 0;
+		unsigned greybox[4] = { 0, 0, UINT_MAX, UINT_MAX };
+		int histogram[4][0x2000];
 		const float d65_white[3] = { 0.950456f, 1.0f, 1.088754f };
 
 		const double xyz_rgb[3][3] = {			/* XYZ from RGB */

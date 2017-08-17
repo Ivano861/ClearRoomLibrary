@@ -78,3 +78,12 @@ int jhead::ljpeg_start(jhead& jh, CReader& reader, unsigned int dngVersion, bool
 	//return zero_after_ff = 1;
 	return 1;
 }
+
+void jhead::ljpeg_end(jhead& jh)
+{
+	for (size_t c = 0; c < 4; c++)
+		if (jh.free[c])
+			::free(jh.free[c]);
+
+	::free(jh.row);
+}
