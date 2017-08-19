@@ -1651,23 +1651,6 @@ dng_skip:
 	if (!load_raw || height < 22 || width < 22 ||
 		tiff_bps > 16 || tiff_samples > 6 || colors > 4)
 		is_raw = 0;
-#ifdef NO_JASPER
-	if (load_raw == redcine_load_raw)
-	{
-		fprintf(stderr, _("%s: You must link dcraw with %s!!\n"),
-			ifname, "libjasper");
-		is_raw = 0;
-	}
-#endif
-#ifdef NO_JPEG
-	if (load_raw == kodak_jpeg_load_raw ||
-		load_raw == lossy_dng_load_raw)
-	{
-		fprintf(stderr, _("%s: You must link dcraw with %s!!\n"),
-			ifname, "libjpeg");
-		is_raw = 0;
-	}
-#endif
 	if (!cdesc[0])
 		strcpy_s(cdesc, LenCDesc, colors == 3 ? "RGBG" : "GMCY");
 	if (!raw_height) raw_height = height;
