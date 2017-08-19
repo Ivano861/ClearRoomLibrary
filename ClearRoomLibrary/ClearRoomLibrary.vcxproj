@@ -91,12 +91,12 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeader>Use</PrecompiledHeader>
-      <AdditionalIncludeDirectories>
-      </AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)lcms2\include;$(ProjectDir)JasperLib;$(ProjectDir)jpeglib\Include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <AdditionalDependencies>
       </AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)JasperLib;$(ProjectDir)lcms2;$(ProjectDir)jpeglib</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
