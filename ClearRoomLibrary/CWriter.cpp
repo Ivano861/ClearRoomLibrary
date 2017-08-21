@@ -3,68 +3,68 @@
 
 using namespace Unmanaged;
 
-CWriter::CWriter() : m_ifp(nullptr), m_order(0), m_dataError(0)
+CWriter::CWriter() : _ifp(nullptr), _order(0), _dataError(0)
 {
 }
 
 CWriter::CWriter(const char *fileName) : CWriter()
 {
 	int len = strlen(fileName) + 1;
-	m_fileName = new char[len];
-	strcpy_s(m_fileName, len, fileName);
+	_fileName = new char[len];
+	strcpy_s(_fileName, len, fileName);
 
-	errno_t err = fopen_s(&m_ifp, m_fileName, "wb");
+	errno_t err = fopen_s(&_ifp, _fileName, "wb");
 	if (err)
 		throw err;
 }
 
 CWriter::~CWriter()
 {
-	if (m_ifp != nullptr)
-		fclose(m_ifp);
+	if (_ifp != nullptr)
+		fclose(_ifp);
 
-	delete m_fileName;
+	delete _fileName;
 }
 
 CWriter* CWriter::CreateTempFile()
 {
 	CWriter* result = new CWriter();
 
-	tmpfile_s(&result->m_ifp);
+	tmpfile_s(&result->_ifp);
 
 	return result;
 }
 
 const char* CWriter::GetFileName()
 {
-	return m_fileName;
+	return _fileName;
 }
 
 void CWriter::SetOrder(short order)
 {
-	m_order = order;
+	_order = order;
 }
 
 short  CWriter::GetOrder()
 {
-	return m_order;
+	return _order;
 }
 
 int CWriter::Seek(long offset, int origin)
 {
-	return fseek(m_ifp, offset, origin);
+	return fseek(_ifp, offset, origin);
 }
 
 size_t CWriter::Write(void* buffer, size_t elementSize, size_t elementCount)
 {
-	return fwrite(buffer, elementSize, elementCount, m_ifp);
+	return fwrite(buffer, elementSize, elementCount, _ifp);
 }
 
 long CWriter::GetPosition()
 {
-	return ftell(m_ifp);
+	return ftell(_ifp);
 }
 int CWriter::Eof()
 {
-	return feof(m_ifp);
+	return feof(_ifp);
 }

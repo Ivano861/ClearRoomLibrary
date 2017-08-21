@@ -14,10 +14,10 @@ namespace Unmanaged
 		static CWriter* CreateTempFile();
 
 	private:
-		FILE* m_ifp;
-		short m_order;
-		unsigned m_dataError;
-		char *m_fileName;
+		FILE* _ifp;
+		short _order;
+		unsigned _dataError;
+		char* _fileName;
 
 	public:
 		const char* GetFileName();

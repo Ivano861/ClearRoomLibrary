@@ -54,6 +54,18 @@
     <ClInclude Include="ph1.h">
       <Filter>File di intestazione\Unmanaged</Filter>
     </ClInclude>
+    <ClInclude Include="COptions.h">
+      <Filter>File di intestazione\Unmanaged</Filter>
+    </ClInclude>
+    <ClInclude Include="Options.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="CRaw.h">
+      <Filter>File di intestazione\Unmanaged</Filter>
+    </ClInclude>
+    <ClInclude Include="Raw.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AssemblyInfo.cpp">
@@ -81,6 +93,18 @@
       <Filter>File di origine\Unmanaged</Filter>
     </ClCompile>
     <ClCompile Include="CWriter.cpp">
+      <Filter>File di origine\Unmanaged</Filter>
+    </ClCompile>
+    <ClCompile Include="COptions.cpp">
+      <Filter>File di origine\Unmanaged</Filter>
+    </ClCompile>
+    <ClCompile Include="Options.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="Raw.cpp">
+      <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="CRaw.cpp">
       <Filter>File di origine\Unmanaged</Filter>
     </ClCompile>
   </ItemGroup>

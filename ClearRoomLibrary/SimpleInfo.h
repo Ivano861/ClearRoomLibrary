@@ -3,27 +3,27 @@
 #pragma once
 
 #include "CSimpleInfo.h"
+#include "Options.h"
 
 using namespace System;
 using namespace Unmanaged;
 
 namespace ClearRoomLibrary
 {
-
 	public ref class SimpleInfo sealed
 	{
-	private:
+	internal:
 		// Constructor
-		SimpleInfo();
+		SimpleInfo(CSimpleInfo* info);
 
 		// Destructor
 		~SimpleInfo();
 
+	public:
+
+
 	private:
 		// Private members
-		CSimpleInfo* m_info;
-
-	public:
-		static SimpleInfo^ GetInfo(String^ fileName);
+		CSimpleInfo* _info;
 	};
 }

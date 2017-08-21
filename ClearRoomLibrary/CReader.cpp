@@ -6,76 +6,76 @@
 
 using namespace Unmanaged;
 
-CReader::CReader(const char *fileName) : m_ifp(nullptr), m_order(0), m_dataError(0)
+CReader::CReader(const char *fileName) : _ifp(nullptr), _order(0), _dataError(0)
 {
 	int len = strlen(fileName) + 1;
-	m_fileName = new char[len];
-	strcpy_s(m_fileName, len, fileName);
+	_fileName = new char[len];
+	strcpy_s(_fileName, len, fileName);
 
-	errno_t err = fopen_s(&m_ifp, m_fileName, "rb");
+	errno_t err = fopen_s(&_ifp, _fileName, "rb");
 	if (err)
 		throw err;
 }
 
 CReader::~CReader()
 {
-	if (m_ifp != nullptr)
-		fclose(m_ifp);
+	if (_ifp != nullptr)
+		fclose(_ifp);
 
-	delete m_fileName;
+	delete _fileName;
 }
 
 const char* CReader::GetFileName()
 {
-	return m_fileName;
+	return _fileName;
 }
 
 void CReader::SetOrder(short order)
 {
-	m_order = order;
+	_order = order;
 }
 
 short  CReader::GetOrder()
 {
-	return m_order;
+	return _order;
 }
 
 int CReader::Seek(long offset, int origin)
 {
-	return fseek(m_ifp, offset, origin);
+	return fseek(_ifp, offset, origin);
 }
 
 size_t CReader::Read(void* buffer, size_t elementSize, size_t elementCount)
 {
-	return fread(buffer, elementSize, elementCount, m_ifp);
+	return fread(buffer, elementSize, elementCount, _ifp);
 }
 
 long CReader::GetPosition() const
 {
-	return ftell(m_ifp);
+	return ftell(_ifp);
 }
 int CReader::Eof()
 {
-	return feof(m_ifp);
+	return feof(_ifp);
 }
 int CReader::GetChar()
 {
-	return fgetc(m_ifp);
+	return fgetc(_ifp);
 }
 
 char* CReader::GetString(char* str, int n)
 {
-	return fgets(str, n, m_ifp);
+	return fgets(str, n, _ifp);
 }
 
 int CReader::scanf(const char *format, void* arg)
 {
-	return fscanf_s(m_ifp, format, arg);
+	return fscanf_s(_ifp, format, arg);
 }
 
 unsigned short CReader::sget2(unsigned char* s)
 {
-	if (m_order == 0x4949)		/* "II" means little-endian */
+	if (_order == 0x4949)		/* "II" means little-endian */
 		return s[0] | s[1] << 8;
 	else						/* "MM" means big-endian */
 		return s[0] << 8 | s[1];
@@ -84,13 +84,13 @@ unsigned short CReader::sget2(unsigned char* s)
 unsigned short CReader::get2()
 {
 	unsigned char str[2] = { 0xff,0xff };
-	fread(str, 1, 2, m_ifp);
+	fread(str, 1, 2, _ifp);
 	return sget2(str);
 }
 
 unsigned CReader::sget4(unsigned char* s)
 {
-	if (m_order == 0x4949)
+	if (_order == 0x4949)
 		return s[0] | s[1] << 8 | s[2] << 16 | s[3] << 24;
 	else
 		return s[0] << 24 | s[1] << 16 | s[2] << 8 | s[3];
@@ -99,7 +99,7 @@ unsigned CReader::sget4(unsigned char* s)
 unsigned CReader::get4()
 {
 	unsigned char str[4] = { 0xff,0xff,0xff,0xff };
-	fread(str, 1, 4, m_ifp);
+	fread(str, 1, 4, _ifp);
 	return sget4(str);
 }
 
@@ -138,18 +138,18 @@ double CReader::getreal(int type)
 		return u.d / (signed int)get4();
 	case 11: return int_to_float(get4());
 	case 12:
-		rev = 7 * ((m_order == 0x4949) == (ntohs(0x1234) == 0x1234));
+		rev = 7 * ((_order == 0x4949) == (ntohs(0x1234) == 0x1234));
 		for (i = 0; i < 8; i++)
-			u.c[i ^ rev] = fgetc(m_ifp);
+			u.c[i ^ rev] = fgetc(_ifp);
 		return u.d;
-	default: return fgetc(m_ifp);
+	default: return fgetc(_ifp);
 	}
 }
 
 void CReader::read_shorts(unsigned short* pixel, unsigned count)
 {
-	if (fread(pixel, 2, count, m_ifp) < count)
+	if (fread(pixel, 2, count, _ifp) < count)
 		CError::derror(*this);
-	if ((m_order == 0x4949) == (ntohs(0x1234) == 0x1234))
+	if ((_order == 0x4949) == (ntohs(0x1234) == 0x1234))
 		_swab((char*)pixel, (char*)pixel, count * 2);
 }

@@ -31,12 +31,13 @@ namespace TestClearRoomLibrary
         private void SelectImageButton_Click(object sender, RoutedEventArgs e)
         {
             // Create an instance of the open file dialog box.
-            OpenFileDialog openFileImage = new OpenFileDialog();
-
-            // Set filter options and filter index.
-            openFileImage.Filter = "Image Files (.jpg)|*.jpg|Image Tiff (.tiff)|*.tiff|All Files (*.*)|*.*";
-            openFileImage.FilterIndex = 3;
-            openFileImage.Multiselect = false;
+            OpenFileDialog openFileImage = new OpenFileDialog
+            {
+                // Set filter options and filter index.
+                Filter = "Image Files (.jpg)|*.jpg|Image Tiff (.tiff)|*.tiff|All Files (*.*)|*.*",
+                FilterIndex = 3,
+                Multiselect = false
+            };
 
             // Call the ShowDialog method to show the dialog box.
             bool? userClickedOK = openFileImage.ShowDialog();
@@ -62,9 +63,13 @@ namespace TestClearRoomLibrary
                 return;
             }
 
-            using (SimpleInfo si = SimpleInfo.GetInfo(FilenameSelected.Text))
+            using (Raw raw = new Raw(FilenameSelected.Text))
             {
-                //si.Dispose();
+                using (SimpleInfo simple = raw.GetInfo())
+                {
+
+                }
+                //raw.Dispose();
             }
         }
     }

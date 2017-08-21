@@ -4,28 +4,13 @@
 #include "SimpleInfo.h"
 
 using namespace ClearRoomLibrary;
-using namespace msclr::interop;
 
-SimpleInfo::SimpleInfo()
+SimpleInfo::SimpleInfo(CSimpleInfo* info)
 {
-	m_info = nullptr;
+	_info = info;
 }
 
-ClearRoomLibrary::SimpleInfo::~SimpleInfo()
+SimpleInfo::~SimpleInfo()
 {
-	if (m_info != nullptr)
-		CSimpleInfo::Release(m_info);
-
-	m_info = nullptr;
-}
-
-SimpleInfo^ SimpleInfo::GetInfo(String^ fileName)
-{
-	SimpleInfo^ info = gcnew SimpleInfo();
-
-	marshal_context^ context = gcnew marshal_context();
-	info->m_info = CSimpleInfo::GetInfo(context->marshal_as<const char*>(fileName));
-	delete context;
-
-	return info;
+	_info = nullptr;
 }

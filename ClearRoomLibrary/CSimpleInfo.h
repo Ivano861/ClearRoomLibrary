@@ -9,14 +9,14 @@ namespace Unmanaged
 {
 	class CSimpleInfo
 	{
-	private:
-		CSimpleInfo();
+	public:
+		CSimpleInfo(CReader* reader);
 		~CSimpleInfo();
 
 		void GetInfo();
 	public:
-		static CSimpleInfo* GetInfo(const char* fileName);
-		static void Release(CSimpleInfo* info);
+		//static CSimpleInfo* GetInfo(CReader* reader);
+		//static void Release(CSimpleInfo* info);
 
 	private:
 		int parse_tiff(int base);
@@ -131,7 +131,7 @@ namespace Unmanaged
 		};
 
 	private:
-		CReader* m_reader;
+		CReader* _reader;
 
 		static const size_t LenMake = 64;
 		static const size_t LenModel = 64;
@@ -155,12 +155,10 @@ namespace Unmanaged
 		unsigned short width;
 		unsigned short height;
 		unsigned colors;
-		int output_bps = 8;
 		unsigned flip;
 
 		unsigned tiff_flip, filters;
 		unsigned short raw_height, raw_width, top_margin, left_margin;
-		int output_color = 1, output_tiff = 0, med_passes = 0;
 
 		float canon_ev;
 
@@ -170,22 +168,19 @@ namespace Unmanaged
 		off_t thumb_offset, meta_offset, profile_offset;
 		unsigned shot_order, kodak_cbpp, exif_cfa, unique_id;
 		unsigned thumb_length, meta_length, profile_length;
-		unsigned thumb_misc, *oprof, fuji_layout, shot_select = 0, multi_out = 0;
+		unsigned thumb_misc, *oprof, fuji_layout, shot_select = 0;
 		unsigned tiff_nifds, tiff_samples, tiff_bps, tiff_compress;
 		unsigned black, maximum, mix_green, raw_color, zero_is_bad;
 		unsigned zero_after_ff, is_raw, dng_version, is_foveon, data_error;
 		unsigned tile_width, tile_length, gpsdata[32], load_flags;
 		off_t strip_offset, data_offset;
 		unsigned short white[8][8], curve[0x10000], cr2_slice[3], sraw_mul[4];
-		double pixel_aspect, aber[4] = { 1,1,1,1 }, gamm[6] = { 0.45,4.5,0,0,0,0 };
+		double pixel_aspect, gamm[6] = { 0.45,4.5,0,0,0,0 };
 		unsigned short shrink, iheight, iwidth, fuji_width, thumb_width, thumb_height;
 		char *meta_data, xtrans[6][6], xtrans_abs[6][6];
 		int mask[8][4];
-		int half_size = 0, four_color_rgb = 0, document_mode = 0, highlight = 0;
-		int verbose = 0, use_auto_wb = 0, use_camera_wb = 0, use_camera_matrix = 1;
-		float bright = 1, user_mul[4] = { 0,0,0,0 }, threshold = 0;
-		int no_auto_bright = 0;
-		unsigned greybox[4] = { 0, 0, UINT_MAX, UINT_MAX };
+		int half_size = 0;
+		int use_camera_wb = 0, use_camera_matrix = 1;
 		int histogram[4][0x2000];
 		const float d65_white[3] = { 0.950456f, 1.0f, 1.088754f };
 
