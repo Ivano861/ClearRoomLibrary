@@ -8,6 +8,8 @@ namespace Unmanaged
 		COptions();
 		~COptions();
 
+		// TODO: implementation
+		/*
 		// Set threshold for wavelet denoising
 		// <num>
 		float& Threshold();
@@ -44,8 +46,8 @@ namespace Unmanaged
 
 		// Use/don't use an embedded color matrix
 		void UseCameraMatrix(bool useEmbedded);
-
 	private:
+	*/
 		float threshold = 0;
 
 		float bright = 1;

@@ -17,6 +17,7 @@ namespace Unmanaged
 	public:
 		const char* GetFileName();
 
+		FILE* GetFILE();
 		void SetOrder(short order);
 		short GetOrder();
 

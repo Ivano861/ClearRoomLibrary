@@ -3,17 +3,9 @@
 #include "jhead.h"
 #include "CError.h"
 #include <time.h>
+#include "Macro.h"
 
 using namespace Unmanaged;
-
-#define SQR(x) ((x)*(x))
-#define ABS(x) (((int)(x) ^ ((int)(x) >> 31)) - ((int)(x) >> 31))
-#define MIN(a,b) ((a) < (b) ? (a) : (b))
-#define MAX(a,b) ((a) > (b) ? (a) : (b))
-#define LIM(x,min,max) MAX(min,MIN(x,max))
-#define ULIM(x,y,z) ((y) < (z) ? LIM(x,y,z) : LIM(x,z,y))
-#define CLIP(x) LIM((int)(x),0,65535)
-#define SWAP(a,b) { a=a+b; b=a-b; a=a-b; }
 
 #pragma region Costructors
 CSimpleInfo::CSimpleInfo(CReader* reader)
@@ -30,21 +22,6 @@ CSimpleInfo::~CSimpleInfo()
 #pragma endregion
 
 #pragma region Public methods
-//CSimpleInfo* CSimpleInfo::GetInfo(CReader* reader)
-//{
-//	CSimpleInfo* result = new CSimpleInfo(reader);
-//	result->_reader = reader;
-//	result->GetInfo();
-//	return result;
-//}
-//
-//void CSimpleInfo::Release(CSimpleInfo* info)
-//{
-//	delete info;
-//}
-#pragma endregion
-
-#pragma region Private methods
 void CSimpleInfo::GetInfo()
 {
 	static const short pana[][6] = {
@@ -306,10 +283,9 @@ void CSimpleInfo::GetInfo()
 	memset(white, 0, sizeof white);
 	memset(mask, 0, sizeof mask);
 	thumb_offset = thumb_length = thumb_width = thumb_height = 0;
-	load_raw = unknown_load_raw;
-	load_raw = unknown_load_raw;
-	thumb_load_raw = unknown_load_raw;
-	write_thumb = jpeg_thumb;
+	load_raw = LoadRawType::unknown_load_raw;
+	thumb_load_raw = LoadRawType::unknown_load_raw;
+	write_thumb = WriteThumbType::jpeg_thumb;
 	data_offset = meta_offset = meta_length = tiff_bps = tiff_compress = 0;
 	kodak_cbpp = zero_after_ff = dng_version = load_flags = 0;
 	timestamp = shot_order = tiff_samples = black = is_foveon = 0;
@@ -355,7 +331,7 @@ void CSimpleInfo::GetInfo()
 		{
 			data_offset = hlen;
 			parse_ciff(hlen, flen - hlen, 0);
-			load_raw = canon_load_raw;
+			load_raw = LoadRawType::canon_load_raw;
 		}
 		else if (parse_tiff(0))
 			apply_tiff();
@@ -389,13 +365,13 @@ void CSimpleInfo::GetInfo()
 	{
 		strcpy_s(make, LenMake, "Apple");
 		strcpy_s(model, LenModel, "QuickTake 100");
-		load_raw = quicktake_100_load_raw;
+		load_raw = LoadRawType::quicktake_100_load_raw;
 	}
 	else if (!strcmp(head, "qktn"))
 	{
 		strcpy_s(make, LenMake, "Apple");
 		strcpy_s(model, LenModel, "QuickTake 150");
-		load_raw = kodak_radc_load_raw;
+		load_raw = LoadRawType::kodak_radc_load_raw;
 	}
 	else if (!memcmp(head, "FUJIFILM", 8))
 	{
@@ -412,7 +388,7 @@ void CSimpleInfo::GetInfo()
 			if (is_raw == 2 && shot_select)
 				parse_fuji(i);
 		}
-		load_raw = unpacked_load_raw;
+		load_raw = LoadRawType::unpacked_load_raw;
 		_reader->Seek(100 + 28 * (shot_select > 0), SEEK_SET);
 		parse_tiff(data_offset = _reader->get4());
 		parse_tiff(thumb_offset + 12);
@@ -439,7 +415,7 @@ void CSimpleInfo::GetInfo()
 		_reader->get2();
 		raw_width = _reader->get2();
 		raw_height = _reader->get2();
-		load_raw = nokia_load_raw;
+		load_raw = LoadRawType::nokia_load_raw;
 		filters = 0x61616161;
 	}
 	else if (!memcmp(head, "NOKIARAW", 8))
@@ -455,10 +431,10 @@ void CSimpleInfo::GetInfo()
 		switch (tiff_bps)
 		{
 		case  8:
-			load_raw = eight_bit_load_raw;
+			load_raw = LoadRawType::eight_bit_load_raw;
 			break;
 		case 10:
-			load_raw = nokia_load_raw;
+			load_raw = LoadRawType::nokia_load_raw;
 		}
 		top_margin = i / (width * tiff_bps / 8) - height;
 		raw_height = height + top_margin;
@@ -475,7 +451,7 @@ void CSimpleInfo::GetInfo()
 		_reader->Seek(668, SEEK_SET);
 		_reader->Read(model, 1, LenModel);
 		data_offset = 4096;
-		load_raw = packed_load_raw;
+		load_raw = LoadRawType::packed_load_raw;
 		load_flags = 88;
 		filters = 0x61616161;
 	}
@@ -489,7 +465,7 @@ void CSimpleInfo::GetInfo()
 		_reader->Seek(56, SEEK_CUR);
 		_reader->Read(model, 1, 30);
 		data_offset = 0x10000;
-		load_raw = canon_rmf_load_raw;
+		load_raw = LoadRawType::canon_rmf_load_raw;
 		gamma_curve(0, 12.25, 1, 1023);
 	}
 	else if (!memcmp(head + 4, "RED1", 4))
@@ -497,7 +473,7 @@ void CSimpleInfo::GetInfo()
 		strcpy_s(make, LenMake, "Red");
 		strcpy_s(model, LenModel, "One");
 		parse_redcine();
-		load_raw = redcine_load_raw;
+		load_raw = LoadRawType::redcine_load_raw;
 		gamma_curve(1 / 2.4, 12.92, 1, 4095);
 		filters = 0x49494949;
 	}
@@ -540,20 +516,20 @@ void CSimpleInfo::GetInfo()
 				switch (tiff_bps)
 				{
 				case 6:
-					load_raw = minolta_rd175_load_raw;
+					load_raw = LoadRawType::minolta_rd175_load_raw;
 					break;
 				case 8:
-					load_raw = eight_bit_load_raw;
+					load_raw = LoadRawType::eight_bit_load_raw;
 					break;
 				case 10: case 12:
 					load_flags |= 128;
-					load_raw = packed_load_raw;
+					load_raw = LoadRawType::packed_load_raw;
 					break;
 				case 16:
 					_reader->SetOrder(0x4949 | 0x404 * (load_flags & 1));
 					tiff_bps -= load_flags >> 4;
 					tiff_bps -= load_flags = load_flags >> 1 & 7;
-					load_raw = unpacked_load_raw;
+					load_raw = LoadRawType::unpacked_load_raw;
 				}
 				maximum = (1 << tiff_bps) - (1 << table[i].max);
 			}
@@ -576,7 +552,7 @@ void CSimpleInfo::GetInfo()
 			data_offset = _reader->GetPosition() + 0x8000 - 32;
 			width = raw_width;
 			raw_width = 2611;
-			load_raw = nokia_load_raw;
+			load_raw = LoadRawType::nokia_load_raw;
 			filters = 0x16161616;
 		}
 		else
@@ -660,23 +636,23 @@ void CSimpleInfo::GetInfo()
 		{
 		case 0:
 		case 1:
-			load_raw = packed_dng_load_raw;
+			load_raw = LoadRawType::packed_dng_load_raw;
 			break;
 		case 7:
-			load_raw = lossless_dng_load_raw;
+			load_raw = LoadRawType::lossless_dng_load_raw;
 			break;
 		case 34892:
-			load_raw = lossy_dng_load_raw;
+			load_raw = LoadRawType::lossy_dng_load_raw;
 			break;
 		default:
-			load_raw = unknown_load_raw;
+			load_raw = LoadRawType::unknown_load_raw;
 		}
 		goto dng_skip;
 	}
 	if (!strcmp(make, "Canon") && !fsize && tiff_bps != 15)
 	{
 		if (!load_raw)
-			load_raw = lossless_jpeg_load_raw;
+			load_raw = LoadRawType::lossless_jpeg_load_raw;
 		for (size_t i = 0; i < sizeof canon / sizeof *canon; i++)
 		{
 			if (raw_width == canon[i][0] && raw_height == canon[i][1])
@@ -716,7 +692,7 @@ void CSimpleInfo::GetInfo()
 	if (!strcmp(make, "Nikon"))
 	{
 		if (!load_raw)
-			load_raw = packed_load_raw;
+			load_raw = LoadRawType::packed_load_raw;
 		if (model[0] == 'E')
 			load_flags |= !data_offset << 2 | 2;
 	}
@@ -758,7 +734,7 @@ void CSimpleInfo::GetInfo()
 		}
 		filters = 0;
 		tiff_samples = colors = 3;
-		load_raw = canon_sraw_load_raw;
+		load_raw = LoadRawType::canon_sraw_load_raw;
 	}
 	else if (!strcmp(model, "PowerShot 600"))
 	{
@@ -767,7 +743,7 @@ void CSimpleInfo::GetInfo()
 		raw_width = 896;
 		colors = 4;
 		filters = 0xe1e4e1e4;
-		load_raw = canon_600_load_raw;
+		load_raw = LoadRawType::canon_600_load_raw;
 	}
 	else if (!strcmp(model, "PowerShot A5") ||
 		!strcmp(model, "PowerShot A5 Zoom"))
@@ -795,7 +771,7 @@ void CSimpleInfo::GetInfo()
 	canon_a5:
 		colors = 4;
 		tiff_bps = 10;
-		load_raw = packed_load_raw;
+		load_raw = LoadRawType::packed_load_raw;
 		load_flags = 40;
 	}
 	else if (!strcmp(model, "PowerShot Pro90 IS") ||
@@ -1004,7 +980,7 @@ void CSimpleInfo::GetInfo()
 			width = 2880;
 			flip = 6;
 		}
-		else if (load_raw != packed_load_raw)
+		else if (load_raw != LoadRawType::packed_load_raw)
 			maximum = (is_raw == 2 && shot_select) ? 0x2f00 : 0x3e00;
 		top_margin = (raw_height - height) >> 2 << 1;
 		left_margin = (raw_width - width) >> 2 << 1;
@@ -1038,13 +1014,13 @@ void CSimpleInfo::GetInfo()
 	else if (!_stricmp(make, "Minolta"))
 	{
 		if (!load_raw && (maximum = 0xfff))
-			load_raw = unpacked_load_raw;
+			load_raw = LoadRawType::unpacked_load_raw;
 		if (!strncmp(model, "DiMAGE A", 8))
 		{
 			if (!strcmp(model, "DiMAGE A200"))
 				filters = 0x49494949;
 			tiff_bps = 12;
-			load_raw = packed_load_raw;
+			load_raw = LoadRawType::packed_load_raw;
 		}
 		else if (!strncmp(model, "ALPHA", 5) ||
 			!strncmp(model, "DYNAX", 5) ||
@@ -1052,7 +1028,7 @@ void CSimpleInfo::GetInfo()
 		{
 			sprintf_s(model + 20, LenModel - 20, "DYNAX %-10s", model + 6 + (model[0] == 'M'));
 			adobe_coeff(make, model + 20);
-			load_raw = packed_load_raw;
+			load_raw = LoadRawType::packed_load_raw;
 		}
 		else if (!strncmp(model, "DiMAGE G", 8))
 		{
@@ -1076,14 +1052,14 @@ void CSimpleInfo::GetInfo()
 			data_offset += 14;
 			filters = 0x61616161;
 		konica_400z:
-			load_raw = unpacked_load_raw;
+			load_raw = LoadRawType::unpacked_load_raw;
 			maximum = 0x3df;
 			_reader->SetOrder(0x4d4d);
 		}
 	}
 	else if (!strcmp(model, "*ist D"))
 	{
-		load_raw = unpacked_load_raw;
+		load_raw = LoadRawType::unpacked_load_raw;
 		data_error = -1;
 	}
 	else if (!strcmp(model, "*ist DS"))
@@ -1160,7 +1136,7 @@ void CSimpleInfo::GetInfo()
 		top_margin = 3;
 		_reader->SetOrder(0x4949);
 		filters = 0x49494949;
-		load_raw = unpacked_load_raw;
+		load_raw = LoadRawType::unpacked_load_raw;
 	}
 	else if (!strcmp(model, "STV680 VGA"))
 	{
@@ -1176,8 +1152,8 @@ void CSimpleInfo::GetInfo()
 	}
 	else if (!strcmp(make, "Hasselblad"))
 	{
-		if (load_raw == lossless_jpeg_load_raw)
-			load_raw = hasselblad_load_raw;
+		if (load_raw == LoadRawType::lossless_jpeg_load_raw)
+			load_raw = LoadRawType::hasselblad_load_raw;
 		if (raw_width == 7262)
 		{
 			height = 5444;
@@ -1218,21 +1194,21 @@ void CSimpleInfo::GetInfo()
 	}
 	else if (!strcmp(make, "Sinar"))
 	{
-		if (!load_raw) load_raw = unpacked_load_raw;
+		if (!load_raw) load_raw = LoadRawType::unpacked_load_raw;
 		if (is_raw > 1 && !shot_select && !half_size) filters = 0;
 		maximum = 0x3fff;
 	}
 	else if (!strcmp(make, "Leaf"))
 	{
-		jhead jh;
 		maximum = 0x3fff;
 		_reader->Seek(data_offset, SEEK_SET);
-		if (jhead::ljpeg_start(jh, *_reader, dng_version, true) && jh.bits == 15)
+		jhead jh(*_reader, *this, true);
+		if (jh._success && jh.jh.bits == 15)
 			maximum = 0x1fff;
 		if (tiff_samples > 1) filters = 0;
 		if (tiff_samples > 1 || tile_length < raw_height)
 		{
-			load_raw = leaf_hdr_load_raw;
+			load_raw = LoadRawType::leaf_hdr_load_raw;
 			raw_width = tile_width;
 		}
 		if ((width | height) == 2048)
@@ -1285,10 +1261,10 @@ void CSimpleInfo::GetInfo()
 	else if (!strcmp(make, "Leica") || !strcmp(make, "Panasonic"))
 	{
 		if ((flen - data_offset) / (raw_width * 8 / 7) == raw_height)
-			load_raw = panasonic_load_raw;
+			load_raw = LoadRawType::panasonic_load_raw;
 		if (!load_raw)
 		{
-			load_raw = unpacked_load_raw;
+			load_raw = LoadRawType::unpacked_load_raw;
 			load_flags = 4;
 		}
 		zero_is_bad = 1;
@@ -1309,7 +1285,7 @@ void CSimpleInfo::GetInfo()
 		height = 1718;
 		width = 2304;
 		filters = 0x16161616;
-		load_raw = packed_load_raw;
+		load_raw = LoadRawType::packed_load_raw;
 		load_flags = 30;
 	}
 	else if (!strcmp(make, "Olympus"))
@@ -1322,14 +1298,14 @@ void CSimpleInfo::GetInfo()
 		{
 			width -= 6; height -= 6;
 		}
-		if (load_raw == unpacked_load_raw)
+		if (load_raw == LoadRawType::unpacked_load_raw)
 			load_flags = 4;
 		tiff_bps = 12;
 		if (!strcmp(model, "E-300") ||
 			!strcmp(model, "E-500"))
 		{
 			width -= 20;
-			if (load_raw == unpacked_load_raw)
+			if (load_raw == LoadRawType::unpacked_load_raw)
 			{
 				maximum = 0xfc3;
 				memset(cblack, 0, sizeof cblack);
@@ -1338,7 +1314,7 @@ void CSimpleInfo::GetInfo()
 		else if (!strcmp(model, "E-330"))
 		{
 			width -= 30;
-			if (load_raw == unpacked_load_raw)
+			if (load_raw == LoadRawType::unpacked_load_raw)
 				maximum = 0xf79;
 		}
 		else if (!strcmp(model, "SP550UZ"))
@@ -1358,7 +1334,7 @@ void CSimpleInfo::GetInfo()
 		width = 3072;
 		filters = 0x61616161;
 		data_offset = 0x1a00;
-		load_raw = packed_load_raw;
+		load_raw = LoadRawType::packed_load_raw;
 	}
 	else if (!strcmp(model, "DSC-F828"))
 	{
@@ -1366,7 +1342,7 @@ void CSimpleInfo::GetInfo()
 		left_margin = 5;
 		mask[1][3] = -17;
 		data_offset = 862144;
-		load_raw = sony_load_raw;
+		load_raw = LoadRawType::sony_load_raw;
 		filters = 0x9c9c9c9c;
 		colors = 4;
 		strcpy_s(cdesc, LenCDesc, "RGBE");
@@ -1377,7 +1353,7 @@ void CSimpleInfo::GetInfo()
 		left_margin = 59;
 		mask[0][1] = 9;
 		data_offset = 787392;
-		load_raw = sony_load_raw;
+		load_raw = LoadRawType::sony_load_raw;
 	}
 	else if (!strcmp(make, "Sony") && raw_width == 3984)
 	{
@@ -1420,7 +1396,7 @@ void CSimpleInfo::GetInfo()
 		if (!strncmp(model, "DSC", 3))
 		{
 			tiff_bps = 14;
-			load_raw = unpacked_load_raw;
+			load_raw = LoadRawType::unpacked_load_raw;
 			black = 512;
 		}
 	}
@@ -1456,16 +1432,16 @@ void CSimpleInfo::GetInfo()
 			_reader->read_shorts(curve, 256);
 		}
 		else gamma_curve(0, 3.875, 1, 255);
-		load_raw = filters ? eight_bit_load_raw :
-			strcmp(model, "C330") ? kodak_c603_load_raw :
-			kodak_c330_load_raw;
+		load_raw = filters ? LoadRawType::eight_bit_load_raw :
+			strcmp(model, "C330") ? LoadRawType::kodak_c603_load_raw :
+			LoadRawType::kodak_c330_load_raw;
 		load_flags = tiff_bps > 16;
 		tiff_bps = 8;
 	}
 	else if (!_strnicmp(model, "EasyShare", 9))
 	{
 		data_offset = data_offset < 0x15000 ? 0x15000 : 0x17000;
-		load_raw = packed_load_raw;
+		load_raw = LoadRawType::packed_load_raw;
 	}
 	else if (!_stricmp(make, "Kodak"))
 	{
@@ -1516,7 +1492,7 @@ void CSimpleInfo::GetInfo()
 			pre_mul[1] = 1.179;
 			pre_mul[2] = 1.209;
 			pre_mul[3] = 1.036;
-			load_raw = eight_bit_load_raw;
+			load_raw = LoadRawType::eight_bit_load_raw;
 		}
 		else if (!strcmp(model, "40"))
 		{
@@ -1524,7 +1500,7 @@ void CSimpleInfo::GetInfo()
 			height = 512;
 			width = 768;
 			data_offset = 1152;
-			load_raw = kodak_radc_load_raw;
+			load_raw = LoadRawType::kodak_radc_load_raw;
 			tiff_bps = 12;
 		}
 		else if (strstr(model, "DC50"))
@@ -1533,7 +1509,7 @@ void CSimpleInfo::GetInfo()
 			height = 512;
 			width = 768;
 			data_offset = 19712;
-			load_raw = kodak_radc_load_raw;
+			load_raw = LoadRawType::kodak_radc_load_raw;
 		}
 		else if (strstr(model, "DC120"))
 		{
@@ -1541,7 +1517,7 @@ void CSimpleInfo::GetInfo()
 			height = 976;
 			width = 848;
 			pixel_aspect = height / 0.75 / width;
-			load_raw = tiff_compress == 7 ? kodak_jpeg_load_raw : kodak_dc120_load_raw;
+			load_raw = tiff_compress == 7 ? LoadRawType::kodak_jpeg_load_raw : LoadRawType::kodak_dc120_load_raw;
 		}
 		else if (!strcmp(model, "DCS200"))
 		{
@@ -1549,7 +1525,7 @@ void CSimpleInfo::GetInfo()
 			thumb_width = 192;
 			thumb_offset = 6144;
 			thumb_misc = 360;
-			write_thumb = layer_thumb;
+			write_thumb = WriteThumbType::layer_thumb;
 			black = 17;
 		}
 	}
@@ -1558,7 +1534,7 @@ void CSimpleInfo::GetInfo()
 		height = 512;
 		width = 768;
 		data_offset = 3632;
-		load_raw = kodak_radc_load_raw;
+		load_raw = LoadRawType::kodak_radc_load_raw;
 		filters = 0x61616161;
 		simple_coeff(2);
 	}
@@ -1595,19 +1571,19 @@ void CSimpleInfo::GetInfo()
 			left_margin = 8;
 		}
 		filters = 0x16161616;
-		load_raw = rollei_load_raw;
+		load_raw = LoadRawType::rollei_load_raw;
 	}
 	if (!model[0])
 		sprintf_s(model, LenModel, "%dx%d", width, height);
 	if (filters == UINT_MAX) filters = 0x94949494;
 	if (thumb_offset && !thumb_height)
 	{
-		jhead jh;
 		_reader->Seek(thumb_offset, SEEK_SET);
-		if (jhead::ljpeg_start(jh, *_reader, dng_version, true))
+		jhead jh(*_reader, *this, true);
+		if (jh._success)
 		{
-			thumb_width = jh.wide;
-			thumb_height = jh.high;
+			thumb_width = jh.jh.wide;
+			thumb_height = jh.jh.high;
 		}
 	}
 dng_skip:
@@ -1618,7 +1594,7 @@ dng_skip:
 		raw_color = 0;
 	}
 	if (raw_color) adobe_coeff(make, model);
-	if (load_raw == kodak_radc_load_raw)
+	if (load_raw == LoadRawType::kodak_radc_load_raw)
 		if (raw_color) adobe_coeff("Apple", "Quicktake");
 	if (fuji_width)
 	{
@@ -1652,7 +1628,9 @@ notraw:
 	if (flip == UINT_MAX)
 		flip = 0;
 }
+#pragma endregion
 
+#pragma region Private methods
 int CSimpleInfo::parse_tiff(int base)
 {
 	_reader->Seek(base, SEEK_SET);
@@ -1761,7 +1739,7 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 			raw_height = 0;
 			if (tiff_ifd[ifd].bps > 12)
 				break;
-			load_raw = packed_load_raw;
+			load_raw = LoadRawType::packed_load_raw;
 			load_flags = _reader->get4() ? 24 : 80;
 			break;
 		case 259:				/* Compression */
@@ -1781,7 +1759,7 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 			break;
 		case 280:				/* Panasonic RW2 offset */
 			if (type != 4) break;
-			load_raw = panasonic_load_raw;
+			load_raw = LoadRawType::panasonic_load_raw;
 			load_flags = 0x2008;
 		case 273:				/* StripOffset */
 		case 513:				/* JpegIFOffset */
@@ -1790,17 +1768,17 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 			if (!tiff_ifd[ifd].bps && tiff_ifd[ifd].offset > 0)
 			{
 				_reader->Seek(tiff_ifd[ifd].offset, SEEK_SET);
-				jhead jh;
-				if (jhead::ljpeg_start(jh, *_reader, dng_version, true))
+				jhead jh(*_reader, *this, true);
+				if (jh._success)
 				{
 					tiff_ifd[ifd].comp = 6;
-					tiff_ifd[ifd].width = jh.wide;
-					tiff_ifd[ifd].height = jh.high;
-					tiff_ifd[ifd].bps = jh.bits;
-					tiff_ifd[ifd].samples = jh.clrs;
-					if (!(jh.sraw || (jh.clrs & 1)))
-						tiff_ifd[ifd].width *= jh.clrs;
-					if ((tiff_ifd[ifd].width > 4 * tiff_ifd[ifd].height) & ~jh.clrs)
+					tiff_ifd[ifd].width = jh.jh.wide;
+					tiff_ifd[ifd].height = jh.jh.high;
+					tiff_ifd[ifd].bps = jh.jh.bits;
+					tiff_ifd[ifd].samples = jh.jh.clrs;
+					if (!(jh.jh.sraw || (jh.jh.clrs & 1)))
+						tiff_ifd[ifd].width *= jh.jh.clrs;
+					if ((tiff_ifd[ifd].width > 4 * tiff_ifd[ifd].height) & ~jh.jh.clrs)
 					{
 						tiff_ifd[ifd].width /= 2;
 						tiff_ifd[ifd].height *= 2;
@@ -1854,14 +1832,14 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 				tiff_ifd[ifd].tile_width = tiff_ifd[ifd].tile_length = 0;
 			if (len == 4)
 			{
-				load_raw = sinar_4shot_load_raw;
+				load_raw = LoadRawType::sinar_4shot_load_raw;
 				is_raw = 5;
 			}
 			break;
 		case 330:				/* SubIFDs */
 			if (!strcmp(model, "DSLR-A100") && tiff_ifd[ifd].width == 3872)
 			{
-				load_raw = sony_arw_load_raw;
+				load_raw = LoadRawType::sony_arw_load_raw;
 				data_offset = _reader->get4() + base;
 				ifd++;  break;
 			}
@@ -2009,9 +1987,15 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 			strip_offset = _reader->get4();
 			switch (tiff_ifd[ifd].comp)
 			{
-			case 32770: load_raw = samsung_load_raw;   break;
-			case 32772: load_raw = samsung2_load_raw;  break;
-			case 32773: load_raw = samsung3_load_raw;  break;
+			case 32770:
+				load_raw = LoadRawType::samsung_load_raw;
+				break;
+			case 32772:
+				load_raw = LoadRawType::samsung2_load_raw;
+				break;
+			case 32773:
+				load_raw = LoadRawType::samsung3_load_raw;
+				break;
 			}
 			break;
 		case 46275:			/* Imacon tags */
@@ -2051,11 +2035,11 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 				left_margin = top_margin = filters = flip = 0;
 			}
 			sprintf_s(model, LenModel, "Ixpress %d-Mp", height*width / 1000000);
-			load_raw = imacon_full_load_raw;
+			load_raw = LoadRawType::imacon_full_load_raw;
 			if (filters)
 			{
 				if (left_margin & 1) filters = 0x61616161;
-				load_raw = unpacked_load_raw;
+				load_raw = LoadRawType::unpacked_load_raw;
 			}
 			maximum = 0xffff;
 			break;
@@ -2210,7 +2194,7 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 			data_offset = _reader->get4();
 			_reader->Seek(28, SEEK_CUR);
 			data_offset += _reader->get4();
-			load_raw = packed_load_raw;
+			load_raw = LoadRawType::packed_load_raw;
 			break;
 		case 65026:
 			if (type == 2) _reader->GetString(model2, LenModel2);
@@ -2770,12 +2754,12 @@ void CSimpleInfo::apply_tiff()
 	if (thumb_offset)
 	{
 		_reader->Seek(thumb_offset, SEEK_SET);
-		jhead jh;
-		if (jhead::ljpeg_start(jh, *_reader, dng_version, true))
+		jhead jh(*_reader, *this, true);
+		if (jh._success)
 		{
-			thumb_misc = jh.bits;
-			thumb_width = jh.wide;
-			thumb_height = jh.high;
+			thumb_misc = jh.jh.bits;
+			thumb_width = jh.jh.wide;
+			thumb_height = jh.jh.high;
 		}
 	}
 	for (size_t i = tiff_nifds; i--; )
@@ -2831,12 +2815,14 @@ void CSimpleInfo::apply_tiff()
 			if (tiff_ifd[raw].bytes == raw_width*raw_height)
 			{
 				tiff_bps = 12;
-				load_raw = sony_arw2_load_raw;			break;
+				load_raw = LoadRawType::sony_arw2_load_raw;
+				break;
 			}
 			if (tiff_ifd[raw].bytes * 8 != raw_width*raw_height*tiff_bps)
 			{
 				raw_height += 8;
-				load_raw = sony_arw_load_raw;			break;
+				load_raw = LoadRawType::sony_arw_load_raw;
+				break;
 			}
 			load_flags = 79;
 		case 32769:
@@ -2855,57 +2841,72 @@ void CSimpleInfo::apply_tiff()
 			} slr:
 			switch (tiff_bps)
 			{
-			case  8: load_raw = eight_bit_load_raw;	break;
-			case 12: if (tiff_ifd[raw].phint == 2)
-				load_flags = 6;
-				load_raw = packed_load_raw;		break;
-			case 14: load_flags = 0;
-			case 16: load_raw = unpacked_load_raw;
-				if (!strncmp(make, "OLYMPUS", 7) &&
-					tiff_ifd[raw].bytes * 7 > raw_width*raw_height)
-					load_raw = olympus_load_raw;
+			case  8:
+				load_raw = LoadRawType::eight_bit_load_raw;
+				break;
+			case 12:
+				if (tiff_ifd[raw].phint == 2)
+					load_flags = 6;
+				load_raw = LoadRawType::packed_load_raw;
+				break;
+			case 14:
+				load_flags = 0;
+			case 16:
+				load_raw = LoadRawType::unpacked_load_raw;
+				if (!strncmp(make, "OLYMPUS", 7) && tiff_ifd[raw].bytes * 7 > raw_width*raw_height)
+					load_raw = LoadRawType::olympus_load_raw;
 			}
 			break;
 		case 6:  case 7:  case 99:
-			load_raw = lossless_jpeg_load_raw;		break;
+			load_raw = LoadRawType::lossless_jpeg_load_raw;
+			break;
 		case 262:
-			load_raw = kodak_262_load_raw;			break;
+			load_raw = LoadRawType::kodak_262_load_raw;
+			break;
 		case 34713:
 			if ((raw_width + 9) / 10 * 16 * raw_height == tiff_ifd[raw].bytes)
 			{
-				load_raw = packed_load_raw;
+				load_raw = LoadRawType::packed_load_raw;
 				load_flags = 1;
 			}
 			else if (raw_width*raw_height * 3 == tiff_ifd[raw].bytes * 2)
 			{
-				load_raw = packed_load_raw;
+				load_raw = LoadRawType::packed_load_raw;
 				if (model[0] == 'N') load_flags = 80;
 			}
 			else if (raw_width*raw_height * 3 == tiff_ifd[raw].bytes)
 			{
-				load_raw = nikon_yuv_load_raw;
+				load_raw = LoadRawType::nikon_yuv_load_raw;
 				gamma_curve(1 / 2.4, 12.92, 1, 4095);
 				memset(cblack, 0, sizeof cblack);
 				filters = 0;
 			}
 			else if (raw_width*raw_height * 2 == tiff_ifd[raw].bytes)
 			{
-				load_raw = unpacked_load_raw;
+				load_raw = LoadRawType::unpacked_load_raw;
 				load_flags = 4;
 				_reader->SetOrder(0x4d4d);
 			}
 			else
-				load_raw = nikon_load_raw;			break;
+				load_raw = LoadRawType::nikon_load_raw;
+			break;
 		case 65535:
-			load_raw = pentax_load_raw;			break;
+			load_raw = LoadRawType::pentax_load_raw;
+			break;
 		case 65000:
 			switch (tiff_ifd[raw].phint)
 			{
-			case 2: load_raw = kodak_rgb_load_raw;   filters = 0;  break;
-			case 6: load_raw = kodak_ycbcr_load_raw; filters = 0;  break;
-			case 32803: load_raw = kodak_65000_load_raw;
+			case 2:
+				load_raw = LoadRawType::kodak_rgb_load_raw;   filters = 0;
+				break;
+			case 6:
+				load_raw = LoadRawType::kodak_ycbcr_load_raw; filters = 0;
+				break;
+			case 32803:
+				load_raw = LoadRawType::kodak_65000_load_raw;
 			}
-		case 32867: case 34892: break;
+		case 32867: case 34892:
+			break;
 		default: is_raw = 0;
 		}
 	}
@@ -2940,19 +2941,19 @@ void CSimpleInfo::apply_tiff()
 		switch (tiff_ifd[thm].comp)
 		{
 		case 0:
-			write_thumb = layer_thumb;
+			write_thumb = WriteThumbType::layer_thumb;
 			break;
 		case 1:
 			if (tiff_ifd[thm].bps <= 8)
-				write_thumb = ppm_thumb;
+				write_thumb = WriteThumbType::ppm_thumb;
 			else if (!strcmp(make, "Imacon"))
-				write_thumb = ppm16_thumb;
+				write_thumb = WriteThumbType::ppm16_thumb;
 			else
-				thumb_load_raw = kodak_thumb_load_raw;
+				thumb_load_raw = LoadRawType::kodak_thumb_load_raw;
 			break;
 		case 65000:
 			thumb_load_raw = tiff_ifd[thm].phint == 6 ?
-				kodak_ycbcr_load_raw : kodak_rgb_load_raw;
+				LoadRawType::kodak_ycbcr_load_raw : LoadRawType::kodak_rgb_load_raw;
 		}
 	}
 }
@@ -4456,7 +4457,7 @@ void CSimpleInfo::parse_phase_one(int base)
 		}
 		_reader->Seek(save, SEEK_SET);
 	}
-	load_raw = ph1.format < 3 ? phase_one_load_raw : phase_one_load_raw_c;
+	load_raw = ph1.format < 3 ? LoadRawType::phase_one_load_raw : LoadRawType::phase_one_load_raw_c;
 	maximum = 0xffff;
 	strcpy_s(make, LenMake, "Phase One");
 	if (model[0]) return;
@@ -4812,9 +4813,9 @@ void CSimpleInfo::parse_smal(int offset, int fsize)
 	strcpy_s(make, LenMake, "SMaL");
 	sprintf_s(model, LenModel, "v%d %dx%d", ver, width, height);
 	if (ver == 6)
-		load_raw = smal_v6_load_raw;
+		load_raw = LoadRawType::smal_v6_load_raw;
 	if (ver == 9)
-		load_raw = smal_v9_load_raw;
+		load_raw = LoadRawType::smal_v9_load_raw;
 }
 
 void CSimpleInfo::parse_cine()
@@ -4837,10 +4838,10 @@ void CSimpleInfo::parse_cine()
 	switch (_reader->get2(), _reader->get2())
 	{
 	case 8:
-		load_raw = eight_bit_load_raw;
+		load_raw = LoadRawType::eight_bit_load_raw;
 		break;
 	case 16:
-		load_raw = unpacked_load_raw;
+		load_raw = LoadRawType::unpacked_load_raw;
 	}
 	_reader->Seek(off_setup + 792, SEEK_SET);
 	strcpy_s(make, LenMake, "CINE");
@@ -4953,7 +4954,7 @@ void CSimpleInfo::parse_rollei()
 		timestamp = mktime(&t);
 	strcpy_s(make, LenMake, "Rollei");
 	strcpy_s(model, LenModel, "d530flex");
-	write_thumb = rollei_thumb;
+	write_thumb = WriteThumbType::rollei_thumb;
 }
 
 void CSimpleInfo::parse_sinar_ia()
@@ -4984,10 +4985,10 @@ void CSimpleInfo::parse_sinar_ia()
 	}
 	raw_width = _reader->get2();
 	raw_height = _reader->get2();
-	load_raw = unpacked_load_raw;
+	load_raw = LoadRawType::unpacked_load_raw;
 	thumb_width = (_reader->get4(), _reader->get2());
 	thumb_height = _reader->get2();
-	write_thumb = ppm_thumb;
+	write_thumb = WriteThumbType::ppm_thumb;
 	maximum = 0x3fff;
 }
 
@@ -5070,13 +5071,13 @@ void CSimpleInfo::parse_foveon()
 				case  5:
 					load_flags = 1;
 				case  6:
-					load_raw = foveon_sd_load_raw;
+					load_raw = LoadRawType::foveon_sd_load_raw;
 					break;
 				case 30:
-					load_raw = foveon_dp_load_raw;
+					load_raw = LoadRawType::foveon_dp_load_raw;
 					break;
 				default:
-					load_raw = unknown_load_raw;
+					load_raw = LoadRawType::unknown_load_raw;
 				}
 				raw_width = wide;
 				raw_height = high;
@@ -5089,14 +5090,14 @@ void CSimpleInfo::parse_foveon()
 			{
 				thumb_offset = off + 28;
 				thumb_length = len - 28;
-				write_thumb = jpeg_thumb;
+				write_thumb = WriteThumbType::jpeg_thumb;
 			}
 			if (++img == 2 && !thumb_length)
 			{
 				thumb_offset = off + 24;
 				thumb_width = wide;
 				thumb_height = high;
-				write_thumb = foveon_thumb;
+				write_thumb = WriteThumbType::foveon_thumb;
 			}
 			break;
 		case 0x464d4143:			/* CAMF */
@@ -5353,3 +5354,44 @@ char* CSimpleInfo::strcasestr(char* haystack, const char* needle)
 	return 0;
 }
 #pragma endregion
+
+unsigned CSimpleInfo::getbithuff(int nbits, unsigned short *huff)
+{
+	static unsigned bitbuf = 0;
+	static int vbits = 0;
+	static int reset = 0;
+
+	if (nbits > 25)
+		return 0;
+
+	if (nbits < 0)
+		return bitbuf = vbits = reset = 0;
+
+	if (nbits == 0 || vbits < 0)
+		return 0;
+
+	unsigned c;
+	while (!reset && vbits < nbits && (c = _reader->GetChar()) != EOF &&
+		!(reset = zero_after_ff && c == 0xff && _reader->GetChar()))
+	{
+		bitbuf = (bitbuf << 8) + (unsigned char)c;
+		vbits += 8;
+	}
+
+	c = bitbuf << (32 - vbits) >> (32 - nbits);
+	if (huff != nullptr)
+	{
+		vbits -= huff[c] >> 8;
+		c = (unsigned char)huff[c];
+	}
+	else
+	{
+		vbits -= nbits;
+	}
+
+	if (vbits < 0)
+		CError::derror(*_reader);
+
+	return c;
+}
+

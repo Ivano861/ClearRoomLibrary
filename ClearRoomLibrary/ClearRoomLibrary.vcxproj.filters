@@ -66,6 +66,18 @@
     <ClInclude Include="Raw.h">
       <Filter>File di intestazione</Filter>
     </ClInclude>
+    <ClInclude Include="Enumerate.h">
+      <Filter>File di intestazione\Unmanaged</Filter>
+    </ClInclude>
+    <ClInclude Include="CImageLoader.h">
+      <Filter>File di intestazione\Unmanaged</Filter>
+    </ClInclude>
+    <ClInclude Include="ImageLoader.h">
+      <Filter>File di intestazione</Filter>
+    </ClInclude>
+    <ClInclude Include="Macro.h">
+      <Filter>File di intestazione\Unmanaged</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AssemblyInfo.cpp">
@@ -106,6 +118,12 @@
     </ClCompile>
     <ClCompile Include="CRaw.cpp">
       <Filter>File di origine\Unmanaged</Filter>
+    </ClCompile>
+    <ClCompile Include="CImageLoader.cpp">
+      <Filter>File di origine\Unmanaged</Filter>
+    </ClCompile>
+    <ClCompile Include="ImageLoader.cpp">
+      <Filter>File di origine</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

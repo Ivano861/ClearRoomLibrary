@@ -2,6 +2,7 @@
 
 #include "COptions.h"
 #include "CSimpleInfo.h"
+#include "CImageLoader.h"
 
 namespace Unmanaged
 {
@@ -14,10 +15,12 @@ namespace Unmanaged
 		COptions& Options();
 		CSimpleInfo& Info();
 		CSimpleInfo& GetInfo();
+		CImageLoader& GetLoadRaw();
 
 	private:
 		COptions* _options;
 		CSimpleInfo* _info;
+		CImageLoader* _load;
 
 		CReader* _reader;
 	};

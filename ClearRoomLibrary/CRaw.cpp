@@ -19,6 +19,11 @@ CRaw::CRaw(const char* fileName) : _info(nullptr)
 
 CRaw::~CRaw()
 {
+	if (_load != nullptr)
+	{
+		delete _load;
+		_load = nullptr;
+	}
 	if (_info != nullptr)
 	{
 		delete _info;
@@ -51,4 +56,11 @@ CSimpleInfo& CRaw::GetInfo()
 	_info = new CSimpleInfo(_reader);
 	_info->GetInfo();
 	return *(_info);
+}
+
+CImageLoader& CRaw::GetLoadRaw()
+{
+	_load = new CImageLoader(_options, _info, _reader);
+	_load->LoadImageRaw();
+	return *(_load);
 }

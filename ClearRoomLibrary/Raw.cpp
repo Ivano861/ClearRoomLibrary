@@ -28,3 +28,12 @@ SimpleInfo^ Raw::GetInfo()
 
 	return simple;
 }
+
+ImageLoader^ Raw::GetImageRaw()
+{
+	CImageLoader& loadRaw = _raw->GetLoadRaw();
+
+	ImageLoader^ simple = gcnew ImageLoader(&loadRaw);
+
+	return simple;
+}

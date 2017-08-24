@@ -30,6 +30,12 @@ const char* CReader::GetFileName()
 	return _fileName;
 }
 
+FILE* CReader::GetFILE()
+{
+	return _ifp;
+}
+
+
 void CReader::SetOrder(short order)
 {
 	_order = order;

@@ -2,6 +2,7 @@
 
 #include "CRaw.h"
 #include "SimpleInfo.h"
+#include "ImageLoader.h"
 
 using namespace System;
 using namespace Unmanaged;
@@ -15,6 +16,7 @@ namespace ClearRoomLibrary
 		~Raw();
 
 		SimpleInfo^ GetInfo();
+		ImageLoader^ GetImageRaw();
 
 	private:
 		//Private members

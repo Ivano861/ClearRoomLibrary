@@ -69,6 +69,10 @@ namespace TestClearRoomLibrary
                 {
 
                 }
+                using (ImageLoader simple = raw.GetImageRaw())
+                {
+
+                }
                 //raw.Dispose();
             }
         }

@@ -12,6 +12,9 @@ COptions::~COptions()
 {
 }
 
+// TODO: implementation
+/*
+
 float& COptions::Threshold()
 {
 	return threshold;
@@ -74,3 +77,4 @@ void COptions::UseCameraMatrix(bool useEmbedded)
 	use_camera_matrix = useEmbedded;
 	//int use_camera_matrix = 3 * (opm == '+');
 }
+*/

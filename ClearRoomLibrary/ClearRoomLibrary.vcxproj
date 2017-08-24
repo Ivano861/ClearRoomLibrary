@@ -138,12 +138,16 @@
   <ItemGroup>
     <ClInclude Include="CDecoder.h" />
     <ClInclude Include="CError.h" />
+    <ClInclude Include="CImageLoader.h" />
     <ClInclude Include="COptions.h" />
     <ClInclude Include="CRaw.h" />
     <ClInclude Include="CReader.h" />
     <ClInclude Include="CSimpleInfo.h" />
     <ClInclude Include="CWriter.h" />
+    <ClInclude Include="Enumerate.h" />
     <ClInclude Include="jhead.h" />
+    <ClInclude Include="ImageLoader.h" />
+    <ClInclude Include="Macro.h" />
     <ClInclude Include="Options.h" />
     <ClInclude Include="ph1.h" />
     <ClInclude Include="Raw.h" />
@@ -156,12 +160,14 @@
     <ClCompile Include="AssemblyInfo.cpp" />
     <ClCompile Include="CDecoder.cpp" />
     <ClCompile Include="CError.cpp" />
+    <ClCompile Include="CImageLoader.cpp" />
     <ClCompile Include="COptions.cpp" />
     <ClCompile Include="CRaw.cpp" />
     <ClCompile Include="CReader.cpp" />
     <ClCompile Include="CSimpleInfo.cpp" />
     <ClCompile Include="CWriter.cpp" />
     <ClCompile Include="jhead.cpp" />
+    <ClCompile Include="ImageLoader.cpp" />
     <ClCompile Include="Options.cpp" />
     <ClCompile Include="Raw.cpp" />
     <ClCompile Include="SimpleInfo.cpp" />
