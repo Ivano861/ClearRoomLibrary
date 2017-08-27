@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "jhead.h"
 #include "CDecoder.h"
-#include "CError.h"
+#include "CException.h"
 #include "Macro.h"
 
 #define _USE_MATH_DEFINES // for C++  
@@ -99,7 +99,9 @@ jhead::jhead(CReader& reader, CSimpleInfo& info, bool info_only) : _reader(reade
 			jh.huff[1 + c] = jh.huff[0];
 	}
 	jh.row = (unsigned short *)calloc(jh.wide*jh.clrs, 4);
-	CError::merror(jh.row, "ClearRoomLibrary", "ljpeg_start()");
+	if (!jh.row)
+		throw CExceptionMemory("ljpeg::ctor");
+
 	info.zero_after_ff = 1;
 	_success = true;
 }
@@ -164,7 +166,8 @@ unsigned short* jhead::ljpeg_row(int jrow)
 				}
 			}
 			if ((**row = pred + diff) >> jh.bits)
-				CError::derror(_reader);
+				throw CExceptionFile();
+
 			if (c <= jh.sraw)
 				spred = **row;
 			row[0]++; row[1]++;

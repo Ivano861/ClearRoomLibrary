@@ -136,8 +136,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CAutoFreeMemory.h" />
     <ClInclude Include="CDecoder.h" />
-    <ClInclude Include="CError.h" />
+    <ClInclude Include="CException.h" />
     <ClInclude Include="CImageLoader.h" />
     <ClInclude Include="COptions.h" />
     <ClInclude Include="CRaw.h" />
@@ -158,8 +159,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AssemblyInfo.cpp" />
+    <ClCompile Include="CAutoFreeMemory.cpp" />
     <ClCompile Include="CDecoder.cpp" />
-    <ClCompile Include="CError.cpp" />
+    <ClCompile Include="CException.cpp" />
     <ClCompile Include="CImageLoader.cpp" />
     <ClCompile Include="COptions.cpp" />
     <ClCompile Include="CRaw.cpp" />

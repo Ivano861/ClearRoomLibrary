@@ -2,8 +2,9 @@
 #include "CImageLoader.h"
 #include "jhead.h"
 #include "CDecoder.h"
-#include "CError.h"
+#include "CException.h"
 #include "Macro.h"
+#include "CAutoFreeMemory.h"
 #include "jpeglib.h"
 #include <jasper/jasper.h>	/* Decode Red camera movies */
 
@@ -97,9 +98,9 @@ void CImageLoader::LoadImageRaw()
 		_info->width += _info->width & 1;
 	}
 
-	// TODO
 	if (!_info->is_raw)
-		throw; //goto next;
+		throw CExceptionNoRaw();
+
 	_info->shrink = _info->filters && (_info->half_size || _options->threshold || _options->aber[0] != 1 || _options->aber[2] != 1);
 	_info->iheight = (_info->height + _info->shrink) >> _info->shrink;
 	_info->iwidth = (_info->width + _info->shrink) >> _info->shrink;
@@ -107,23 +108,25 @@ void CImageLoader::LoadImageRaw()
 	if (_info->meta_length)
 	{
 		_info->meta_data = (char *)malloc(_info->meta_length);
-		CError::merror(_info->meta_data, "ClearRoomLibrary", "LoadImageRaw()");
+		if (!_info->meta_data)
+			throw CExceptionMemory("LoadImageRaw()");
 	}
 	if (_info->filters || _info->colors == 1)
 	{
 		_info->raw_image = (unsigned short *)calloc((_info->raw_height + 7), _info->raw_width * 2);
-		CError::merror(_info->raw_image, "ClearRoomLibrary", "LoadImageRaw()");
+		if (!_info->raw_image)
+			throw CExceptionMemory("LoadImageRaw()");
 	}
 	else
 	{
 		_info->image = (unsigned short(*)[4]) calloc(_info->iheight, _info->iwidth * sizeof *_info->image);
-		CError::merror(_info->image, "ClearRoomLibrary", "LoadImageRaw()");
+		if (!_info->image)
+			throw CExceptionMemory("LoadImageRaw()");
 	}
+
 	if (_info->shot_select >= _info->is_raw)
-	{
-		// TODO:
-		//fprintf(stderr, _("%s: \"-s %d\" requests a nonexistent image!\n"), ifname, shot_select);
-	}
+		throw CExceptionInvalidImageRequest();
+
 	_reader->Seek(_info->data_offset, SEEK_SET);
 	LoadRaw();
 
@@ -138,9 +141,11 @@ void CImageLoader::LoadImageRaw()
 	if (_info->raw_image)
 	{
 		_info->image = (unsigned short(*)[4]) calloc(_info->iheight, _info->iwidth * sizeof *_info->image);
-		CError::merror(_info->image, "ClearRoomLibrary", "LoadImageRaw()");
+		if (!_info->image)
+			throw CExceptionMemory("LoadImageRaw()");
 		crop_masked_pixels();
 		free(_info->raw_image);
+		_info->raw_image = nullptr;
 	}
 	/*
 	if (zero_is_bad)
@@ -233,7 +238,10 @@ void CImageLoader::LoadImageRaw()
 	if (oprof) free (oprof);
 	*/
 	if (_info->image)
-		free (_info->image);
+	{
+		free(_info->image);
+		_info->image = nullptr;
+	}
 	/*
 	if (multi_out) {
 	if (++shot_select < is_raw) arg--;
@@ -409,10 +417,7 @@ void CImageLoader::LoadImageThumbnail()
 
 	if ((!_info->thumb_offset))
 	{
-		throw;
-		// TODO
-		//fprintf(stderr, _("%s has no thumbnail.\n"), ifname);
-		//goto next;
+		throw CExceptionNoThumbnail();
 	}
 	else if (_info->thumb_load_raw != LoadRawType::unknown_load_raw)
 	{
@@ -513,7 +518,7 @@ void CImageLoader::packed_load_raw()
 			if (_info->load_flags & 1 && (col % 10) == 9 && _reader->GetChar() &&
 				row < _info->height + _info->top_margin && col < _info->width + _info->left_margin)
 			{
-				CError::derror(*_reader);
+				throw CExceptionFile();
 			}
 		}
 		vbits -= rbits;
@@ -527,13 +532,17 @@ void CImageLoader::unpacked_load_raw()
 	while (1 << ++bits < _info->maximum);
 	_reader->read_shorts(_info->raw_image, _info->raw_width*_info->raw_height);
 	for (row = 0; row < _info->raw_height; row++)
+	{
 		for (col = 0; col < _info->raw_width; col++)
+		{
 			if ((RAW(row, col) >>= _info->load_flags) >> bits
 				&& (unsigned)(row - _info->top_margin) < _info->height
 				&& (unsigned)(col - _info->left_margin) < _info->width)
 			{
-				CError::derror(*_reader);
+				throw CExceptionFile();
 			}
+		}
+	}
 }
 
 void CImageLoader::lossless_dng_load_raw()
@@ -685,7 +694,7 @@ void CImageLoader::lossy_dng_load_raw()
 void CImageLoader::packed_dng_load_raw()
 {
 	unsigned short* pixel = (unsigned short *)calloc(_info->raw_width, _info->tiff_samples * sizeof *pixel);
-	CError::merror(pixel, "ClearRoomLibrary", "packed_dng_load_raw()");
+	CAutoFreeMemory autoFree(pixel);
 	for (int row = 0; row < _info->raw_height; row++)
 	{
 		if (_info->tiff_bps == 16)
@@ -702,7 +711,6 @@ void CImageLoader::packed_dng_load_raw()
 		for (int col = 0; col < _info->raw_width; col++)
 			adobe_copy_pixel(row, col, &rp);
 	}
-	free(pixel);
 }
 
 void CImageLoader::lossless_jpeg_load_raw()
@@ -753,11 +761,15 @@ void CImageLoader::canon_load_raw()
 	int pnum = 0;
 
 	crw_init_tables(_info->tiff_compress, huff);
+	CAutoFreeMemory autoFreeHuff0(huff[0]);
+	CAutoFreeMemory autoFreeHuff1(huff[1]);
+
 	int lowbits = canon_has_lowbits();
 	if (!lowbits)
 		_info->maximum = 0x3ff;
 	_reader->Seek(540 + lowbits*_info->raw_height*_info->raw_width / 4, SEEK_SET);
 	_info->zero_after_ff = 1;
+
 	_info->getbits(-1);
 	for (int row = 0; row < _info->raw_height; row += 8)
 	{
@@ -790,7 +802,7 @@ void CImageLoader::canon_load_raw()
 				if (pnum++ % _info->raw_width == 0)
 					base[0] = base[1] = 512;
 				if ((pixel[(block << 6) + i] = base[i & 1] += diffbuf[i]) >> 10)
-					CError::derror(*_reader);
+					throw CExceptionFile();
 			}
 		}
 		if (lowbits)
@@ -812,8 +824,6 @@ void CImageLoader::canon_load_raw()
 			_reader->Seek(save, SEEK_SET);
 		}
 	}
-	for (size_t c = 0; c < 2; c++)
-		free(huff[c]);
 }
 
 void CImageLoader::canon_600_load_raw()
@@ -824,7 +834,8 @@ void CImageLoader::canon_600_load_raw()
 	for (size_t irow = 0; irow < _info->height; irow++)
 	{
 		if (_reader->Read(data, 1, 1120) < 1120)
-			CError::derror(*_reader);
+			throw CExceptionFile();
+
 		unsigned short* pix = _info->raw_image + row*_info->raw_width;
 		for (unsigned char* dp = data; dp < data + 1120; dp += 10, pix += 8)
 		{
@@ -971,15 +982,15 @@ void CImageLoader::canon_sraw_load_raw()
 void CImageLoader::eight_bit_load_raw()
 {
 	unsigned char* pixel = (unsigned char *)calloc(_info->raw_width, sizeof *pixel);
-	CError::merror(pixel, "ClearRoomLibrary", "eight_bit_load_raw()");
+	CAutoFreeMemory autoFree(pixel);
 	for (unsigned row = 0; row < _info->raw_height; row++)
 	{
 		if (_reader->Read(pixel, 1, _info->raw_width) < _info->raw_width)
-			CError::derror(*_reader);
+			throw CExceptionFile();
+
 		for (unsigned col = 0; col < _info->raw_width; col++)
 			RAW(row, col) = _info->curve[pixel[col]];
 	}
-	free(pixel);
 	_info->maximum = _info->curve[0xff];
 }
 
@@ -995,7 +1006,7 @@ void CImageLoader::hasselblad_load_raw()
 	_reader->SetOrder(0x4949);
 	ph1_bits(-1);
 	back[4] = (int *)calloc(_info->raw_width, 3 * sizeof **back);
-	CError::merror(back[4], "ClearRoomLibrary", "hasselblad_load_raw()");
+	CAutoFreeMemory autoFree(back[4]);
 	for (int c = 0; c < 3; c++)
 		back[c] = back[4] + c*_info->raw_width;
 	int sh = _info->tiff_samples > 1;
@@ -1054,7 +1065,6 @@ void CImageLoader::hasselblad_load_raw()
 			}
 		}
 	}
-	free(back[4]);
 	if (_info->image)
 		_info->mix_green = 1;
 }
@@ -1075,14 +1085,16 @@ void CImageLoader::kodak_262_load_raw()
 		{ 0,1,5,1,1,2,0,0,0,0,0,0,0,0,0,0, 0,1,2,3,4,5,6,7,8,9 },
 		{ 0,3,1,1,1,1,1,2,0,0,0,0,0,0,0,0, 0,1,2,3,4,5,6,7,8,9 }
 	};
-	unsigned short* huff[2];
+	unsigned short* huff[2] = {nullptr, nullptr};
 	int pi = 0;
 
-	for (size_t c = 0; c < 2; c++)
-		huff[c] = CDecoder::make_decoder(kodak_tree[c]);
+	CAutoFreeMemory autoFreeHuff0(huff[0] = CDecoder::make_decoder(kodak_tree[0]));
+	CAutoFreeMemory autoFreeHuff1(huff[1] = CDecoder::make_decoder(kodak_tree[1]));
+
 	int ns = (_info->raw_height + 63) >> 5;
 	unsigned char* pixel = (unsigned char *)malloc(_info->raw_width * 32 + ns * 4);
-	CError::merror(pixel, "ClearRoomLibrary", "kodak_262_load_raw()");
+	CAutoFreeMemory autoFree(pixel);
+
 	int* strip = (int *)(pixel + _info->raw_width * 32);
 	_reader->SetOrder(0x4d4d);
 	for (size_t c = 0; c < ns; c++)
@@ -1112,14 +1124,11 @@ void CImageLoader::kodak_262_load_raw()
 			int val = pred + jhead::ljpeg_diff(huff[chess], *_info);
 			pixel[pi] = val;
 			if (val >> 8)
-				CError::derror(*_reader);
+				throw CExceptionFile();
 			val = _info->curve[pixel[pi++]];
 			RAW(row, col) = val;
 		}
 	}
-	free(pixel);
-	for (size_t c = 0; c < 2; c++)
-		free(huff[c]);
 }
 
 void CImageLoader::kodak_65000_load_raw()
@@ -1136,7 +1145,7 @@ void CImageLoader::kodak_65000_load_raw()
 			int ret = kodak_65000_decode(buf, len);
 			for (int i = 0; i < len; i++)
 				if ((RAW(row, col + i) = _info->curve[ret ? buf[i] : (pred[i & 1] += buf[i])]) >> 12)
-					CError::derror(*_reader);
+					throw CExceptionFile();
 		}
 	}
 }
@@ -1146,11 +1155,13 @@ void CImageLoader::kodak_c330_load_raw()
 	int rgb[3];
 
 	unsigned char* pixel = (unsigned char *)calloc(_info->raw_width, 2 * sizeof *pixel);
-	CError::merror(pixel, "ClearRoomLibrary", "kodak_c330_load_raw()");
+	CAutoFreeMemory autoFree(pixel);
+
 	for (int row = 0; row < _info->height; row++)
 	{
 		if (_reader->Read(pixel, _info->raw_width, 2) < 2)
-			CError::derror(*_reader);
+			throw CExceptionFile();
+
 		if (_info->load_flags && (row & 31) == 31)
 			_reader->Seek(_info->raw_width * 32, SEEK_CUR);
 		for (int col = 0; col < _info->width; col++)
@@ -1165,7 +1176,6 @@ void CImageLoader::kodak_c330_load_raw()
 				_info->image[row*_info->width + col][c] = _info->curve[LIM(rgb[c], 0, 255)];
 		}
 	}
-	free(pixel);
 	_info->maximum = _info->curve[0xff];
 }
 
@@ -1174,12 +1184,13 @@ void CImageLoader::kodak_c603_load_raw()
 	int rgb[3];
 
 	unsigned char* pixel = (unsigned char *)calloc(_info->raw_width, 3 * sizeof *pixel);
-	CError::merror(pixel, "ClearRoomLibrary", "kodak_c603_load_raw()");
+	CAutoFreeMemory autoFree(pixel);
 	for (int row = 0; row < _info->height; row++)
 	{
 		if (~row & 1)
 			if (_reader->Read(pixel, _info->raw_width, 3) < 3)
-				CError::derror(*_reader);
+				throw CExceptionFile();
+
 		for (int col = 0; col < _info->width; col++)
 		{
 			int y = pixel[_info->width * 2 * (row & 1) + col];
@@ -1192,7 +1203,6 @@ void CImageLoader::kodak_c603_load_raw()
 				_info->image[row*_info->width + col][c] = _info->curve[LIM(rgb[c], 0, 255)];
 		}
 	}
-	free(pixel);
 	_info->maximum = _info->curve[0xff];
 }
 
@@ -1205,7 +1215,8 @@ void CImageLoader::kodak_dc120_load_raw()
 	for (int row = 0; row < _info->height; row++)
 	{
 		if (_reader->Read(pixel, 1, 848) < 848)
-			CError::derror(*_reader);
+			throw CExceptionFile();
+
 		int shift = row * mul[row & 3] + add[row & 3];
 		for (int col = 0; col < _info->width; col++)
 			RAW(row, col) = (unsigned short)pixel[(col + shift) % 848];
@@ -1250,11 +1261,8 @@ void CImageLoader::kodak_jpeg_load_raw()
 		(cinfo.output_height * 2 != _info->height) ||
 		(cinfo.output_components != 3))
 	{
-		// TODO: gestire errore
-		//fprintf(stderr, _("%s: incorrect JPEG dimensions\n"), ifname);
 		jpeg_destroy_decompress(&cinfo);
-		//longjmp(failure, 3);
-		throw 3;
+		throw CExceptionJpegError();;
 	}
 	buf = (*cinfo.mem->alloc_sarray)
 		((j_common_ptr)&cinfo, JPOOL_IMAGE, _info->width * 3, 1);
@@ -1425,7 +1433,7 @@ void CImageLoader::kodak_rgb_load_raw()
 			for (int i = 0; i < len; i++, ip += 4)
 				for (size_t c = 0; c < 3; c++)
 					if ((ip[c] = rgb[c] += *bp++) >> 12)
-						CError::derror(*_reader);
+						throw CExceptionFile();
 		}
 	}
 }
@@ -1460,7 +1468,8 @@ void CImageLoader::kodak_ycbcr_load_raw()
 					for (int k = 0; k < 2; k++)
 					{
 						if ((y[j][k] = y[j][k ^ 1] + *bp++) >> 10)
-							CError::derror(*_reader);
+							throw CExceptionFile();
+
 						unsigned short* ip = _info->image[(row + j)*_info->width + col + i + k];
 						for (size_t c = 0; c < 3; c++)
 							ip[c] = _info->curve[LIM(y[j][k] + rgb[c], 0, 0xfff)];
@@ -1474,11 +1483,12 @@ void CImageLoader::kodak_ycbcr_load_raw()
 void CImageLoader::leaf_hdr_load_raw()
 {
 	unsigned short *pixel = nullptr;
+	CAutoFreeMemory autoFree(pixel, false);
 
 	if (!_info->filters)
 	{
 		pixel = (unsigned short *)calloc(_info->raw_width, sizeof *pixel);
-		CError::merror(pixel, "ClearRoomLibrary", "leaf_hdr_load_raw()");
+		autoFree.ChangePointer(pixel);
 	}
 
 	unsigned tile = 0;
@@ -1495,6 +1505,7 @@ void CImageLoader::leaf_hdr_load_raw()
 				continue;
 			if (_info->filters)
 				pixel = _info->raw_image + r*_info->raw_width;
+
 			_reader->read_shorts(pixel, _info->raw_width);
 			int row = r - _info->top_margin;
 			if (!_info->filters && row < _info->height)
@@ -1506,7 +1517,6 @@ void CImageLoader::leaf_hdr_load_raw()
 	{
 		_info->maximum = 0xffff;
 		_info->raw_color = 1;
-		free(pixel);
 	}
 }
 
@@ -1517,7 +1527,8 @@ void CImageLoader::minolta_rd175_load_raw()
 	for (size_t irow = 0; irow < 1481; irow++)
 	{
 		if (_reader->Read(pixel, 1, 768) < 768)
-			CError::derror(*_reader);
+			throw CExceptionFile();
+
 		unsigned box = irow / 82;
 		unsigned row = irow % 82 * 12 + ((box < 12) ? box | 1 : (box - 12) * 2);
 		switch (irow)
@@ -1605,6 +1616,7 @@ void CImageLoader::nikon_load_raw()
 		max--;
 
 	unsigned short* huff = CDecoder::make_decoder(nikon_tree[tree]);
+	CAutoFreeMemory autoFree(huff);
 	_reader->Seek(_info->data_offset, SEEK_SET);
 	_info->getbits(-1);
 	int min = 0;
@@ -1612,8 +1624,7 @@ void CImageLoader::nikon_load_raw()
 	{
 		if (split && row == split)
 		{
-			free(huff);
-			huff = CDecoder::make_decoder(nikon_tree[tree + 1]);
+			autoFree.ChangePointer(huff = CDecoder::make_decoder(nikon_tree[tree + 1]));
 			max += (min = 16) << 1;
 		}
 		for (int col = 0; col < _info->raw_width; col++)
@@ -1629,11 +1640,11 @@ void CImageLoader::nikon_load_raw()
 			else
 				hpred[col & 1] += diff;
 			if ((unsigned short)(hpred[col & 1] + min) >= max)
-				CError::derror(*_reader);
+				throw CExceptionFile();
+
 			RAW(row, col) = _info->curve[LIM((short)hpred[col & 1], 0, 0x3fff)];
 		}
 	}
-	free(huff);
 }
 
 void CImageLoader::nikon_yuv_load_raw()
@@ -1669,11 +1680,13 @@ void CImageLoader::nokia_load_raw()
 	int rev = 3 * (_reader->GetOrder() == 0x4949);
 	int dwide = (_info->raw_width * 5 + 1) / 4;
 	unsigned char* data = (unsigned char *)malloc(dwide * 2);
-	CError::merror(data, "ClearRoomLibrary", "nokia_load_raw()");
+	CAutoFreeMemory autoFree(data);
+
 	for (int row = 0; row < _info->raw_height; row++)
 	{
 		if (_reader->Read(data + dwide, 1, dwide) < dwide)
-			CError::derror(*_reader);
+			throw CExceptionFile();
+
 		for (int c = 0; c < dwide; c++)
 			data[c] = data[dwide + (c ^ rev)];
 		unsigned char* dp = data;
@@ -1681,7 +1694,7 @@ void CImageLoader::nokia_load_raw()
 			for (int c = 0; c < 4; c++)
 				RAW(row, col + c) = (dp[c] << 2) | (dp[4] >> (c << 1) & 3);
 	}
-	free(data);
+	autoFree.Release();
 
 	_info->maximum = 0x3ff;
 	if (strcmp(_info->make, "OmniVision"))
@@ -1756,7 +1769,7 @@ void CImageLoader::olympus_load_raw()
 				}
 			}
 			if ((RAW(row, col) = pred + ((diff << 2) | low)) >> 12)
-				CError::derror(*_reader);
+				throw CExceptionFile();
 		}
 	}
 }
@@ -1792,7 +1805,7 @@ void CImageLoader::panasonic_load_raw()
 				pred[i & 1] = nonz[i & 1] << 4 | pana_bits(4);
 			}
 			if ((RAW(row, col) = pred[col & 1]) > 4098 && col < _info->width)
-				CError::derror(*_reader);
+				throw CExceptionFile();
 		}
 	}
 }
@@ -1828,7 +1841,7 @@ void CImageLoader::pentax_load_raw()
 				hpred[col & 1] += diff;
 			RAW(row, col) = hpred[col & 1];
 			if (hpred[col & 1] >> _info->tiff_bps)
-				CError::derror(*_reader);
+				throw CExceptionFile();
 		}
 	}
 }
@@ -1862,7 +1875,8 @@ void CImageLoader::phase_one_load_raw_c()
 	short (*rblack)[2];
 
 	unsigned short* pixel = (unsigned short *)calloc(_info->raw_width * 3 + _info->raw_height * 4, 2);
-	CError::merror(pixel, "ClearRoomLibrary", "phase_one_load_raw_c()");
+	CAutoFreeMemory autoFree(pixel);
+
 	int* offset = (int *)(pixel + _info->raw_width);
 	_reader->Seek(_info->strip_offset, SEEK_SET);
 	for (size_t row = 0; row < _info->raw_height; row++)
@@ -1871,10 +1885,12 @@ void CImageLoader::phase_one_load_raw_c()
 	_reader->Seek(_info->ph1.black_col, SEEK_SET);
 	if (_info->ph1.black_col)
 		_reader->read_shorts((unsigned short *)cblack[0], _info->raw_height * 2);
+
 	rblack = cblack + _info->raw_height;
 	_reader->Seek(_info->ph1.black_row, SEEK_SET);
 	if (_info->ph1.black_row)
 		_reader->read_shorts((unsigned short *)rblack[0], _info->raw_width * 2);
+
 	for (unsigned i = 0; i < 256; i++)
 		_info->curve[i] = i*i / 3.969 + 0.5;
 	for (int row = 0; row < _info->raw_height; row++)
@@ -1904,7 +1920,8 @@ void CImageLoader::phase_one_load_raw_c()
 			else
 				pixel[col] = pred[col & 1] += ph1_bits(i) + 1 - (1 << (i - 1));
 			if (pred[col & 1] >> 16)
-				CError::derror(*_reader);
+				throw CExceptionFile();
+
 			if (_info->ph1.format == 5 && pixel[col] < 256)
 				pixel[col] = _info->curve[pixel[col]];
 		}
@@ -1917,7 +1934,6 @@ void CImageLoader::phase_one_load_raw_c()
 				RAW(row, col) = i;
 		}
 	}
-	free(pixel);
 	_info->maximum = 0xfffc - _info->ph1.black;
 }
 
@@ -2013,14 +2029,38 @@ void CImageLoader::redcine_load_raw()
 {
 	jas_init();
 	jas_stream_t* in = jas_stream_fopen(_reader->GetFileName(), "rb");
+	if (!in)
+		throw CExceptionFile("Jasper open file failed");
+
 	jas_stream_seek(in, _info->data_offset + 20, SEEK_SET);
 	jas_image_t* jimg = jas_image_decode(in, -1, 0);
 	if (!jimg)
-		throw 3;	// TODO: gestire errore
+	{
+		jas_stream_close(in);
+
+		throw CExceptionFile("Jasper decode file failed");
+	}
+
 	jas_matrix_t* jmat = jas_matrix_create(_info->height / 2, _info->width / 2);
-	CError::merror(jmat, "ClearRoomLibrary", "redcine_load_raw()");
+	if (!jmat)
+	{
+		jas_image_destroy(jimg);
+		jas_stream_close(in);
+
+		throw CExceptionMemory("redcine_load_raw()");
+	}
+
 	unsigned short* img = (unsigned short *)calloc((_info->height + 2), (_info->width + 2) * 2);
-	CError::merror(img, "ClearRoomLibrary", "redcine_load_raw()");
+	CAutoFreeMemory autoFree(img, false);
+	if (!img)
+	{
+		jas_matrix_destroy(jmat);
+		jas_image_destroy(jimg);
+		jas_stream_close(in);
+
+		throw CExceptionMemory();
+	}
+
 	for (int c = 0; c < 4; c++)
 	{
 		jas_image_readcmpt(jimg, c, 0, 0, _info->width / 2, _info->height / 2, jmat);
@@ -2052,7 +2092,6 @@ void CImageLoader::redcine_load_raw()
 	for (int row = 0; row < _info->height; row++)
 		for (int col = 0; col < _info->width; col++)
 			RAW(row, col) = _info->curve[img[(row + 1)*(_info->width + 2) + col + 1]];
-	free(img);
 	jas_matrix_destroy(jmat);
 	jas_image_destroy(jimg);
 	jas_stream_close(in);
@@ -2161,7 +2200,7 @@ void CImageLoader::samsung2_load_raw()
 				hpred[col & 1] += diff;
 			RAW(row, col) = hpred[col & 1];
 			if (hpred[col & 1] >> _info->tiff_bps)
-				CError::derror(*_reader);
+				throw CExceptionFile();
 		}
 	}
 }
@@ -2237,7 +2276,8 @@ void CImageLoader::sinar_4shot_load_raw()
 		return;
 	}
 	unsigned short* pixel = (unsigned short *)calloc(_info->raw_width, sizeof *pixel);
-	CError::merror(pixel, "ClearRoomLibrary", "sinar_4shot_load_raw()");
+	CAutoFreeMemory autoFree(pixel);
+
 	for (unsigned shot = 0; shot < 4; shot++)
 	{
 		_reader->Seek(_info->data_offset + shot * 4, SEEK_SET);
@@ -2257,7 +2297,6 @@ void CImageLoader::sinar_4shot_load_raw()
 			}
 		}
 	}
-	free(pixel);
 	_info->mix_green = 1;
 }
 
@@ -2312,11 +2351,12 @@ void CImageLoader::sony_load_raw()
 	{
 		unsigned short* pixel = _info->raw_image + row*_info->raw_width;
 		if (_reader->Read(pixel, 2, _info->raw_width) < _info->raw_width)
-			CError::derror(*_reader);
+			throw CExceptionFile();
+
 		sony_decrypt((unsigned *)pixel, _info->raw_width / 2, !row, key);
 		for (unsigned col = 0; col < _info->raw_width; col++)
 			if ((pixel[col] = ntohs(pixel[col])) >> 14)
-				CError::derror(*_reader);
+				throw CExceptionFile();
 	}
 	_info->maximum = 0x3ff0;
 }
@@ -2343,7 +2383,7 @@ void CImageLoader::sony_arw_load_raw()
 		{
 			if (row == _info->raw_height) row = 1;
 			if ((sum += jhead::ljpeg_diff(huff, *_info)) >> 12)
-				CError::derror(*_reader);
+				throw CExceptionFile();
 			if (row < _info->height) RAW(row, col) = sum;
 		}
 	}
@@ -2354,7 +2394,8 @@ void CImageLoader::sony_arw2_load_raw()
 	unsigned short pix[16];
 
 	unsigned char* data = (unsigned char *)malloc(_info->raw_width + 1);
-	CError::merror(data, "ClearRoomLibrary", "sony_arw2_load_raw()");
+	CAutoFreeMemory autoFree(data);
+
 	for (int row = 0; row < _info->height; row++)
 	{
 		_reader->Read(data, 1, _info->raw_width);
@@ -2391,7 +2432,6 @@ void CImageLoader::sony_arw2_load_raw()
 			}
 		}
 	}
-	free(data);
 }
 
 
@@ -2782,7 +2822,8 @@ void CImageLoader::phase_one_correct()
 		for (size_t i = 0; i < 9; i++)
 			head[i] = _reader->get4() & 0x7fff;
 		yval[0] = (float *)calloc(head[1] * head[3] + head[2] * head[4], 6);
-		CError::merror(yval[0], "ClearRoomLibrary", "phase_one_correct()");
+		CAutoFreeMemory autoFree(yval[0]);
+
 		yval[1] = (float  *)(yval[0] + head[1] * head[3]);
 		xval[0] = (unsigned short *)(yval[1] + head[2] * head[4]);
 		xval[1] = (unsigned short *)(xval[0] + head[1] * head[3]);
@@ -2815,7 +2856,6 @@ void CImageLoader::phase_one_correct()
 				RAW(row, col) = LIM(c, 0, 65535);
 			}
 		}
-		free(yval[0]);
 	}
 }
 
@@ -3003,7 +3043,8 @@ void CImageLoader::phase_one_flat_field(int is_float, int nc)
 	unsigned wide = head[2] / head[4] + (head[2] % head[4] != 0);
 	unsigned high = head[3] / head[5] + (head[3] % head[5] != 0);
 	float* mrow = (float *)calloc(nc*wide, sizeof *mrow);
-	CError::merror(mrow, "ClearRoomLibrary", "phase_one_flat_field()");
+	CAutoFreeMemory autoFree(mrow);
+
 	for (unsigned y = 0; y < high; y++)
 	{
 		for (unsigned x = 0; x < wide; x++)
@@ -3045,7 +3086,6 @@ void CImageLoader::phase_one_flat_field(int is_float, int nc)
 					mrow[c*wide + x] += mrow[(c + 1)*wide + x];
 		}
 	}
-	free(mrow);
 }
 
 void CImageLoader::cubic_spline(const int* x_, const int* y_, const int len)
@@ -3177,8 +3217,18 @@ void CImageLoader::crw_init_tables(unsigned table, unsigned short* huff[2])
 
 	if (table > 2)
 		table = 2;
-	huff[0] = CDecoder::make_decoder(first_tree[table]);
-	huff[1] = CDecoder::make_decoder(second_tree[table]);
+	try
+	{
+		huff[0] = CDecoder::make_decoder(first_tree[table]);
+		huff[1] = CDecoder::make_decoder(second_tree[table]);
+	}
+	catch (const CExceptionMemory&)
+	{
+		free(huff[0]);
+		free(huff[1]);
+
+		throw;
+	}
 }
 
 /*

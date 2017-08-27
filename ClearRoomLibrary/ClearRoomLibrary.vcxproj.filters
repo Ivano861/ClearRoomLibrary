@@ -19,6 +19,18 @@
     <Filter Include="File di origine\Unmanaged">
       <UniqueIdentifier>{cd60a8a6-5f64-4247-a872-fd619c21b3b4}</UniqueIdentifier>
     </Filter>
+    <Filter Include="File di intestazione\Unmanaged\Exceptions">
+      <UniqueIdentifier>{141ff34f-0e3a-43ab-b646-362f25186974}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="File di origine\Unmanaged\Exceptions">
+      <UniqueIdentifier>{207231fc-d396-4001-9112-2cf5e7693e65}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="File di intestazione\Unmanaged\Utility">
+      <UniqueIdentifier>{8d5d0ea8-7539-4225-91cf-a5285ba3df0e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="File di origine\Unmanaged\Utility">
+      <UniqueIdentifier>{fb9fd78f-2174-4e42-b1db-4e559212438a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Stdafx.h">
@@ -43,9 +55,6 @@
       <Filter>File di intestazione\Unmanaged</Filter>
     </ClInclude>
     <ClInclude Include="CDecoder.h">
-      <Filter>File di intestazione\Unmanaged</Filter>
-    </ClInclude>
-    <ClInclude Include="CError.h">
       <Filter>File di intestazione\Unmanaged</Filter>
     </ClInclude>
     <ClInclude Include="CWriter.h">
@@ -78,6 +87,12 @@
     <ClInclude Include="Macro.h">
       <Filter>File di intestazione\Unmanaged</Filter>
     </ClInclude>
+    <ClInclude Include="CException.h">
+      <Filter>File di intestazione\Unmanaged\Exceptions</Filter>
+    </ClInclude>
+    <ClInclude Include="CAutoFreeMemory.h">
+      <Filter>File di intestazione\Unmanaged\Utility</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AssemblyInfo.cpp">
@@ -101,9 +116,6 @@
     <ClCompile Include="CDecoder.cpp">
       <Filter>File di origine\Unmanaged</Filter>
     </ClCompile>
-    <ClCompile Include="CError.cpp">
-      <Filter>File di origine\Unmanaged</Filter>
-    </ClCompile>
     <ClCompile Include="CWriter.cpp">
       <Filter>File di origine\Unmanaged</Filter>
     </ClCompile>
@@ -124,6 +136,12 @@
     </ClCompile>
     <ClCompile Include="ImageLoader.cpp">
       <Filter>File di origine</Filter>
+    </ClCompile>
+    <ClCompile Include="CException.cpp">
+      <Filter>File di origine\Unmanaged\Exceptions</Filter>
+    </ClCompile>
+    <ClCompile Include="CAutoFreeMemory.cpp">
+      <Filter>File di origine\Unmanaged\Utility</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

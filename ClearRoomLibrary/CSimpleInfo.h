@@ -104,9 +104,13 @@ namespace Unmanaged
 
 		float canon_ev;
 
+		// Managed
+		char* meta_data;
+		unsigned short* raw_image;
+		unsigned short(*image)[4];
 
 		float cam_mul[4], pre_mul[4], cmatrix[3][4], rgb_cam[3][4];
-		unsigned short *raw_image, (*image)[4], cblack[4102];
+		unsigned short cblack[4102];
 		off_t thumb_offset, meta_offset, profile_offset;
 		unsigned shot_order, kodak_cbpp, exif_cfa, unique_id;
 		unsigned thumb_length, meta_length, profile_length;
@@ -119,7 +123,7 @@ namespace Unmanaged
 		unsigned short white[8][8], curve[0x10000], cr2_slice[3], sraw_mul[4];
 		double pixel_aspect, gamm[6] = { 0.45,4.5,0,0,0,0 };
 		unsigned short shrink, iheight, iwidth, fuji_width, thumb_width, thumb_height;
-		char *meta_data, xtrans[6][6], xtrans_abs[6][6];
+		char xtrans[6][6], xtrans_abs[6][6];
 		int mask[8][4];
 		int half_size = 0;
 		int use_camera_wb = 0, use_camera_matrix = 1;

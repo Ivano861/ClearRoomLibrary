@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "CReader.h"
-#include "CError.h"
+#include "CException.h"
 
 #pragma comment(lib,"ws2_32.lib") //Winsock Library
 
@@ -14,7 +14,7 @@ CReader::CReader(const char *fileName) : _ifp(nullptr), _order(0), _dataError(0)
 
 	errno_t err = fopen_s(&_ifp, _fileName, "rb");
 	if (err)
-		throw err;
+		throw CExceptionFile(err);
 }
 
 CReader::~CReader()
@@ -22,7 +22,7 @@ CReader::~CReader()
 	if (_ifp != nullptr)
 		fclose(_ifp);
 
-	delete _fileName;
+	delete[] _fileName;
 }
 
 const char* CReader::GetFileName()
@@ -155,7 +155,8 @@ double CReader::getreal(int type)
 void CReader::read_shorts(unsigned short* pixel, unsigned count)
 {
 	if (fread(pixel, 2, count, _ifp) < count)
-		CError::derror(*this);
+		throw CExceptionFile();
+
 	if ((_order == 0x4949) == (ntohs(0x1234) == 0x1234))
 		_swab((char*)pixel, (char*)pixel, count * 2);
 }

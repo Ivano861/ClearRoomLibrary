@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "CDecoder.h"
-#include "CError.h"
+#include "CException.h"
 
 using namespace Unmanaged;
 
@@ -18,7 +18,9 @@ unsigned short* CDecoder::make_decoder_ref(const unsigned char** source)
 	int max;
 	for (max = 16; max && !count[max]; max--);
 	unsigned short* huff = (unsigned short *)calloc(1 + (1 << max), sizeof *huff);
-	CError::merror(huff, "ClearRoomLibrary", "make_decoder()");
+	if (!huff)
+		throw CExceptionMemory("make_decoder()");
+
 	huff[0] = max;
 	int h = 1;
 	for (int len = 1; len <= max; len++)

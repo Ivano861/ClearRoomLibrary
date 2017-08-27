@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "CWriter.h"
+#include "CException.h"
 
 using namespace Unmanaged;
 
@@ -15,7 +16,7 @@ CWriter::CWriter(const char *fileName) : CWriter()
 
 	errno_t err = fopen_s(&_ifp, _fileName, "wb");
 	if (err)
-		throw err;
+		throw CExceptionFile(err);
 }
 
 CWriter::~CWriter()
@@ -23,14 +24,16 @@ CWriter::~CWriter()
 	if (_ifp != nullptr)
 		fclose(_ifp);
 
-	delete _fileName;
+	delete[] _fileName;
 }
 
 CWriter* CWriter::CreateTempFile()
 {
 	CWriter* result = new CWriter();
 
-	tmpfile_s(&result->_ifp);
+	errno_t err = tmpfile_s(&result->_ifp);
+	if (err)
+		throw CExceptionFile(err);
 
 	return result;
 }

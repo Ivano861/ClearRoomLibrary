@@ -1,22 +1,37 @@
 #include "Stdafx.h"
 #include "CSimpleInfo.h"
 #include "jhead.h"
-#include "CError.h"
+#include "CException.h"
+#include "CAutoFreeMemory.h"
 #include <time.h>
 #include "Macro.h"
 
 using namespace Unmanaged;
 
 #pragma region Costructors
-CSimpleInfo::CSimpleInfo(CReader* reader)
+CSimpleInfo::CSimpleInfo(CReader* reader) : _reader(reader), meta_data(nullptr), raw_image(nullptr), image(nullptr)
 {
-	_reader = reader;
 }
 #pragma endregion
 
 #pragma region Destructor
 CSimpleInfo::~CSimpleInfo()
 {
+	if (meta_data)
+	{
+		free(meta_data);
+		meta_data = nullptr;
+	}
+	if (raw_image)
+	{
+		free(raw_image);
+		raw_image = nullptr;
+	}
+	if (image)
+	{
+		free(image);
+		image = nullptr;
+	}
 	_reader = nullptr;
 }
 #pragma endregion
@@ -1060,7 +1075,7 @@ void CSimpleInfo::GetInfo()
 	else if (!strcmp(model, "*ist D"))
 	{
 		load_raw = LoadRawType::unpacked_load_raw;
-		data_error = -1;
+		data_error = -1;	// TODO: ignore first file error
 	}
 	else if (!strcmp(model, "*ist DS"))
 	{
@@ -1658,7 +1673,7 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 	double cc[4][4], cm[4][3], cam_xyz[4][3], num;
 	double ab[] = { 1,1,1,1 }, asn[] = { 0,0,0,0 }, xyz[] = { 1,1,1 };
 	unsigned sony_curve[] = { 0,0,0,0,0,4095 };
-	unsigned *buf, sony_offset = 0, sony_length = 0, sony_key = 0;
+	unsigned sony_offset = 0, sony_length = 0, sony_key = 0;
 
 	if (tiff_nifds >= sizeof tiff_ifd / sizeof tiff_ifd[0])
 		return 1;
@@ -2046,12 +2061,17 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 		case 50454:			/* Sinar tag */
 		case 50455:
 			if (!(cbuf = (char *)malloc(len)))
+			{
 				break;
-			_reader->Read(cbuf, 1, len);
-			for (cp = cbuf - 1; cp && cp < cbuf + len; cp = strchr(cp, '\n'))
-				if (!strncmp(++cp, "Neutral ", 8))
-					sscanf_s(cp + 8, "%f %f %f", cam_mul, cam_mul + 1, cam_mul + 2);
-			free(cbuf);
+			}
+			else
+			{
+				CAutoFreeMemory(cbuf, false);
+				_reader->Read(cbuf, 1, len);
+				for (cp = cbuf - 1; cp && cp < cbuf + len; cp = strchr(cp, '\n'))
+					if (!strncmp(++cp, "Neutral ", 8))
+						sscanf_s(cp + 8, "%f %f %f", cam_mul, cam_mul + 1, cam_mul + 2);
+			}
 			break;
 		case 50458:
 			if (!make[0])
@@ -2201,22 +2221,22 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 		}
 		_reader->Seek(save, SEEK_SET);
 	}
-	if (sony_length && (buf = (unsigned *)malloc(sony_length)))
+	if (sony_length)
 	{
-		_reader->Seek(sony_offset, SEEK_SET);
-		_reader->Read(buf, sony_length, 1);
-		sony_decrypt(buf, sony_length / 4, 1, sony_key);
-
-		CWriter* sfp = CWriter::CreateTempFile();
-		// TODO
-		//if (sfp != nullptr)
+		unsigned* buf = (unsigned *)malloc(sony_length);
+		if (buf)
 		{
+			CAutoFreeMemory(buf, false);
+			_reader->Seek(sony_offset, SEEK_SET);
+			_reader->Read(buf, sony_length, 1);
+			sony_decrypt(buf, sony_length / 4, 1, sony_key);
+
+			CWriter* sfp = CWriter::CreateTempFile();
 			sfp->Write(buf, sony_length, 1);
 			sfp->Seek(0, SEEK_SET);
 			parse_tiff_ifd(-sony_offset);
+			delete sfp;
 		}
-		delete sfp;
-		free(buf);
 	}
 	for (i = 0; i < colors; i++)
 		for (size_t c = 0; c < colors; c++)
@@ -2976,7 +2996,8 @@ void CSimpleInfo::parse_external_jpeg()
 		return;
 	size_t lenName = strlen(_reader->GetFileName()) + 1;
 	char* jname = (char *)malloc(lenName);
-	CError::merror(jname, "ClearRoomLibrary", "parse_external_jpeg()");
+	CAutoFreeMemory autoFree(jname);
+
 	strcpy_s(jname, lenName, _reader->GetFileName());
 	char* jfile = file - _reader->GetFileName() + jname;
 	char* jext = ext - _reader->GetFileName() + jname;
@@ -3007,9 +3028,9 @@ void CSimpleInfo::parse_external_jpeg()
 		{
 			_reader = new CReader(jname);
 		}
-		catch (const errno_t)
+		catch (const CExceptionFile&)
 		{
-			// TODO: manage exception.
+			_reader = save;
 			throw;
 		}
 
@@ -3022,7 +3043,6 @@ void CSimpleInfo::parse_external_jpeg()
 	}
 	if (!timestamp)
 		fprintf(stderr, ("Failed to read metadata from %s\n"), jname);
-	free(jname);
 }
 
 /*
@@ -5390,7 +5410,7 @@ unsigned CSimpleInfo::getbithuff(int nbits, unsigned short *huff)
 	}
 
 	if (vbits < 0)
-		CError::derror(*_reader);
+		throw CExceptionFile();
 
 	return c;
 }

@@ -1,20 +1,13 @@
 #include "stdafx.h"
 #include "CRaw.h"
+#include "CException.h"
 
 using namespace Unmanaged;
 
 CRaw::CRaw(const char* fileName) : _info(nullptr)
 {
 	_options = new COptions();
-	try
-	{
-		_reader = new CReader(fileName);
-	}
-	catch (const errno_t)
-	{
-		// TODO: manage exception.
-		throw;
-	}
+	_reader = new CReader(fileName);
 }
 
 CRaw::~CRaw()
