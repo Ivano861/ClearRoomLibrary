@@ -106,4 +106,15 @@ namespace Unmanaged
 	private:
 		static const char* Message;
 	};
+
+	class CExceptionDecoderTableOverflow : CException
+	{
+	public:
+		// Create an default exception
+		CExceptionDecoderTableOverflow();
+
+		virtual const char* what() const noexcept;
+	private:
+		static const char* Message;
+	};
 }

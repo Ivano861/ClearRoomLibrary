@@ -26,7 +26,7 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 using namespace Unmanaged;
 
 #pragma region Costructors
-CSimpleInfo::CSimpleInfo(CReader* reader) : _reader(reader), meta_data(nullptr), raw_image(nullptr), image(nullptr)
+CSimpleInfo::CSimpleInfo(CReader* reader) : _reader(reader), meta_data(nullptr), raw_image(nullptr), image(nullptr), oprof(nullptr)
 {
 }
 #pragma endregion
@@ -48,6 +48,11 @@ CSimpleInfo::~CSimpleInfo()
 	{
 		free(image);
 		image = nullptr;
+	}
+	if (oprof)
+	{
+		free(oprof);
+		oprof = nullptr;
 	}
 	_reader = nullptr;
 }
@@ -318,6 +323,7 @@ void CSimpleInfo::GetInfo()
 	load_raw = LoadRawType::unknown_load_raw;
 	thumb_load_raw = LoadRawType::unknown_load_raw;
 	write_thumb = WriteThumbType::jpeg_thumb;
+	write_fun = WriteThumbType::unknown_write;
 	data_offset = meta_offset = meta_length = tiff_bps = tiff_compress = 0;
 	kodak_cbpp = zero_after_ff = dng_version = load_flags = 0;
 	timestamp = shot_order = tiff_samples = black = is_foveon = 0;

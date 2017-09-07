@@ -21,7 +21,7 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 
 using namespace Unmanaged;
 
-CWriter::CWriter() : _ifp(nullptr), _order(0), _dataError(0)
+CWriter::CWriter() : _ofp(nullptr), _order(0), _dataError(0)
 {
 }
 
@@ -31,15 +31,15 @@ CWriter::CWriter(const char *fileName) : CWriter()
 	_fileName = new char[len];
 	strcpy_s(_fileName, len, fileName);
 
-	errno_t err = fopen_s(&_ifp, _fileName, "wb");
+	errno_t err = fopen_s(&_ofp, _fileName, "wb");
 	if (err)
 		throw CExceptionFile(err);
 }
 
 CWriter::~CWriter()
 {
-	if (_ifp != nullptr)
-		fclose(_ifp);
+	if (_ofp != nullptr)
+		fclose(_ofp);
 
 	delete[] _fileName;
 }
@@ -48,7 +48,7 @@ CWriter* CWriter::CreateTempFile()
 {
 	CWriter* result = new CWriter();
 
-	errno_t err = tmpfile_s(&result->_ifp);
+	errno_t err = tmpfile_s(&result->_ofp);
 	if (err)
 		throw CExceptionFile(err);
 
@@ -72,19 +72,41 @@ short  CWriter::GetOrder()
 
 int CWriter::Seek(long offset, int origin)
 {
-	return fseek(_ifp, offset, origin);
+	return fseek(_ofp, offset, origin);
 }
 
 size_t CWriter::Write(void* buffer, size_t elementSize, size_t elementCount)
 {
-	return fwrite(buffer, elementSize, elementCount, _ifp);
+	return fwrite(buffer, elementSize, elementCount, _ofp);
+}
+
+int CWriter::PutChar(int c)
+{
+	return fputc(c, _ofp);
+}
+
+int CWriter::Print(const char* format, unsigned short value1, unsigned short value2)
+{
+	return fprintf(_ofp, format, value1, value2);
+}
+int CWriter::Print(const char* format, int value1, unsigned short value2, unsigned short value3)
+{
+	return fprintf(_ofp, format, value1, value2, value3);
+}
+int CWriter::Print(const char* format, unsigned short value1, unsigned short value2, unsigned int value3, int value4, const char* value5)
+{
+	return fprintf(_ofp, format, value1, value2, value3, value4, value5);
+}
+int CWriter::Print(const char* format, int value1, unsigned short value2, unsigned short value3, int value4)
+{
+	return fprintf(_ofp, format, value1, value2, value3, value4);
 }
 
 long CWriter::GetPosition()
 {
-	return ftell(_ifp);
+	return ftell(_ofp);
 }
 int CWriter::Eof()
 {
-	return feof(_ifp);
+	return feof(_ofp);
 }

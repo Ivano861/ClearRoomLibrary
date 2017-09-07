@@ -22,7 +22,9 @@
             <TextBox x:Name="FilenameSelected" Grid.Column="1" VerticalAlignment="Center"></TextBox>
             <Button x:Name="SelectImageButton" Grid.Column="2" Content="..." Click="SelectImageButton_Click"/>
         </Grid>
-        <Grid Grid.Row="1"/>
+        <Grid Grid.Row="1">
+            <Image x:Name="image" Margin="10"/>
+        </Grid>
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition/>

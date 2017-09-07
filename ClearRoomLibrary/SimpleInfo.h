@@ -35,7 +35,11 @@ namespace ClearRoomLibrary
 		~SimpleInfo();
 
 	public:
-
+		property String^ Make { String^ get(); }
+		property String^ Model { String^ get(); }
+		property String^ Model2 { String^ get(); }
+		property String^ Artist { String^ get(); }
+		property String^ Description { String^ get(); }
 
 	private:
 		// Private members

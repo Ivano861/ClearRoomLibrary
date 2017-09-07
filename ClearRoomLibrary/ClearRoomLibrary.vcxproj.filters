@@ -48,9 +48,6 @@
     <ClInclude Include="CReader.h">
       <Filter>File di intestazione\Unmanaged</Filter>
     </ClInclude>
-    <ClInclude Include="tiff_ifd.h">
-      <Filter>File di intestazione\Unmanaged</Filter>
-    </ClInclude>
     <ClInclude Include="jhead.h">
       <Filter>File di intestazione\Unmanaged</Filter>
     </ClInclude>
@@ -92,6 +89,18 @@
     </ClInclude>
     <ClInclude Include="CAutoFreeMemory.h">
       <Filter>File di intestazione\Unmanaged\Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="decode.h">
+      <Filter>File di intestazione\Unmanaged</Filter>
+    </ClInclude>
+    <ClInclude Include="tiffHdr.h">
+      <Filter>File di intestazione\Unmanaged</Filter>
+    </ClInclude>
+    <ClInclude Include="tiffTag.h">
+      <Filter>File di intestazione\Unmanaged</Filter>
+    </ClInclude>
+    <ClInclude Include="tiffIfd.h">
+      <Filter>File di intestazione\Unmanaged</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

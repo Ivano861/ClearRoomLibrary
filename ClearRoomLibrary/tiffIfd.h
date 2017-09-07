@@ -15,21 +15,20 @@ You should have received a copy of the GNU General Public License
 along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "stdafx.h"
-#include "Options.h"
+#pragma once
 
-using namespace ClearRoomLibrary;
-
-Options::Options()
+struct tiff_ifd
 {
-	_options = new COptions();
-}
-
-Options::~Options()
-{
-	if (_options)
-	{
-		delete _options;
-		_options = nullptr;
-	}
-}
+	int width;
+	int height;
+	int bps;
+	int comp;
+	int phint;
+	int offset;
+	int flip;
+	int samples;
+	int bytes;
+	int tile_width;
+	int tile_length;
+	float shutter;
+};

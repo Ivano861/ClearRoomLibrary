@@ -15,21 +15,32 @@ You should have received a copy of the GNU General Public License
 along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "stdafx.h"
-#include "Options.h"
+#pragma once
 
-using namespace ClearRoomLibrary;
+#include "tiffTag.h"
 
-Options::Options()
+struct tiff_hdr
 {
-	_options = new COptions();
-}
-
-Options::~Options()
-{
-	if (_options)
-	{
-		delete _options;
-		_options = nullptr;
-	}
-}
+	unsigned short order;
+	unsigned short magic;
+	int ifd;
+	unsigned short pad;
+	unsigned short ntag;
+	tiff_tag tag[23];
+	int nextifd;
+	unsigned short pad2;
+	unsigned short nexif;
+	tiff_tag exif[4];
+	unsigned short pad3;
+	unsigned short ngps;
+	tiff_tag gpst[10];
+	short bps[4];
+	int rat[10];
+	unsigned gps[26];
+	char desc[512];
+	char make[64];
+	char model[64];
+	char soft[32];
+	char date[20];
+	char artist[64];
+};

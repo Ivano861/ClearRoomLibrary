@@ -145,6 +145,7 @@
     <ClInclude Include="CReader.h" />
     <ClInclude Include="CSimpleInfo.h" />
     <ClInclude Include="CWriter.h" />
+    <ClInclude Include="decode.h" />
     <ClInclude Include="Enumerate.h" />
     <ClInclude Include="jhead.h" />
     <ClInclude Include="ImageLoader.h" />
@@ -155,7 +156,9 @@
     <ClInclude Include="SimpleInfo.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Stdafx.h" />
-    <ClInclude Include="tiff_ifd.h" />
+    <ClInclude Include="tiffHdr.h" />
+    <ClInclude Include="tiffIfd.h" />
+    <ClInclude Include="tiffTag.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AssemblyInfo.cpp" />

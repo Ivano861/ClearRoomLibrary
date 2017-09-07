@@ -17,9 +17,15 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
-struct tiff_ifd
+struct tiff_tag
 {
-	int width, height, bps, comp, phint, offset, flip, samples, bytes;
-	int tile_width, tile_length;
-	float shutter;
+	unsigned short tag;
+	unsigned short type;
+	int count;
+	union
+	{
+		char c[4];
+		short s[2];
+		int i;
+	} val;
 };

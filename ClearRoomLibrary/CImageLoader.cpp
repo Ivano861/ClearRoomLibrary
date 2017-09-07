@@ -16,6 +16,7 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include "stdafx.h"
+#include <direct.h>
 #include "CImageLoader.h"
 #include "jhead.h"
 #include "CDecoder.h"
@@ -23,10 +24,15 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 #include "Macro.h"
 #include "CAutoFreeMemory.h"
 #include "jpeglib.h"
-#include <jasper/jasper.h>	/* Decode Red camera movies */
+#include "jasper/jasper.h"	/* Decode Red camera movies */
+#include "lcms2.h"
+
+#define _USE_MATH_DEFINES // for C++  
+#include <math.h> 
 
 #pragma comment(lib,"jpeg.lib") //jpeglib Library
 #pragma comment(lib,"libjasper.lib") //libjasper Library
+#pragma comment(lib,"lcms2_static.lib") //lcms2 Library
 
 using namespace Unmanaged;
 
@@ -82,7 +88,7 @@ All RGB cameras use one of these Bayer grids:
 	_info->image[((row) >> _info->shrink)*_info->iwidth + ((col) >> _info->shrink)][fcol(row,col)]
 
 
-CImageLoader::CImageLoader(COptions* options, CSimpleInfo* info, CReader* reader) : _options(options), _info(info), _reader(reader)
+CImageLoader::CImageLoader(COptions* options, CSimpleInfo* info, CReader* reader) : _options(options), _info(info), _reader(reader), _writer(nullptr)
 {
 }
 
@@ -91,6 +97,11 @@ CImageLoader::~CImageLoader()
 	_options = nullptr;
 	_info = nullptr;
 	_reader = nullptr;
+	if (_writer)
+	{
+		_writer->~CWriter();
+		_writer = nullptr;
+	}
 }
 
 void CImageLoader::LoadImageRaw()
@@ -108,6 +119,7 @@ void CImageLoader::LoadImageRaw()
 	case  90:
 		_info->flip = 6;
 	}
+	_info->write_fun = WriteThumbType::write_ppm_tiff;
 
 	if (_info->load_raw == LoadRawType::kodak_ycbcr_load_raw)
 	{
@@ -164,101 +176,147 @@ void CImageLoader::LoadImageRaw()
 		free(_info->raw_image);
 		_info->raw_image = nullptr;
 	}
-	/*
-	if (zero_is_bad)
+	if (_info->zero_is_bad)
 		remove_zeroes();
-	bad_pixels (bpfile);
-	if (dark_frame) subtract (dark_frame);
-	quality = 2 + !fuji_width;
-	if (user_qual >= 0) quality = user_qual;
-	i = cblack[3];
-	FORC3 if (i > cblack[c]) i = cblack[c];
-	FORC4 cblack[c] -= i;
-	black += i;
-	i = cblack[6];
-	FORC (cblack[4] * cblack[5])
-	if (i > cblack[6+c]) i = cblack[6+c];
-	FORC (cblack[4] * cblack[5])
-	cblack[6+c] -= i;
-	black += i;
-	if (user_black >= 0) black = user_black;
-	FORC4 cblack[c] += black;
-	if (user_sat > 0) maximum = user_sat;
-	#ifdef COLORCHECK
-	colorcheck();
-	#endif
-	if (is_foveon) {
-	if (document_mode || load_raw == &CLASS foveon_dp_load_raw) {
-	for (i=0; i < height*width*4; i++)
-	if ((short) image[0][i] < 0) image[0][i] = 0;
-	} else foveon_interpolate();
-	} else if (document_mode < 2)
-	scale_colors();
-	pre_interpolate();
-	if (filters && !document_mode) {
-	if (quality == 0)
-	lin_interpolate();
-	else if (quality == 1 || colors > 3)
-	vng_interpolate();
-	else if (quality == 2 && filters > 1000)
-	ppg_interpolate();
-	else if (filters == 9)
-	xtrans_interpolate (quality*2-3);
-	else
-	ahd_interpolate();
+	bad_pixels(_options->bpfile);
+	if (_options->dark_frame)
+		subtract (_options->dark_frame);
+	int quality = 2 + !_info->fuji_width;
+	if (_options->user_qual >= 0)
+		quality = _options->user_qual;
+	int i = _info->cblack[3];
+	for (size_t c = 0; c < 3; c++)
+	{
+		if (i > _info->cblack[c])
+			i = _info->cblack[c];
 	}
-	if (mix_green)
-	for (colors=3, i=0; i < height*width; i++)
-	image[i][1] = (image[i][1] + image[i][3]) >> 1;
-	if (!is_foveon && colors == 3) median_filter();
-	if (!is_foveon && highlight == 2) blend_highlights();
-	if (!is_foveon && highlight > 2) recover_highlights();
-	if (use_fuji_rotate) fuji_rotate();
+	for (size_t c = 0; c < 4; c++)
+		_info->cblack[c] -= i;
+	_info->black += i;
+	i = _info->cblack[6];
+	for (size_t c = 0; c < (_info->cblack[4] * _info->cblack[5]); c++)
+		if (i > _info->cblack[6+c])
+			i = _info->cblack[6+c];
+	for (size_t c = 0; c < (_info->cblack[4] * _info->cblack[5]); c++)
+		_info->cblack[6+c] -= i;
+	_info->black += i;
+	if (_options->user_black >= 0)
+		_info->black = _options->user_black;
+	for (size_t c = 0; c < 4; c++)
+		_info->cblack[c] += _info->black;
+	if (_options->user_sat > 0)
+		_info->maximum = _options->user_sat;
+	//#ifdef COLORCHECK
+	colorcheck();
+	//#endif
+	if (_info->is_foveon)
+	{
+		if (_options->document_mode || _info->load_raw == LoadRawType::foveon_dp_load_raw)
+		{
+			for (i = 0; i < _info->height*_info->width * 4; i++)
+				if ((short)_info->image[0][i] < 0)
+					_info->image[0][i] = 0;
+		}
+		else
+		{
+			foveon_interpolate();
+		}
+	}
+	else if (_options->document_mode < 2)
+	{
+		scale_colors();
+	}
+	pre_interpolate();
+	if (_info->filters && !_options->document_mode)
+	{
+		if (quality == 0)
+			lin_interpolate();
+		else if (quality == 1 || _info->colors > 3)
+			vng_interpolate();
+		else if (quality == 2 && _info->filters > 1000)
+			ppg_interpolate();
+		else if (_info->filters == 9)
+			xtrans_interpolate(quality * 2 - 3);
+		else
+			ahd_interpolate();
+	}
+	if (_info->mix_green)
+	{
+		_info->colors = 3;
+		for (i = 0; i < _info->height*_info->width; i++)
+			_info->image[i][1] = (_info->image[i][1] + _info->image[i][3]) >> 1;
+	}
+	if (!_info->is_foveon && _info->colors == 3)
+		median_filter();
+	if (!_info->is_foveon && _options->highlight == 2)
+		blend_highlights();
+	if (!_info->is_foveon && _options->highlight > 2)
+		recover_highlights();
+	if (_options->use_fuji_rotate)
+		fuji_rotate();
 	#ifndef NO_LCMS
-	if (cam_profile) apply_profile (cam_profile, out_profile);
+	if (_options->cam_profile)
+		apply_profile (_options->cam_profile, _options->out_profile);
 	#endif
 	convert_to_rgb();
-	if (use_fuji_rotate) stretch();
-	thumbnail:
-	if (write_fun == &CLASS jpeg_thumb)
-	write_ext = ".jpg";
-	else if (output_tiff && write_fun == &CLASS write_ppm_tiff)
-	write_ext = ".tiff";
+	if (_options->use_fuji_rotate)
+		stretch();
+
+	const char* write_ext;
+	if (_info->write_fun == WriteThumbType::jpeg_thumb)
+		write_ext = ".jpg";
+	else if (_options->output_tiff && _info->write_fun == WriteThumbType::write_ppm_tiff)
+		write_ext = ".tiff";
 	else
-	write_ext = ".pgm\0.ppm\0.ppm\0.pam" + colors*5-5;
-	ofname = (char *) malloc (strlen(ifname) + 64);
-	merror (ofname, "main()");
-	if (write_to_stdout)
-	strcpy (ofname,_("standard output"));
-	else {
-	strcpy (ofname, ifname);
-	if ((cp = strrchr (ofname, '.'))) *cp = 0;
-	if (multi_out)
-	sprintf (ofname+strlen(ofname), "_%0*d",
-	snprintf(0,0,"%d",is_raw-1), shot_select);
-	if (thumbnail_only)
-	strcat (ofname, ".thumb");
-	strcat (ofname, write_ext);
-	ofp = fopen (ofname, "wb");
-	if (!ofp) {
-	status = 1;
-	perror (ofname);
-	goto cleanup;
+		write_ext = &".pgm\0.ppm\0.ppm\0.pam"[(_info->colors * 5 - 5)];
+	char* ofname = (char *) malloc (strlen(_reader->GetFileName()) + 64);
+	CAutoFreeMemory autoFreeOutput(ofname);
+
+	strcpy(ofname, _reader->GetFileName());
+	char* cp = strrchr(ofname, '.');
+	if (cp)
+		*cp = 0;
+	if (_options->multi_out)
+		sprintf(ofname + strlen(ofname), "_%0*d",
+			snprintf(0, 0, "%d", _info->is_raw - 1), _info->shot_select);
+	if (_options->thumbnail_only)
+		strcat(ofname, ".thumb");
+	strcat(ofname, write_ext);
+	_writer = new CWriter(ofname);
+
+	switch (_info->write_fun)
+	{
+	case WriteThumbType::layer_thumb:
+		layer_thumb();
+		break;
+	case WriteThumbType::ppm_thumb:
+		ppm_thumb();
+		break;
+	case WriteThumbType::ppm16_thumb:
+		ppm16_thumb();
+		break;
+	case WriteThumbType::rollei_thumb:
+		rollei_thumb();
+		break;
+	case WriteThumbType::jpeg_thumb:
+		jpeg_thumb();
+		break;
+	case WriteThumbType::foveon_thumb:
+		foveon_thumb();
+		break;
+	case WriteThumbType::write_ppm_tiff:
+		write_ppm_tiff();
+		break;
+	case WriteThumbType::unknown_write:
+	default:
+		break;
 	}
-	}
-	(*write_fun)();
-	fclose(ifp);
-	if (ofp != stdout) fclose(ofp);
-	cleanup:
-	if (meta_data) free (meta_data);
-	if (ofname) free (ofname);
-	if (oprof) free (oprof);
-	*/
-	if (_info->image)
+
+	/*if (_info->image)
 	{
 		free(_info->image);
 		_info->image = nullptr;
-	}
+	}*/
 	/*
 	if (multi_out) {
 	if (++shot_select < is_raw) arg--;
@@ -307,10 +365,10 @@ void CImageLoader::LoadRaw()
 		eight_bit_load_raw();
 		break;
 	case LoadRawType::foveon_dp_load_raw:
-		// TODO
+		foveon_dp_load_raw();
 		break;
 	case LoadRawType::foveon_sd_load_raw:
-		// TODO
+		foveon_sd_load_raw();
 		break;
 	case LoadRawType::hasselblad_load_raw:
 		hasselblad_load_raw();
@@ -431,6 +489,7 @@ void CImageLoader::LoadImageThumbnail()
 	case  90:
 		_info->flip = 6;
 	}
+	_info->write_fun = WriteThumbType::write_ppm_tiff;
 
 	if ((!_info->thumb_offset))
 	{
@@ -444,54 +503,198 @@ void CImageLoader::LoadImageThumbnail()
 		_info->width = _info->thumb_width;
 		_info->filters = 0;
 		_info->colors = 3;
+
+		if (!_info->is_raw)
+			throw CExceptionNoRaw();
+
+		_info->shrink = _info->filters && (_info->half_size || _options->threshold || _options->aber[0] != 1 || _options->aber[2] != 1);
+		_info->iheight = (_info->height + _info->shrink) >> _info->shrink;
+		_info->iwidth = (_info->width + _info->shrink) >> _info->shrink;
+
+		if (_info->meta_length)
+		{
+			_info->meta_data = (char *)malloc(_info->meta_length);
+			if (!_info->meta_data)
+				throw CExceptionMemory("LoadImageRaw()");
+		}
+		if (_info->filters || _info->colors == 1)
+		{
+			_info->raw_image = (unsigned short *)calloc((_info->raw_height + 7), _info->raw_width * 2);
+			if (!_info->raw_image)
+				throw CExceptionMemory("LoadImageRaw()");
+		}
+		else
+		{
+			_info->image = (unsigned short(*)[4]) calloc(_info->iheight, _info->iwidth * sizeof *_info->image);
+			if (!_info->image)
+				throw CExceptionMemory("LoadImageRaw()");
+		}
+
+		if (_info->shot_select >= _info->is_raw)
+			throw CExceptionInvalidImageRequest();
+
+		_reader->Seek(_info->data_offset, SEEK_SET);
+		LoadRaw();
+
+		if (_options->document_mode == 3)
+		{
+			_info->top_margin = _info->left_margin = _info->fuji_width = 0;
+			_info->height = _info->raw_height;
+			_info->width = _info->raw_width;
+		}
+		_info->iheight = (_info->height + _info->shrink) >> _info->shrink;
+		_info->iwidth = (_info->width + _info->shrink) >> _info->shrink;
+		if (_info->raw_image)
+		{
+			_info->image = (unsigned short(*)[4]) calloc(_info->iheight, _info->iwidth * sizeof *_info->image);
+			if (!_info->image)
+				throw CExceptionMemory("LoadImageRaw()");
+			crop_masked_pixels();
+			free(_info->raw_image);
+			_info->raw_image = nullptr;
+		}
+		if (_info->zero_is_bad)
+			remove_zeroes();
+		bad_pixels(_options->bpfile);
+		if (_options->dark_frame)
+			subtract(_options->dark_frame);
+		int quality = 2 + !_info->fuji_width;
+		if (_options->user_qual >= 0)
+			quality = _options->user_qual;
+		int i = _info->cblack[3];
+		for (size_t c = 0; c < 3; c++)
+		{
+			if (i > _info->cblack[c])
+				i = _info->cblack[c];
+		}
+		for (size_t c = 0; c < 4; c++)
+			_info->cblack[c] -= i;
+		_info->black += i;
+		i = _info->cblack[6];
+		for (size_t c = 0; c < (_info->cblack[4] * _info->cblack[5]); c++)
+			if (i > _info->cblack[6 + c])
+				i = _info->cblack[6 + c];
+		for (size_t c = 0; c < (_info->cblack[4] * _info->cblack[5]); c++)
+			_info->cblack[6 + c] -= i;
+		_info->black += i;
+		if (_options->user_black >= 0)
+			_info->black = _options->user_black;
+		for (size_t c = 0; c < 4; c++)
+			_info->cblack[c] += _info->black;
+		if (_options->user_sat > 0)
+			_info->maximum = _options->user_sat;
+		//#ifdef COLORCHECK
+		colorcheck();
+		//#endif
+		if (_info->is_foveon)
+		{
+			if (_options->document_mode || _info->load_raw == LoadRawType::foveon_dp_load_raw)
+			{
+				for (i = 0; i < _info->height*_info->width * 4; i++)
+					if ((short)_info->image[0][i] < 0)
+						_info->image[0][i] = 0;
+			}
+			else
+			{
+				foveon_interpolate();
+			}
+		}
+		else if (_options->document_mode < 2)
+		{
+			scale_colors();
+		}
+		pre_interpolate();
+		if (_info->filters && !_options->document_mode)
+		{
+			if (quality == 0)
+				lin_interpolate();
+			else if (quality == 1 || _info->colors > 3)
+				vng_interpolate();
+			else if (quality == 2 && _info->filters > 1000)
+				ppg_interpolate();
+			else if (_info->filters == 9)
+				xtrans_interpolate(quality * 2 - 3);
+			else
+				ahd_interpolate();
+		}
+		if (_info->mix_green)
+		{
+			_info->colors = 3;
+			for (i = 0; i < _info->height*_info->width; i++)
+				_info->image[i][1] = (_info->image[i][1] + _info->image[i][3]) >> 1;
+		}
+		if (!_info->is_foveon && _info->colors == 3)
+			median_filter();
+		if (!_info->is_foveon && _options->highlight == 2)
+			blend_highlights();
+		if (!_info->is_foveon && _options->highlight > 2)
+			recover_highlights();
+		if (_options->use_fuji_rotate)
+			fuji_rotate();
+#ifndef NO_LCMS
+		if (_options->cam_profile)
+			apply_profile(_options->cam_profile, _options->out_profile);
+#endif
+		convert_to_rgb();
+		if (_options->use_fuji_rotate)
+			stretch();
 	}
 	else
 	{
 		_reader->Seek(_info->thumb_offset, SEEK_SET);
-		// TODO
-		//_info->write_fun = _info->write_thumb;
-
-		/*if (write_fun == WriteThumbType::jpeg_thumb)
-			write_ext = ".jpg";
-		else if (output_tiff && write_fun == WriteThumbType::write_ppm_tiff)
-			write_ext = ".tiff";
-		else
-			write_ext = ".pgm\0.ppm\0.ppm\0.pam" + colors * 5 - 5;
-		ofname = (char *)malloc(strlen(ifname) + 64);
-		merror(ofname, "main()");
-		if (write_to_stdout)
-			strcpy(ofname, _("standard output"));
-		else {
-			strcpy(ofname, ifname);
-			if ((cp = strrchr(ofname, '.'))) *cp = 0;
-			if (multi_out)
-				sprintf(ofname + strlen(ofname), "_%0*d",
-					snprintf(0, 0, "%d", is_raw - 1), shot_select);
-			if (thumbnail_only)
-				strcat(ofname, ".thumb");
-			strcat(ofname, write_ext);
-			ofp = fopen(ofname, "wb");
-			if (!ofp) {
-				status = 1;
-				perror(ofname);
-				goto cleanup;
-			}
-		}
-		(*write_fun)();*/
+		_info->write_fun = _info->write_thumb;
 	}
 
-//cleanup:
-//	if (meta_data) free(meta_data);
-//	if (ofname) free(ofname);
-//	if (oprof) free(oprof);
-//	if (image) free(image);
-//	if (multi_out) {
-//		if (++shot_select < is_raw) arg--;
-//		else shot_select = 0;
-//	}
+	const char* write_ext;
+	if (_info->write_fun == WriteThumbType::jpeg_thumb)
+		write_ext = ".jpg";
+	else if (_options->output_tiff && _info->write_fun == WriteThumbType::write_ppm_tiff)
+		write_ext = ".tiff";
+	else
+		write_ext = &".pgm\0.ppm\0.ppm\0.pam"[(_info->colors * 5 - 5)];
+	char* ofname = (char *)malloc(strlen(_reader->GetFileName()) + 64);
+	CAutoFreeMemory autoFreeOutput(ofname);
 
+	strcpy(ofname, _reader->GetFileName());
+	char* cp = strrchr(ofname, '.');
+	if (cp)
+		*cp = 0;
+	if (_options->multi_out)
+		sprintf(ofname + strlen(ofname), "_%0*d",
+			snprintf(0, 0, "%d", _info->is_raw - 1), _info->shot_select);
+	if (_options->thumbnail_only)
+		strcat(ofname, ".thumb");
+	strcat(ofname, write_ext);
+	_writer = new CWriter(ofname);
+
+	switch (_info->write_fun)
+	{
+	case WriteThumbType::layer_thumb:
+		layer_thumb();
+		break;
+	case WriteThumbType::ppm_thumb:
+		ppm_thumb();
+		break;
+	case WriteThumbType::ppm16_thumb:
+		ppm16_thumb();
+		break;
+	case WriteThumbType::rollei_thumb:
+		rollei_thumb();
+		break;
+	case WriteThumbType::jpeg_thumb:
+		jpeg_thumb();
+		break;
+	case WriteThumbType::foveon_thumb:
+		foveon_thumb();
+		break;
+	case WriteThumbType::write_ppm_tiff:
+		write_ppm_tiff();
+		break;
+	case WriteThumbType::unknown_write:
+	default:
+		break;
+	}
 }
-
 
 void CImageLoader::packed_load_raw()
 {
@@ -1495,6 +1698,15 @@ void CImageLoader::kodak_ycbcr_load_raw()
 			}
 		}
 	}
+}
+
+void CImageLoader::kodak_thumb_load_raw()
+{
+	_info->colors = _info->thumb_misc >> 5;
+	for (int row = 0; row < _info->height; row++)
+		for (int col = 0; col < _info->width; col++)
+			_reader->read_shorts(_info->image[row*_info->width + col], _info->colors);
+	_info->maximum = (1 << (_info->thumb_misc & 31)) - 1;
 }
 
 void CImageLoader::leaf_hdr_load_raw()
@@ -3110,6 +3322,8 @@ void CImageLoader::cubic_spline(const int* x_, const int* y_, const int len)
 	float** A = (float **)calloc(((2 * len + 4) * sizeof **A + sizeof *A), 2 * len);
 	if (!A)
 		return;
+	CAutoFreeMemory autoFree(A);
+
 	A[0] = (float *)(A + 2 * len);
 	int i;
 	for (i = 1; i < 2 * len; i++)
@@ -3169,7 +3383,6 @@ void CImageLoader::cubic_spline(const int* x_, const int* y_, const int len)
 		_info->curve[i] = y_out < 0.0 ? 0 : (y_out >= 1.0 ? 65535 :
 			(unsigned short)(y_out * 65535.0 + 0.5));
 	}
-	free(A);
 }
 
 void CImageLoader::crw_init_tables(unsigned table, unsigned short* huff[2])
@@ -3511,4 +3724,3240 @@ void CImageLoader::sony_decrypt(unsigned *data, int len, int start, int key)
 	}
 	while (len-- && p++)
 		*data++ ^= pad[(p - 1) & 127] = pad[p & 127] ^ pad[(p + 64) & 127];
+}
+
+void CImageLoader::remove_zeroes()
+{
+	for (unsigned row = 0; row < _info->height; row++)
+	{
+		for (unsigned col = 0; col < _info->width; col++)
+		{
+			if (BAYER(row, col) == 0)
+			{
+				unsigned tot = 0;
+				unsigned n = 0;
+				for (unsigned r = row - 2; r <= row + 2; r++)
+				{
+					for (unsigned c = col - 2; c <= col + 2; c++)
+					{
+						if (r < _info->height && c < _info->width &&
+							FC(r, c) == FC(row, col) && BAYER(r, c))
+						{
+							tot += (n++, BAYER(r, c));
+						}
+					}
+				}
+				if (n)
+					BAYER(row, col) = tot / n;
+			}
+		}
+	}
+}
+
+/*
+Seach from the current directory up to the root looking for
+a ".badpixels" file, and fix those pixels now.
+*/
+void CImageLoader::bad_pixels(const char *cfname)
+{
+	// TODO: manage file
+	FILE* fp = 0;
+	int fixed = 0;
+
+	if (!_info->filters)
+		return;
+
+	if (cfname)
+	{
+		fp = fopen(cfname, "r");
+	}
+	else
+	{
+		char* fname = nullptr;
+		CAutoFreeMemory(fname, false);
+
+		int len;
+		for (len = 32; ; len *= 2)
+		{
+			fname = (char *)malloc(len);
+			if (!fname)
+				return;
+			if (_getcwd(fname, len - 16))
+				break;
+			if (errno != ERANGE)
+				return;
+		}
+		if (fname[1] == ':')
+			memmove(fname, fname + 2, len - 2);
+		char* cp;
+		for (cp = fname; *cp; cp++)
+			if (*cp == '\\')
+				*cp = '/';
+		cp = fname + strlen(fname);
+		if (cp[-1] == '/')
+			cp--;
+		while (*fname == '/')
+		{
+			strcpy(cp, "/.badpixels");
+			if ((fp = fopen(fname, "r")))
+				break;
+			if (cp == fname)
+				break;
+			while (*--cp != '/');
+		}
+	}
+	if (!fp)
+		return;
+
+	char line[128];
+	while (fgets(line, 128, fp))
+	{
+		char* cp = strchr(line, '#');
+		if (cp)
+			*cp = 0;
+		int time;
+		int row;
+		int col;
+		if (sscanf(line, "%d %d %d", &col, &row, &time) != 3)
+			continue;
+		if ((unsigned)col >= _info->width || (unsigned)row >= _info->height)
+			continue;
+		if (time > _info->timestamp)
+			continue;
+		int n = 0;
+		int tot = 0;
+		for (int rad = 1; rad < 3 && n == 0; rad++)
+		{
+			for (int r = row - rad; r <= row + rad; r++)
+			{
+				for (int c = col - rad; c <= col + rad; c++)
+				{
+					if ((unsigned)r < _info->height && (unsigned)c < _info->width &&
+						(r != row || c != col) && fcol(r, c) == fcol(row, col))
+					{
+						tot += BAYER2(r, c);
+						n++;
+					}
+				}
+			}
+		}
+		BAYER2(row, col) = tot / n;
+	}
+	if (fixed)
+		fputc('\n', stderr);
+	fclose(fp);
+}
+
+void CImageLoader::subtract(const char *fname)
+{
+	// TODO: manage file
+	FILE *fp;
+	int dim[3] = { 0,0,0 };
+
+	if (!(fp = fopen(fname, "rb")))
+	{
+		perror(fname);
+		return;
+	}
+
+	int error = 0;
+	if (fgetc(fp) != 'P' || fgetc(fp) != '5')
+		error = 1;
+
+	int  c;
+	int  nd = 0;
+	int comment = 0;
+	int number = 0;
+	while (!error && nd < 3 && (c = fgetc(fp)) != EOF)
+	{
+		if (c == '#')
+			comment = 1;
+		if (c == '\n')
+			comment = 0;
+		if (comment)
+			continue;
+		if (isdigit(c))
+			number = 1;
+		if (number)
+		{
+			if (isdigit(c))
+			{
+				dim[nd] = dim[nd] * 10 + c - '0';
+			}
+			else if (isspace(c))
+			{
+				number = 0;  nd++;
+			}
+			else
+			{
+				error = 1;
+			}
+		}
+	}
+	if (error || nd < 3)
+	{
+		fprintf(stderr, ("%s is not a valid PGM file!\n"), fname);
+		fclose(fp);  return;
+	}
+	else if (dim[0] != _info->width || dim[1] != _info->height || dim[2] != 65535)
+	{
+		fprintf(stderr, ("%s has the wrong dimensions!\n"), fname);
+		fclose(fp);  return;
+	}
+	unsigned short* pixel = (unsigned short *)calloc(_info->width, sizeof *pixel);
+	CAutoFreeMemory autoFree(pixel);
+	for (int row = 0; row < _info->height; row++)
+	{
+		fread(pixel, 2, _info->width, fp);
+		for (int col = 0; col < _info->width; col++)
+			BAYER(row, col) = MAX(BAYER(row, col) - ntohs(pixel[col]), 0);
+	}
+	fclose(fp);
+	memset(_info->cblack, 0, sizeof _info->cblack);
+	_info->black = 0;
+}
+
+void CImageLoader::colorcheck()
+{
+#ifdef COLORCHECK
+#define NSQ 24
+	// Coordinates of the GretagMacbeth ColorChecker squares
+	// width, height, 1st_column, 1st_row
+	int cut[NSQ][4];			// you must set these
+								// ColorChecker Chart under 6500-kelvin illumination
+	static const double gmb_xyY[NSQ][3] =
+	{
+		{ 0.400, 0.350, 10.1 },		// Dark Skin
+		{ 0.377, 0.345, 35.8 },		// Light Skin
+		{ 0.247, 0.251, 19.3 },		// Blue Sky
+		{ 0.337, 0.422, 13.3 },		// Foliage
+		{ 0.265, 0.240, 24.3 },		// Blue Flower
+		{ 0.261, 0.343, 43.1 },		// Bluish Green
+		{ 0.506, 0.407, 30.1 },		// Orange
+		{ 0.211, 0.175, 12.0 },		// Purplish Blue
+		{ 0.453, 0.306, 19.8 },		// Moderate Red
+		{ 0.285, 0.202, 6.6 },		// Purple
+		{ 0.380, 0.489, 44.3 },		// Yellow Green
+		{ 0.473, 0.438, 43.1 },		// Orange Yellow
+		{ 0.187, 0.129, 6.1 },		// Blue
+		{ 0.305, 0.478, 23.4 },		// Green
+		{ 0.539, 0.313, 12.0 },		// Red
+		{ 0.448, 0.470, 59.1 },		// Yellow
+		{ 0.364, 0.233, 19.8 },		// Magenta
+		{ 0.196, 0.252, 19.8 },		// Cyan
+		{ 0.310, 0.316, 90.0 },		// White
+		{ 0.310, 0.316, 59.1 },		// Neutral 8
+		{ 0.310, 0.316, 36.2 },		// Neutral 6.5
+		{ 0.310, 0.316, 19.8 },		// Neutral 5
+		{ 0.310, 0.316, 9.0 },		// Neutral 3.5
+		{ 0.310, 0.316, 3.1 } };		// Black
+	double gmb_cam[NSQ][4];
+	double gmb_xyz[NSQ][3];
+	double inverse[NSQ][3];
+	double cam_xyz[4][3];
+	double balance[4];
+	int count[4];
+
+	memset(gmb_cam, 0, sizeof gmb_cam);
+	for (size_t sq = 0; sq < NSQ; sq++)
+	{
+		for (size_t c = 0; c < _info->colors; c++)
+			count[c] = 0;
+		for (int row = cut[sq][3]; row < cut[sq][3] + cut[sq][1]; row++)
+		{
+			for (int col = cut[sq][2]; col < cut[sq][2] + cut[sq][0]; col++)
+			{
+				int c = FC(row, col);
+				if (c >= _info->colors) c -= 2;
+				gmb_cam[sq][c] += BAYER2(row, col);
+				BAYER2(row, col) = _info->black + (BAYER2(row, col) - _info->black) / 2;
+				count[c]++;
+			}
+		}
+		for (size_t c = 0; c < _info->colors; c++)
+			gmb_cam[sq][c] = gmb_cam[sq][c] / count[c] - _info->black;
+		gmb_xyz[sq][0] = gmb_xyY[sq][2] * gmb_xyY[sq][0] / gmb_xyY[sq][1];
+		gmb_xyz[sq][1] = gmb_xyY[sq][2];
+		gmb_xyz[sq][2] = gmb_xyY[sq][2] * (1 - gmb_xyY[sq][0] - gmb_xyY[sq][1]) / gmb_xyY[sq][1];
+	}
+	pseudoinverse(gmb_xyz, inverse, NSQ);
+	for (size_t pass = 0; pass < 2; pass++)
+	{
+		_info->raw_color = 0;
+		for (size_t i = 0; i < _info->colors; i++)
+		{
+			for (size_t j = 0; j < 3; j++)
+			{
+				cam_xyz[i][j] = 0;
+				for (size_t k = 0; k < NSQ; k++)
+				{
+					cam_xyz[i][j] += gmb_cam[k][i] * inverse[k][j];
+				}
+			}
+		}
+		cam_xyz_coeff(_info->rgb_cam, cam_xyz);
+
+		for (size_t c = 0; c < _info->colors; c++)
+			balance[c] = _info->pre_mul[c] * gmb_cam[20][c];
+		for (size_t sq = 0; sq < NSQ; sq++)
+			for (size_t c = 0; c < _info->colors; c++)
+				gmb_cam[sq][c] *= balance[c];
+	}
+#undef NSQ
+#endif
+}
+
+
+void CImageLoader::pseudoinverse(double(*in)[3], double(*out)[3], int size)
+{
+	double work[3][6];
+
+	for (int i = 0; i < 3; i++)
+	{
+		for (int j = 0; j < 6; j++)
+			work[i][j] = j == i + 3;
+		for (int j = 0; j < 3; j++)
+			for (int k = 0; k < size; k++)
+				work[i][j] += in[k][i] * in[k][j];
+	}
+	for (int i = 0; i < 3; i++)
+	{
+		double num = work[i][i];
+		for (int j = 0; j < 6; j++)
+			work[i][j] /= num;
+		for (int k = 0; k < 3; k++)
+		{
+			if (k == i)
+				continue;
+			num = work[k][i];
+			for (int j = 0; j < 6; j++)
+				work[k][j] -= work[i][j] * num;
+		}
+	}
+	for (int i = 0; i < size; i++)
+	{
+		for (int j = 0; j < 3; j++)
+		{
+			out[i][j] = 0;
+			for (int k = 0; k < 3; k++)
+				out[i][j] += work[j][k + 3] * in[i][k];
+		}
+	}
+}
+
+void CImageLoader::cam_xyz_coeff(float rgb_cam[3][4], double cam_xyz[4][3])
+{
+	double cam_rgb[4][3];
+	double inverse[4][3];
+
+	for (size_t i = 0; i < _info->colors; i++)		/* Multiply out XYZ colorspace */
+	{
+		for (size_t j = 0; j < 3; j++)
+		{
+			cam_rgb[i][j] = 0;
+			for (size_t k = 0; k < 3; k++)
+				cam_rgb[i][j] += cam_xyz[i][k] * _info->xyz_rgb[k][j];
+		}
+	}
+
+	for (size_t i = 0; i < _info->colors; i++)		/* Normalize cam_rgb so that */
+	{
+		double num = 0;
+		for (size_t j = 0; j < 3; j++)		/* cam_rgb * (1,1,1) is (1,1,1,1) */
+			num += cam_rgb[i][j];
+		for (size_t j = 0; j < 3; j++)
+			cam_rgb[i][j] /= num;
+		_info->pre_mul[i] = 1 / num;
+	}
+	pseudoinverse(cam_rgb, inverse, _info->colors);
+	for (size_t i = 0; i < 3; i++)
+		for (size_t j = 0; j < _info->colors; j++)
+			rgb_cam[i][j] = inverse[j][i];
+}
+
+void CImageLoader::scale_colors()
+{
+	unsigned sum[8];
+	int val;
+	double dsum[8];
+	float scale_mul[4];
+
+	if (_options->user_mul[0])
+		memcpy(_info->pre_mul, _options->user_mul, sizeof _info->pre_mul);
+	if (_options->use_auto_wb || (_options->use_camera_wb && _info->cam_mul[0] == -1))
+	{
+		memset(dsum, 0, sizeof dsum);
+		unsigned bottom = MIN(_options->greybox[1] + _options->greybox[3], _info->height);
+		unsigned right = MIN(_options->greybox[0] + _options->greybox[2], _info->width);
+		for (unsigned row = _options->greybox[1]; row < bottom; row += 8)
+		{
+			for (unsigned col = _options->greybox[0]; col < right; col += 8)
+			{
+				memset(sum, 0, sizeof sum);
+				for (unsigned y = row; y < row + 8 && y < bottom; y++)
+				{
+					for (unsigned x = col; x < col + 8 && x < right; x++)
+					{
+						for (size_t c = 0; c < 4; c++)
+						{
+							if (_info->filters)
+							{
+								c = fcol(y, x);
+								val = BAYER2(y, x);
+							}
+							else
+							{
+								val = _info->image[y*_info->width + x][c];
+							}
+							if (val > _info->maximum - 25)
+								goto skip_block;
+							if ((val -= _info->cblack[c]) < 0)
+								val = 0;
+							sum[c] += val;
+							sum[c + 4]++;
+							if (_info->filters) break;
+						}
+					}
+				}
+				for (size_t c = 0; c < 8; c++)
+					dsum[c] += sum[c];
+			skip_block:;
+			}
+		}
+		for (size_t c = 0; c < 4; c++)
+			if (dsum[c])
+				_info->pre_mul[c] = dsum[c + 4] / dsum[c];
+	}
+	if (_options->use_camera_wb && _info->cam_mul[0] != -1)
+	{
+		memset(sum, 0, sizeof sum);
+		for (unsigned row = 0; row < 8; row++)
+		{
+			for (unsigned col = 0; col < 8; col++)
+			{
+				unsigned c = FC(row, col);
+				if ((val = _info->white[row][col] - _info->cblack[c]) > 0)
+					sum[c] += val;
+				sum[c + 4]++;
+			}
+		}
+		if (sum[0] && sum[1] && sum[2] && sum[3])
+			for (size_t c = 0; c < 4; c++)
+				_info->pre_mul[c] = (float)sum[c + 4] / sum[c];
+		else if (_info->cam_mul[0] && _info->cam_mul[2])
+			memcpy(_info->pre_mul, _info->cam_mul, sizeof _info->pre_mul);
+		else
+			fprintf(stderr, ("%s: Cannot use camera white balance.\n"), _reader->GetFileName());
+	}
+	if (_info->pre_mul[1] == 0)
+		_info->pre_mul[1] = 1;
+	if (_info->pre_mul[3] == 0)
+		_info->pre_mul[3] = _info->colors < 4 ? _info->pre_mul[1] : 1;
+	int dark = _info->black;
+	int sat = _info->maximum;
+	if (_options->threshold)
+		wavelet_denoise();
+	_info->maximum -= _info->black;
+
+	double dmin = DBL_MAX;
+	double dmax = 0;
+	for (size_t c = 0; c < 4; c++)
+	{
+		if (dmin > _info->pre_mul[c])
+			dmin = _info->pre_mul[c];
+		if (dmax < _info->pre_mul[c])
+			dmax = _info->pre_mul[c];
+	}
+	if (!_options->highlight)
+		dmax = dmin;
+	for (size_t c = 0; c < 4; c++)
+		scale_mul[c] = (_info->pre_mul[c] /= dmax) * 65535.0 / _info->maximum;
+	if (_info->filters > 1000 && (_info->cblack[4] + 1) / 2 == 1 && (_info->cblack[5] + 1) / 2 == 1)
+	{
+		for (size_t c = 0; c < 4; c++)
+			_info->cblack[FC(c / 2, c % 2)] += _info->cblack[6 + c / 2 % _info->cblack[4] * _info->cblack[5] + c % 2 % _info->cblack[5]];
+		_info->cblack[4] = _info->cblack[5] = 0;
+	}
+	unsigned size = _info->iheight*_info->iwidth;
+	for (unsigned i = 0; i < size * 4; i++)
+	{
+		if (!(val = ((unsigned short *)_info->image)[i]))
+			continue;
+		if (_info->cblack[4] && _info->cblack[5])
+			val -= _info->cblack[6 + i / 4 / _info->iwidth % _info->cblack[4] * _info->cblack[5] + i / 4 % _info->iwidth % _info->cblack[5]];
+		val -= _info->cblack[i & 3];
+		val *= scale_mul[i & 3];
+		((unsigned short *)_info->image)[i] = CLIP(val);
+	}
+	if ((_options->aber[0] != 1 || _options->aber[2] != 1) && _info->colors == 3)
+	{
+		for (size_t c = 0; c < 4; c += 2)
+		{
+			if (_options->aber[c] == 1)
+				continue;
+			unsigned short* img = (unsigned short *)malloc(size * sizeof *img);
+			CAutoFreeMemory autoFree(img);
+			for (size_t i = 0; i < size; i++)
+				img[i] = _info->image[i][c];
+			for (unsigned row = 0; row < _info->iheight; row++)
+			{
+				float fr = (row - _info->iheight*0.5) * _options->aber[c] + _info->iheight*0.5;
+				unsigned ur = fr;
+				if (ur > _info->iheight - 2)
+					continue;
+				fr -= ur;
+				for (unsigned col = 0; col < _info->iwidth; col++)
+				{
+					float fc = (col - _info->iwidth*0.5) * _options->aber[c] + _info->iwidth*0.5;
+					unsigned uc = fc;
+					if (uc > _info->iwidth - 2)
+						continue;
+					fc -= uc;
+					unsigned short* pix = img + ur*_info->iwidth + uc;
+					_info->image[row*_info->iwidth + col][c] =
+						(pix[0] * (1 - fc) + pix[1] * fc) * (1 - fr) +
+						(pix[_info->iwidth] * (1 - fc) + pix[_info->iwidth + 1] * fc) * fr;
+				}
+			}
+		}
+	}
+}
+
+void CImageLoader::wavelet_denoise()
+{
+	static const float noise[] = { 0.8002,0.2735,0.1202,0.0585,0.0291,0.0152,0.0080,0.0044 };
+	float mul[2];
+	int blk[2];
+	unsigned short* window[4];
+
+	int scale = 1;
+	while (_info->maximum << scale < 0x10000)
+		scale++;
+	_info->maximum <<= --scale;
+	_info->black <<= scale;
+	for (size_t c = 0; c < 4; c++)
+		_info->cblack[c] <<= scale;
+
+	float *fimg = 0;
+	int size = _info->iheight*_info->iwidth;
+	if (size < 0x15550000)
+		fimg = (float *)malloc((size * 3 + _info->iheight + _info->iwidth) * sizeof *fimg);
+	CAutoFreeMemory autoFree(fimg);
+	float* temp = fimg + size * 3;
+	int nc = _info->colors;
+	if (nc == 3 && _info->filters)
+		nc++;
+	for (size_t c = 0; c < nc; c++)
+	{			/* denoise R,G1,B,G3 individually */
+		for (int i = 0; i < size; i++)
+			fimg[i] = 256 * sqrt(_info->image[i][c] << scale);
+		int hpass = 0;
+		int lpass;
+		for (int lev = 0; lev < 5; lev++)
+		{
+			lpass = size*((lev & 1) + 1);
+			for (int row = 0; row < _info->iheight; row++)
+			{
+				hat_transform(temp, fimg + hpass + row*_info->iwidth, 1, _info->iwidth, 1 << lev);
+				for (int col = 0; col < _info->iwidth; col++)
+					fimg[lpass + row*_info->iwidth + col] = temp[col] * 0.25;
+			}
+			for (int col = 0; col < _info->iwidth; col++) {
+				hat_transform(temp, fimg + lpass + col, _info->iwidth, _info->iheight, 1 << lev);
+				for (int row = 0; row < _info->iheight; row++)
+					fimg[lpass + row*_info->iwidth + col] = temp[row] * 0.25;
+			}
+			float thold = _options->threshold * noise[lev];
+			for (int i = 0; i < size; i++)
+			{
+				fimg[hpass + i] -= fimg[lpass + i];
+				if (fimg[hpass + i] < -thold) fimg[hpass + i] += thold;
+				else if (fimg[hpass + i] >  thold) fimg[hpass + i] -= thold;
+				else	 fimg[hpass + i] = 0;
+				if (hpass) fimg[i] += fimg[hpass + i];
+			}
+			hpass = lpass;
+		}
+		for (int i = 0; i < size; i++)
+			_info->image[i][c] = CLIP(SQR(fimg[i] + fimg[lpass + i]) / 0x10000);
+	}
+	if (_info->filters && _info->colors == 3)  /* pull G1 and G3 closer together */
+	{
+		for (int row = 0; row < 2; row++)
+		{
+			mul[row] = 0.125 * _info->pre_mul[FC(row + 1, 0) | 1] / _info->pre_mul[FC(row, 0) | 1];
+			blk[row] = _info->cblack[FC(row, 0) | 1];
+		}
+		for (int i = 0; i < 4; i++)
+			window[i] = (unsigned short *)fimg + _info->width*i;
+		int wlast = -1;
+		for (int row = 1; row < _info->height - 1; row++)
+		{
+			while (wlast < row + 1)
+			{
+				wlast++;
+				for (int i = 0; i < 4; i++)
+					window[(i + 3) & 3] = window[i];
+				for (int col = FC(wlast, 1) & 1; col < _info->width; col += 2)
+					window[2][col] = BAYER(wlast, col);
+			}
+			float thold = _options->threshold / 512;
+			for (int col = (FC(row, 0) & 1) + 1; col < _info->width - 1; col += 2)
+			{
+				float avg = (window[0][col - 1] + window[0][col + 1] +
+					window[2][col - 1] + window[2][col + 1] - blk[~row & 1] * 4)
+					* mul[row & 1] + (window[1][col] + blk[row & 1]) * 0.5;
+				avg = avg < 0 ? 0 : sqrt(avg);
+				float diff = sqrt(BAYER(row, col)) - avg;
+				if (diff < -thold)
+					diff += thold;
+				else if (diff >  thold)
+					diff -= thold;
+				else
+					diff = 0;
+				BAYER(row, col) = CLIP(SQR(avg + diff) + 0.5);
+			}
+		}
+	}
+}
+
+void CImageLoader::hat_transform(float *temp, float *base, int st, int size, int sc)
+{
+	int i;
+	for (i = 0; i < sc; i++)
+		temp[i] = 2 * base[st*i] + base[st*(sc - i)] + base[st*(i + sc)];
+	for (; i + sc < size; i++)
+		temp[i] = 2 * base[st*i] + base[st*(i - sc)] + base[st*(i + sc)];
+	for (; i < size; i++)
+		temp[i] = 2 * base[st*i] + base[st*(i - sc)] + base[st*(2 * size - 2 - (i + sc))];
+}
+
+void CImageLoader::pre_interpolate()
+{
+	if (_info->shrink)
+	{
+		if (_options->half_size)
+		{
+			_info->height = _info->iheight;
+			_info->width = _info->iwidth;
+			if (_info->filters == 9)
+			{
+				int row;
+				int col;
+				for (row = 0; row < 3; row++)
+					for (col = 1; col < 4; col++)
+						if (!(_info->image[row*_info->width + col][0] | _info->image[row*_info->width + col][2]))
+							goto break2;
+			break2:
+				for (; row < _info->height; row += 3)
+				{
+					for (col = (col - 1) % 3 + 1; col < _info->width - 1; col += 3)
+					{
+						unsigned short(*img)[4] = _info->image + row*_info->width + col;
+						for (size_t c = 0; c < 3; c += 2)
+							img[0][c] = (img[-1][c] + img[1][c]) >> 1;
+					}
+				}
+			}
+		}
+		else
+		{
+			unsigned short(*img)[4] = (unsigned short(*)[4]) calloc(_info->height, _info->width * sizeof *img);
+			CAutoFreeMemory autoFree(img);
+			for (int row = 0; row < _info->height; row++)
+			{
+				for (int col = 0; col < _info->width; col++)
+				{
+					int c = fcol(row, col);
+					img[row*_info->width + col][c] = _info->image[(row >> 1)*_info->iwidth + (col >> 1)][c];
+				}
+			}
+			free(_info->image);
+			_info->image = img;
+			_info->shrink = 0;
+		}
+	}
+	if (_info->filters > 1000 && _info->colors == 3)
+	{
+		_info->mix_green = _options->four_color_rgb ^ _info->half_size;
+		if (_options->four_color_rgb | _info->half_size)
+		{
+			_info->colors++;
+		}
+		else
+		{
+			for (int row = FC(1, 0) >> 1; row < _info->height; row += 2)
+				for (int col = FC(row, 1) & 1; col < _info->width; col += 2)
+					_info->image[row*_info->width + col][1] = _info->image[row*_info->width + col][3];
+			_info->filters &= ~((_info->filters & 0x55555555) << 1);
+		}
+	}
+	if (_info->half_size)
+		_info->filters = 0;
+}
+
+void CImageLoader::lin_interpolate()
+{
+	int code[16][16][32];
+	int sum[4];
+
+	int size = 16;
+	if (_info->filters == 9)
+		size = 6;
+	border_interpolate(1);
+	for (int row = 0; row < size; row++)
+	{
+		for (int col = 0; col < size; col++)
+		{
+			int* ip = code[row][col] + 1;
+			int f = fcol(row, col);
+			int color;
+			memset(sum, 0, sizeof sum);
+			for (int y = -1; y <= 1; y++)
+			{
+				for (int x = -1; x <= 1; x++)
+				{
+					int shift = (y == 0) + (x == 0);
+					color = fcol(row + y, col + x);
+					if (color == f)
+						continue;
+					*ip++ = (_info->width*y + x) * 4 + color;
+					*ip++ = shift;
+					*ip++ = color;
+					sum[color] += 1 << shift;
+				}
+			}
+			code[row][col][0] = (ip - code[row][col]) / 3;
+			for (int c = 0; c < _info->colors; c++)
+			{
+				if (c != f)
+				{
+					*ip++ = c;
+					*ip++ = 256 / sum[c];
+				}
+			}
+		}
+	}
+	for (int row = 1; row < _info->height - 1; row++)
+	{
+		for (int col = 1; col < _info->width - 1; col++)
+		{
+			unsigned short* pix = _info->image[row*_info->width + col];
+			int* ip = code[row % size][col % size];
+			memset(sum, 0, sizeof sum);
+			for (int i = *ip++; i--; ip += 3)
+				sum[ip[2]] += pix[ip[0]] << ip[1];
+			for (int i = _info->colors; --i; ip += 2)
+				pix[ip[0]] = sum[ip[0]] * ip[1] >> 8;
+		}
+	}
+}
+
+/*
+This algorithm is officially called:
+
+"Interpolation using a Threshold-based variable number of gradients"
+
+described in http://scien.stanford.edu/pages/labsite/1999/psych221/projects/99/tingchen/algodep/vargra.html
+
+I've extended the basic idea to work with non-Bayer filter arrays.
+Gradients are numbered clockwise from NW=0 to W=7.
+*/
+void CImageLoader::vng_interpolate()
+{
+	static const signed char* cp;
+	static const signed char terms[] =
+	{
+		-2,-2,+0,-1,0,0x01, -2,-2,+0,+0,1,0x01, -2,-1,-1,+0,0,0x01,
+		-2,-1,+0,-1,0,0x02, -2,-1,+0,+0,0,0x03, -2,-1,+0,+1,1,0x01,
+		-2,+0,+0,-1,0,0x06, -2,+0,+0,+0,1,0x02, -2,+0,+0,+1,0,0x03,
+		-2,+1,-1,+0,0,0x04, -2,+1,+0,-1,1,0x04, -2,+1,+0,+0,0,0x06,
+		-2,+1,+0,+1,0,0x02, -2,+2,+0,+0,1,0x04, -2,+2,+0,+1,0,0x04,
+		-1,-2,-1,+0,0,0x80, -1,-2,+0,-1,0,0x01, -1,-2,+1,-1,0,0x01,
+		-1,-2,+1,+0,1,0x01, -1,-1,-1,+1,0,0x88, -1,-1,+1,-2,0,0x40,
+		-1,-1,+1,-1,0,0x22, -1,-1,+1,+0,0,0x33, -1,-1,+1,+1,1,0x11,
+		-1,+0,-1,+2,0,0x08, -1,+0,+0,-1,0,0x44, -1,+0,+0,+1,0,0x11,
+		-1,+0,+1,-2,1,0x40, -1,+0,+1,-1,0,0x66, -1,+0,+1,+0,1,0x22,
+		-1,+0,+1,+1,0,0x33, -1,+0,+1,+2,1,0x10, -1,+1,+1,-1,1,0x44,
+		-1,+1,+1,+0,0,0x66, -1,+1,+1,+1,0,0x22, -1,+1,+1,+2,0,0x10,
+		-1,+2,+0,+1,0,0x04, -1,+2,+1,+0,1,0x04, -1,+2,+1,+1,0,0x04,
+		+0,-2,+0,+0,1,0x80, +0,-1,+0,+1,1,0x88, +0,-1,+1,-2,0,0x40,
+		+0,-1,+1,+0,0,0x11, +0,-1,+2,-2,0,0x40, +0,-1,+2,-1,0,0x20,
+		+0,-1,+2,+0,0,0x30, +0,-1,+2,+1,1,0x10, +0,+0,+0,+2,1,0x08,
+		+0,+0,+2,-2,1,0x40, +0,+0,+2,-1,0,0x60, +0,+0,+2,+0,1,0x20,
+		+0,+0,+2,+1,0,0x30, +0,+0,+2,+2,1,0x10, +0,+1,+1,+0,0,0x44,
+		+0,+1,+1,+2,0,0x10, +0,+1,+2,-1,1,0x40, +0,+1,+2,+0,0,0x60,
+		+0,+1,+2,+1,0,0x20, +0,+1,+2,+2,0,0x10, +1,-2,+1,+0,0,0x80,
+		+1,-1,+1,+1,0,0x88, +1,+0,+1,+2,0,0x08, +1,+0,+2,-1,0,0x40,
+		+1,+0,+2,+1,0,0x10
+	};
+	static const signed char chood[] = { -1,-1, -1,0, -1,+1, 0,+1, +1,+1, +1,0, +1,-1, 0,-1 };
+
+	unsigned short(*brow[5])[4], *pix;
+	int* code[16][16];
+	int gval[8];
+	int sum[4];
+	int row;
+	int col;
+	int g;
+
+	lin_interpolate();
+
+	int prow = 8;
+	int pcol = 2;
+	if (_info->filters == 1)
+	{
+		prow = 16;
+		pcol = 16;
+	}
+	if (_info->filters == 9)
+	{
+		prow = 6;
+		pcol = 6;
+	}
+	int* pip = (int *)calloc(prow*pcol, 1280);
+	CAutoFreeMemory autoFreePip(pip);
+	int* ip = pip;
+	for (row = 0; row < prow; row++)		/* Precalculate for VNG */
+	{
+		for (col = 0; col < pcol; col++)
+		{
+			code[row][col] = ip;
+			cp = terms;
+			for (int t = 0; t < 64; t++)
+			{
+				int y1 = *cp++;
+				int x1 = *cp++;
+				int y2 = *cp++;
+				int x2 = *cp++;
+				int weight = *cp++;
+				int grads = *cp++;
+				int color = fcol(row + y1, col + x1);
+				if (fcol(row + y2, col + x2) != color)
+					continue;
+				int diag = (fcol(row, col + 1) == color && fcol(row + 1, col) == color) ? 2 : 1;
+				if (abs(y1 - y2) == diag && abs(x1 - x2) == diag)
+					continue;
+				*ip++ = (y1*_info->width + x1) * 4 + color;
+				*ip++ = (y2*_info->width + x2) * 4 + color;
+				*ip++ = weight;
+				for (g = 0; g < 8; g++)
+					if (grads & 1 << g) *ip++ = g;
+				*ip++ = -1;
+			}
+			*ip++ = INT_MAX;
+			cp = chood;
+			for (g = 0; g < 8; g++)
+			{
+				int y = *cp++;
+				int x = *cp++;
+				*ip++ = (y*_info->width + x) * 4;
+				int color = fcol(row, col);
+				if (fcol(row + y, col + x) != color && fcol(row + y * 2, col + x * 2) == color)
+					*ip++ = (y*_info->width + x) * 8 + color;
+				else
+					*ip++ = 0;
+			}
+		}
+	}
+	brow[4] = (unsigned short(*)[4]) calloc(_info->width * 3, sizeof **brow);
+	CAutoFreeMemory autoFreeBrow(brow[4]);
+	for (row = 0; row < 3; row++)
+		brow[row] = brow[4] + row*_info->width;
+	for (row = 2; row < _info->height - 2; row++)			/* Do VNG interpolation */
+	{
+		for (col = 2; col < _info->width - 2; col++)
+		{
+			pix = _info->image[row*_info->width + col];
+			ip = code[row % prow][col % pcol];
+			memset(gval, 0, sizeof gval);
+			while ((g = ip[0]) != INT_MAX)			/* Calculate gradients */
+			{
+				int diff = ABS(pix[g] - pix[ip[1]]) << ip[2];
+				gval[ip[3]] += diff;
+				ip += 5;
+				if ((g = ip[-1]) == -1)
+					continue;
+				gval[g] += diff;
+				while ((g = *ip++) != -1)
+					gval[g] += diff;
+			}
+			ip++;
+			int gmax = gval[0];				/* Choose a threshold */
+			int gmin = gmax;
+			for (g = 1; g < 8; g++)
+			{
+				if (gmin > gval[g])
+					gmin = gval[g];
+				if (gmax < gval[g])
+					gmax = gval[g];
+			}
+			if (gmax == 0) {
+				memcpy(brow[2][col], pix, sizeof *_info->image);
+				continue;
+			}
+			int thold = gmin + (gmax >> 1);
+			memset(sum, 0, sizeof sum);
+			int color = fcol(row, col);
+			int num = 0;
+			for (g = 0; g < 8; g++, ip += 2)
+			{		/* Average the neighbors */
+				if (gval[g] <= thold)
+				{
+					for (size_t c = 0; c < _info->colors; c++)
+					{
+						if (c == color && ip[1])
+							sum[c] += (pix[c] + pix[ip[1]]) >> 1;
+						else
+							sum[c] += pix[ip[0] + c];
+					}
+					num++;
+				}
+			}
+			for (size_t c = 0; c < _info->colors; c++)					/* Save to buffer */
+			{
+				int t = pix[color];
+				if (c != color)
+					t += (sum[c] - sum[color]) / num;
+				brow[2][col][c] = CLIP(t);
+			}
+		}
+		if (row > 3)				/* Write buffer to image */
+			memcpy(_info->image[(row - 2)*_info->width + 2], brow[0] + 2, (_info->width - 4) * sizeof *_info->image);
+		for (g = 0; g < 4; g++)
+			brow[(g - 1) & 3] = brow[g];
+	}
+	memcpy(_info->image[(row - 2)*_info->width + 2], brow[0] + 2, (_info->width - 4) * sizeof *_info->image);
+	memcpy(_info->image[(row - 1)*_info->width + 2], brow[1] + 2, (_info->width - 4) * sizeof *_info->image);
+}
+
+/*
+Patterned Pixel Grouping Interpolation by Alain Desbiolles
+*/
+void CImageLoader::ppg_interpolate()
+{
+	int dir[5] = { 1, _info->width, -1, -_info->width, 1 };
+	int diff[2];
+	int guess[2];
+	int c;
+	int d;
+	int i;
+	unsigned short(*pix)[4];
+
+	border_interpolate(3);
+
+	/*  Fill in the green layer with gradients and pattern recognition: */
+	for (int row = 3; row < _info->height - 3; row++)
+	{
+		for (int col = 3 + (FC(row, 3) & 1), c = FC(row, col); col < _info->width - 3; col += 2)
+		{
+			pix = _info->image + row*_info->width + col;
+			for (i = 0; (d = dir[i]) > 0; i++)
+			{
+				guess[i] = (pix[-d][1] + pix[0][c] + pix[d][1]) * 2
+					- pix[-2 * d][c] - pix[2 * d][c];
+				diff[i] = (ABS(pix[-2 * d][c] - pix[0][c]) +
+					ABS(pix[2 * d][c] - pix[0][c]) +
+					ABS(pix[-d][1] - pix[d][1])) * 3 +
+					(ABS(pix[3 * d][1] - pix[d][1]) +
+						ABS(pix[-3 * d][1] - pix[-d][1])) * 2;
+			}
+			d = dir[i = diff[0] > diff[1]];
+			pix[0][1] = ULIM(guess[i] >> 2, pix[d][1], pix[-d][1]);
+		}
+	}
+	/*  Calculate red and blue for each green pixel:		*/
+	for (int row = 1; row < _info->height - 1; row++)
+		for (int col = 1 + (FC(row, 2) & 1), c = FC(row, col + 1); col < _info->width - 1; col += 2)
+		{
+			pix = _info->image + row*_info->width + col;
+			for (i = 0; (d = dir[i]) > 0; c = 2 - c, i++)
+				pix[0][c] = CLIP((pix[-d][c] + pix[d][c] + 2 * pix[0][1]
+					- pix[-d][1] - pix[d][1]) >> 1);
+		}
+	/*  Calculate blue for red pixels and vice versa:		*/
+	for (int row = 1; row < _info->height - 1; row++)
+	{
+		for (int col = 1 + (FC(row, 1) & 1), c = 2 - FC(row, col); col < _info->width - 1; col += 2)
+		{
+			pix = _info->image + row*_info->width + col;
+			for (i = 0; (d = dir[i] + dir[i + 1]) > 0; i++)
+			{
+				diff[i] = ABS(pix[-d][c] - pix[d][c]) +
+					ABS(pix[-d][1] - pix[0][1]) +
+					ABS(pix[d][1] - pix[0][1]);
+				guess[i] = pix[-d][c] + pix[d][c] + 2 * pix[0][1]
+					- pix[-d][1] - pix[d][1];
+			}
+			if (diff[0] != diff[1])
+				pix[0][c] = CLIP(guess[diff[0] > diff[1]] >> 1);
+			else
+				pix[0][c] = CLIP((guess[0] + guess[1]) >> 2);
+		}
+	}
+}
+
+void CImageLoader::border_interpolate(int border)
+{
+	unsigned sum[8];
+
+	for (unsigned row = 0; row < _info->height; row++)
+	{
+		for (unsigned col = 0; col < _info->width; col++)
+		{
+			if (col == border && row >= border && row < _info->height - border)
+				col = _info->width - border;
+			memset(sum, 0, sizeof sum);
+			for (unsigned y = row - 1; y != row + 2; y++)
+			{
+				for (unsigned x = col - 1; x != col + 2; x++)
+				{
+					if (y < _info->height && x < _info->width)
+					{
+						unsigned f = fcol(y, x);
+						sum[f] += _info->image[y*_info->width + x][f];
+						sum[f + 4]++;
+					}
+				}
+			}
+			unsigned f = fcol(row, col);
+			for (size_t c = 0; c < _info->colors; c++)
+				if (c != f && sum[c + 4])
+					_info->image[row*_info->width + col][c] = sum[c] / sum[c + 4];
+		}
+	}
+}
+
+#define TS 512		/* Tile Size */
+#define fcol(row,col) _info->xtrans[(row+6) % 6][(col+6) % 6]
+/*
+Frank Markesteijn's algorithm for Fuji X-Trans sensors
+*/
+void CImageLoader::xtrans_interpolate(int passes)
+{
+	static const short orth[12] = { 1,0,0,1,-1,0,0,-1,1,0,0,1 };
+	static const short patt[2][16] =
+	{
+		{ 0,1,0,-1,2,0,-1,0,1,1,1,-1,0,0,0,0 },
+		{ 0,1,0,-2,1,0,-2,0,1,1,-2,-2,1,-1,-1,1 }
+	};
+	static const short dir[4] = { 1,TS,TS + 1,TS - 1 };
+
+	int hm[8];
+	int avg[4];
+	int color[3][8];
+
+	short allhex[3][3][2][8];
+	unsigned short sgrow;
+	unsigned short sgcol;
+	unsigned short(*rgb)[TS][TS][3];
+	unsigned short(*rix)[3];
+	unsigned short(*pix)[4];
+	short(*lab)[TS][3];
+	short(*lix)[3];
+	float(*drv)[TS][TS];
+	float diff[6];
+	char(*homo)[TS][TS];
+
+	cielab(0, 0);
+	int ndir = 4 << (passes > 1);
+	char* buffer = (char *)malloc(TS*TS*(ndir * 11 + 6));
+	CAutoFreeMemory autoFree(buffer);
+	rgb = (unsigned short(*)[TS][TS][3]) buffer;
+	lab = (short(*)[TS][3])(buffer + TS*TS*(ndir * 6));
+	drv = (float(*)[TS][TS])   (buffer + TS*TS*(ndir * 6 + 6));
+	homo = (char(*)[TS][TS])   (buffer + TS*TS*(ndir * 10 + 6));
+
+	/* Map a green hexagon around each non-green pixel and vice versa:	*/
+	for (int row = 0; row < 3; row++)
+	{
+		for (int col = 0; col < 3; col++)
+		{
+			int ng = 0;
+			for (int d = 0; d < 10; d += 2)
+			{
+				int g = fcol(row, col) == 1;
+				if (fcol(row + orth[d], col + orth[d + 2]) == 1)
+					ng = 0;
+				else
+					ng++;
+				if (ng == 4)
+				{
+					sgrow = row;
+					sgcol = col;
+				}
+				if (ng == g + 1)
+				{
+					for (int c = 0; c < 8; c++)
+					{
+						int v = orth[d] * patt[g][c * 2] + orth[d + 1] * patt[g][c * 2 + 1];
+						int h = orth[d + 2] * patt[g][c * 2] + orth[d + 3] * patt[g][c * 2 + 1];
+						allhex[row][col][0][c ^ (g * 2 & d)] = h + v*_info->width;
+						allhex[row][col][1][c ^ (g * 2 & d)] = h + v*TS;
+					}
+				}
+			}
+		}
+	}
+
+	/* Set green1 and green3 to the minimum and maximum allowed values:	*/
+	for (int row = 2; row < _info->height - 2; row++)
+	{
+		unsigned short max = 0;
+		unsigned short min = ~max;
+		for (int col = 2; col < _info->width - 2; col++)
+		{
+			if (fcol(row, col) == 1 && (min = ~(max = 0)))
+				continue;
+			pix = _info->image + row*_info->width + col;
+			short* hex = allhex[row % 3][col % 3][0];
+			if (!max)
+			{
+				for (int c = 0; c < 6; c++)
+				{
+					int val = pix[hex[c]][1];
+					if (min > val)
+						min = val;
+					if (max < val)
+						max = val;
+				}
+			}
+			pix[0][1] = min;
+			pix[0][3] = max;
+			switch ((row - sgrow) % 3)
+			{
+			case 1:
+				if (row < _info->height - 3)
+				{
+					row++;
+					col--;
+				}
+				break;
+			case 2:
+				if ((min = ~(max = 0)) && (col += 2) < _info->width - 3 && row > 2)
+					row--;
+			}
+		}
+	}
+
+	for (int top = 3; top < _info->height - 19; top += TS - 16)
+	{
+		for (int left = 3; left < _info->width - 19; left += TS - 16)
+		{
+			int mrow = MIN(top + TS, _info->height - 3);
+			int mcol = MIN(left + TS, _info->width - 3);
+			for (int row = top; row < mrow; row++)
+				for (int col = left; col < mcol; col++)
+					memcpy(rgb[0][row - top][col - left], _info->image[row*_info->width + col], 6);
+			for (int c = 0; c < 3; c++)
+				memcpy(rgb[c + 1], rgb[0], sizeof *rgb);
+
+			/* Interpolate green horizontally, vertically, and along both diagonals: */
+			for (int row = top; row < mrow; row++)
+			{
+				for (int col = left; col < mcol; col++)
+				{
+					int f = fcol(row, col);
+					if (f == 1)
+						continue;
+					pix = _info->image + row*_info->width + col;
+					short* hex = allhex[row % 3][col % 3][0];
+					color[1][0] = 174 * (pix[hex[1]][1] + pix[hex[0]][1]) -
+						46 * (pix[2 * hex[1]][1] + pix[2 * hex[0]][1]);
+					color[1][1] = 223 * pix[hex[3]][1] + pix[hex[2]][1] * 33 +
+						92 * (pix[0][f] - pix[-hex[2]][f]);
+					for (int c = 0; c < 2; c++)
+						color[1][2 + c] =
+						164 * pix[hex[4 + c]][1] + 92 * pix[-2 * hex[4 + c]][1] + 33 *
+						(2 * pix[0][f] - pix[3 * hex[4 + c]][f] - pix[-3 * hex[4 + c]][f]);
+					for (int c = 0; c < 4; c++)
+						rgb[c ^ !((row - sgrow) % 3)][row - top][col - left][1] =
+						LIM(color[1][c] >> 8, pix[0][1], pix[0][3]);
+				}
+			}
+
+			for (int pass = 0; pass < passes; pass++)
+			{
+				if (pass == 1)
+					memcpy(rgb += 4, buffer, 4 * sizeof *rgb);
+
+				/* Recalculate green from interpolated values of closer pixels:	*/
+				if (pass)
+				{
+					for (int row = top + 2; row < mrow - 2; row++)
+					{
+						for (int col = left + 2; col < mcol - 2; col++)
+						{
+							int f = fcol(row, col);
+							if (f == 1)
+								continue;
+							pix = _info->image + row*_info->width + col;
+							short* hex = allhex[row % 3][col % 3][1];
+							for (int d = 3; d < 6; d++)
+							{
+								rix = &rgb[(d - 2) ^ !((row - sgrow) % 3)][row - top][col - left];
+								int val = rix[-2 * hex[d]][1] + 2 * rix[hex[d]][1]
+									- rix[-2 * hex[d]][f] - 2 * rix[hex[d]][f] + 3 * rix[0][f];
+								rix[0][1] = LIM(val / 3, pix[0][1], pix[0][3]);
+							}
+						}
+					}
+				}
+
+				/* Interpolate red and blue values for solitary green pixels:	*/
+				for (int row = (top - sgrow + 4) / 3 * 3 + sgrow; row < mrow - 2; row += 3)
+				{
+					for (int col = (left - sgcol + 4) / 3 * 3 + sgcol; col < mcol - 2; col += 3)
+					{
+						rix = &rgb[0][row - top][col - left];
+						int h = fcol(row, col + 1);
+						memset(diff, 0, sizeof diff);
+						int i = 1;
+						for (int d = 0; d < 6; d++, i ^= TS ^ 1, h ^= 2)
+						{
+							for (int c = 0; c < 2; c++, h ^= 2)
+							{
+								int g = 2 * rix[0][1] - rix[i << c][1] - rix[-i << c][1];
+								color[h][d] = g + rix[i << c][h] + rix[-i << c][h];
+								if (d > 1)
+									diff[d] += SQR(rix[i << c][1] - rix[-i << c][1]
+										- rix[i << c][h] + rix[-i << c][h]) + SQR(g);
+							}
+							if (d > 1 && (d & 1))
+								if (diff[d - 1] < diff[d])
+									for (int c = 0; c < 2; c++)
+										color[c * 2][d] = color[c * 2][d - 1];
+							if (d < 2 || (d & 1))
+							{
+								for (int c = 0; c < 2; c++)
+									rix[0][c * 2] = CLIP(color[c * 2][d] / 2);
+								rix += TS*TS;
+							}
+						}
+					}
+				}
+
+				/* Interpolate red for blue pixels and vice versa:		*/
+				for (int row = top + 3; row < mrow - 3; row++)
+				{
+					for (int col = left + 3; col < mcol - 3; col++)
+					{
+						int f = 2 - fcol(row, col);
+						if ((f) == 1)
+							continue;
+						rix = &rgb[0][row - top][col - left];
+						int c = (row - sgrow) % 3 ? TS : 1;
+						int h = 3 * (c ^ TS ^ 1);
+						for (int d = 0; d < 4; d++, rix += TS*TS)
+						{
+							int i = d > 1 || ((d ^ c) & 1) ||
+								((ABS(rix[0][1] - rix[c][1]) + ABS(rix[0][1] - rix[-c][1])) <
+									2 * (ABS(rix[0][1] - rix[h][1]) + ABS(rix[0][1] - rix[-h][1]))) ? c : h;
+							rix[0][f] = CLIP((rix[i][f] + rix[-i][f] +
+								2 * rix[0][1] - rix[i][1] - rix[-i][1]) / 2);
+						}
+					}
+				}
+
+				/* Fill in red and blue for 2x2 blocks of green:		*/
+				for (int row = top + 2; row < mrow - 2; row++)
+				{
+					if ((row - sgrow) % 3)
+					{
+						for (int col = left + 2; col < mcol - 2; col++)
+						{
+							if ((col - sgcol) % 3)
+							{
+								rix = &rgb[0][row - top][col - left];
+								short* hex = allhex[row % 3][col % 3][1];
+								for (int d = 0; d < ndir; d += 2, rix += TS*TS)
+								{
+									if (hex[d] + hex[d + 1])
+									{
+										int g = 3 * rix[0][1] - 2 * rix[hex[d]][1] - rix[hex[d + 1]][1];
+										for (int c = 0; c < 4; c += 2)
+											rix[0][c] = CLIP((g + 2 * rix[hex[d]][c] + rix[hex[d + 1]][c]) / 3);
+									}
+									else
+									{
+										int g = 2 * rix[0][1] - rix[hex[d]][1] - rix[hex[d + 1]][1];
+										for (int c = 0; c < 4; c += 2)
+											rix[0][c] = CLIP((g + rix[hex[d]][c] + rix[hex[d + 1]][c]) / 2);
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			rgb = (unsigned short(*)[TS][TS][3]) buffer;
+			mrow -= top;
+			mcol -= left;
+
+			/* Convert to CIELab and differentiate in all directions:	*/
+			for (int d = 0; d < ndir; d++)
+			{
+				for (int row = 2; row < mrow - 2; row++)
+					for (int col = 2; col < mcol - 2; col++)
+						cielab(rgb[d][row][col], lab[row][col]);
+				int f = dir[d & 3];
+				for (int row = 3; row < mrow - 3; row++)
+				{
+					for (int col = 3; col < mcol - 3; col++)
+					{
+						lix = &lab[row][col];
+						int g = 2 * lix[0][0] - lix[f][0] - lix[-f][0];
+						drv[d][row][col] = SQR(g)
+							+ SQR((2 * lix[0][1] - lix[f][1] - lix[-f][1] + g * 500 / 232))
+							+ SQR((2 * lix[0][2] - lix[f][2] - lix[-f][2] - g * 500 / 580));
+					}
+				}
+			}
+
+			/* Build homogeneity maps from the derivatives:			*/
+			memset(homo, 0, ndir*TS*TS);
+			for (int row = 4; row < mrow - 4; row++)
+			{
+				for (int col = 4; col < mcol - 4; col++)
+				{
+					float tr = FLT_MAX;
+					for (int d = 0; d < ndir; d++)
+						if (tr > drv[d][row][col])
+							tr = drv[d][row][col];
+					tr *= 8;
+					for (int d = 0; d < ndir; d++)
+						for (int v = -1; v <= 1; v++)
+							for (int h = -1; h <= 1; h++)
+								if (drv[d][row + v][col + h] <= tr)
+									homo[d][row][col]++;
+				}
+			}
+
+			/* Average the most homogenous pixels for the final result:	*/
+			if (_info->height - top < TS + 4)
+				mrow = _info->height - top + 2;
+			if (_info->width - left < TS + 4)
+				mcol = _info->width - left + 2;
+			for (int row = MIN(top, 8); row < mrow - 8; row++)
+			{
+				for (int col = MIN(left, 8); col < mcol - 8; col++)
+				{
+					for (int d = 0; d < ndir; d++)
+					{
+						hm[d] = 0;
+						for (int v = -2; v <= 2; v++)
+						{
+							for (int h = -2; h <= 2; h++)
+							{
+								hm[d] += homo[d][row + v][col + h];
+							}
+						}
+					}
+					for (int d = 0; d < ndir - 4; d++)
+						if (hm[d] < hm[d + 4]) hm[d] = 0; else
+							if (hm[d] > hm[d + 4]) hm[d + 4] = 0;
+					unsigned short max = hm[0];
+					for (int d = 1; d < ndir; d++)
+						if (max < hm[d]) max = hm[d];
+					max -= max >> 3;
+					memset(avg, 0, sizeof avg);
+					for (int d = 0; d < ndir; d++)
+						if (hm[d] >= max)
+						{
+							for (int c = 0; c < 3; c++)
+								avg[c] += rgb[d][row][col][c];
+							avg[3]++;
+						}
+					for (int c = 0; c < 3; c++)
+						_info->image[(row + top)*_info->width + col + left][c] = avg[c] / avg[3];
+				}
+			}
+		}
+	}
+	border_interpolate(8);
+}
+#undef fcol
+
+/*
+Adaptive Homogeneity-Directed interpolation is based on
+the work of Keigo Hirakawa, Thomas Parks, and Paul Lee.
+*/
+void CImageLoader::ahd_interpolate()
+{
+	static const int dir[4] = { -1, 1, -TS, TS };
+	int hm[2];
+	unsigned ldiff[2][4];
+	unsigned abdiff[2][4];
+
+	cielab(0, 0);
+	border_interpolate(5);
+	char* buffer = (char *)malloc(26 * TS*TS);
+	CAutoFreeMemory autoFree(buffer);
+	unsigned short(*rgb)[TS][TS][3] = (unsigned short(*)[TS][TS][3]) buffer;
+	short(*lab)[TS][TS][3] = (short(*)[TS][TS][3]) (buffer + 12 * TS*TS);
+	char(*homo)[TS][TS] = (char(*)[TS][TS]) (buffer + 24 * TS*TS);
+
+	for (int top = 2; top < _info->height - 5; top += TS - 6)
+	{
+		for (int left = 2; left < _info->width - 5; left += TS - 6)
+		{
+			/*  Interpolate green horizontally and vertically:		*/
+			for (int row = top; row < top + TS && row < _info->height - 2; row++)
+			{
+				int col = left + (FC(row, left) & 1);
+				for (int c = FC(row, col); col < left + TS && col < _info->width - 2; col += 2)
+				{
+					unsigned short(*pix)[4] = _info->image + row*_info->width + col;
+					int val = ((pix[-1][1] + pix[0][c] + pix[1][1]) * 2
+						- pix[-2][c] - pix[2][c]) >> 2;
+					rgb[0][row - top][col - left][1] = ULIM(val, pix[-1][1], pix[1][1]);
+					val = ((pix[-_info->width][1] + pix[0][c] + pix[_info->width][1]) * 2
+						- pix[-2 * _info->width][c] - pix[2 * _info->width][c]) >> 2;
+					rgb[1][row - top][col - left][1] = ULIM(val, pix[-_info->width][1], pix[_info->width][1]);
+				}
+			}
+			/*  Interpolate red and blue, and convert to CIELab:		*/
+			for (int d = 0; d < 2; d++)
+			{
+				for (int row = top + 1; row < top + TS - 1 && row < _info->height - 3; row++)
+				{
+					for (int col = left + 1; col < left + TS - 1 && col < _info->width - 3; col++)
+					{
+						unsigned short(*pix)[4] = _info->image + row*_info->width + col;
+						unsigned short(*rix)[3] = &rgb[d][row - top][col - left];
+						short(*lix)[3] = &lab[d][row - top][col - left];
+						int c = 2 - FC(row, col);
+						int val;
+						if (c == 1)
+						{
+							c = FC(row + 1, col);
+							val = pix[0][1] + ((pix[-1][2 - c] + pix[1][2 - c]
+								- rix[-1][1] - rix[1][1]) >> 1);
+							rix[0][2 - c] = CLIP(val);
+							val = pix[0][1] + ((pix[-_info->width][c] + pix[_info->width][c]
+								- rix[-TS][1] - rix[TS][1]) >> 1);
+						}
+						else
+						{
+							val = rix[0][1] + ((pix[-_info->width - 1][c] + pix[-_info->width + 1][c]
+								+ pix[+_info->width - 1][c] + pix[+_info->width + 1][c]
+								- rix[-TS - 1][1] - rix[-TS + 1][1]
+								- rix[+TS - 1][1] - rix[+TS + 1][1] + 1) >> 2);
+						}
+						rix[0][c] = CLIP(val);
+						c = FC(row, col);
+						rix[0][c] = pix[0][c];
+						cielab(rix[0], lix[0]);
+					}
+				}
+			}
+			/*  Build homogeneity maps from the CIELab images:		*/
+			memset(homo, 0, 2 * TS*TS);
+			for (int row = top + 2; row < top + TS - 2 && row < _info->height - 4; row++)
+			{
+				int tr = row - top;
+				for (int col = left + 2; col < left + TS - 2 && col < _info->width - 4; col++)
+				{
+					int tc = col - left;
+					for (int d = 0; d < 2; d++)
+					{
+						short(*lix)[3] = &lab[d][tr][tc];
+						for (int i = 0; i < 4; i++)
+						{
+							ldiff[d][i] = ABS(lix[0][0] - lix[dir[i]][0]);
+							abdiff[d][i] = SQR(lix[0][1] - lix[dir[i]][1])
+								+ SQR(lix[0][2] - lix[dir[i]][2]);
+						}
+					}
+					unsigned leps = MIN(MAX(ldiff[0][0], ldiff[0][1]),
+						MAX(ldiff[1][2], ldiff[1][3]));
+					unsigned abeps = MIN(MAX(abdiff[0][0], abdiff[0][1]),
+						MAX(abdiff[1][2], abdiff[1][3]));
+					for (int d = 0; d < 2; d++)
+						for (int i = 0; i < 4; i++)
+							if (ldiff[d][i] <= leps && abdiff[d][i] <= abeps)
+								homo[d][tr][tc]++;
+				}
+			}
+			/*  Combine the most homogenous pixels for the final result:	*/
+			for (int row = top + 3; row < top + TS - 3 && row < _info->height - 5; row++)
+			{
+				int tr = row - top;
+				for (int col = left + 3; col < left + TS - 3 && col < _info->width - 5; col++)
+				{
+					int tc = col - left;
+					for (int d = 0; d < 2; d++)
+					{
+						hm[d] = 0;
+						for (int i = tr - 1; i <= tr + 1; i++)
+							for (int j = tc - 1; j <= tc + 1; j++)
+								hm[d] += homo[d][i][j];
+					}
+					if (hm[0] != hm[1])
+					{
+						for (int c = 0; c < 3; c++)
+							_info->image[row*_info->width + col][c] = rgb[hm[1] > hm[0]][tr][tc][c];
+					}
+					else
+					{
+						for (int c = 0; c < 3; c++)
+							_info->image[row*_info->width + col][c] = (rgb[0][tr][tc][c] + rgb[1][tr][tc][c]) >> 1;
+					}
+				}
+			}
+		}
+	}
+}
+#undef TS
+
+void CImageLoader::cielab(unsigned short rgb[3], short lab[3])
+{
+	float r, xyz[3];
+	static float cbrt[0x10000], xyz_cam[3][4];
+
+	if (!rgb)
+	{
+		for (int i = 0; i < 0x10000; i++)
+		{
+			r = i / 65535.0;
+			cbrt[i] = r > 0.008856 ? pow(r, 1 / 3.0) : 7.787*r + 16 / 116.0;
+		}
+		for (int i = 0; i < 3; i++)
+		{
+			for (int j = 0; j < _info->colors; j++)
+			{
+				xyz_cam[i][j] = 0;
+				for (int k = 0; k < 3; k++)
+				{
+					xyz_cam[i][j] += _info->xyz_rgb[i][k] * _info->rgb_cam[k][j] / _info->d65_white[i];
+				}
+			}
+		}
+		return;
+	}
+	xyz[0] = xyz[1] = xyz[2] = 0.5;
+	for (size_t c = 0; c < _info->colors; c++)
+	{
+		xyz[0] += xyz_cam[0][c] * rgb[c];
+		xyz[1] += xyz_cam[1][c] * rgb[c];
+		xyz[2] += xyz_cam[2][c] * rgb[c];
+	}
+	xyz[0] = cbrt[CLIP((int)xyz[0])];
+	xyz[1] = cbrt[CLIP((int)xyz[1])];
+	xyz[2] = cbrt[CLIP((int)xyz[2])];
+	lab[0] = 64 * (116 * xyz[1] - 16);
+	lab[1] = 64 * 500 * (xyz[0] - xyz[1]);
+	lab[2] = 64 * 200 * (xyz[1] - xyz[2]);
+}
+
+
+
+/* RESTRICTED code starts here */
+
+void CImageLoader::foveon_decoder(unsigned size, unsigned code)
+{
+	static unsigned huff[1024];
+
+	if (!code)
+	{
+		for (int i = 0; i < size; i++)
+			huff[i] = _reader->get4();
+		memset(first_decode, 0, sizeof first_decode);
+		free_decode = first_decode;
+	}
+	decode* cur = free_decode++;
+	if (free_decode > first_decode + 2048)
+		throw CExceptionDecoderTableOverflow();
+
+	if (code)
+	{
+		for (int i = 0; i < size; i++)
+		{
+			if (huff[i] == code)
+			{
+				cur->leaf = i;
+				return;
+			}
+		}
+	}
+	int len = code >> 27;
+	if ((len) > 26)
+		return;
+	code = (len + 1) << 27 | (code & 0x3ffffff) << 1;
+
+	cur->branch[0] = free_decode;
+	foveon_decoder(size, code);
+	cur->branch[1] = free_decode;
+	foveon_decoder(size, code + 1);
+}
+
+void CImageLoader::foveon_sd_load_raw()
+{
+	decode* dindex;
+	short diff[1024];
+	unsigned bitbuf = 0;
+	int pred[3];
+	int bit = -1;
+
+	_reader->read_shorts((unsigned short *)diff, 1024);
+	if (!_info->load_flags)
+		foveon_decoder(1024, 0);
+
+	for (int row = 0; row < _info->height; row++)
+	{
+		memset(pred, 0, sizeof pred);
+		if (!bit && !_info->load_flags && atoi(_info->model + 2) < 14)
+			_reader->get4();
+		bit = 0;
+		for (int col = 0; col < _info->width; col++)
+		{
+			if (_info->load_flags)
+			{
+				bitbuf = _reader->get4();
+				for (size_t c = 0; c < 3; c++)
+					pred[2 - c] += diff[bitbuf >> c * 10 & 0x3ff];
+			}
+			else
+			{
+				for (size_t c = 0; c < 3; c++)
+				{
+					for (dindex = first_decode; dindex->branch[0]; )
+					{
+						bit = (bit - 1) & 31;
+						if (bit == 31)
+							for (size_t i = 0; i < 4; i++)
+								bitbuf = (bitbuf << 8) + _reader->GetChar();
+						dindex = dindex->branch[bitbuf >> bit & 1];
+					}
+					pred[c] += diff[dindex->leaf];
+					if (pred[c] >> 16 && ~pred[c] >> 16)
+						throw CExceptionFile();
+				}
+			}
+			for (size_t c = 0; c < 3; c++)
+				_info->image[row*_info->width + col][c] = pred[c];
+		}
+	}
+}
+
+void CImageLoader::foveon_huff(unsigned short *huff)
+{
+	huff[0] = 8;
+	for (int i = 0; i < 13; i++)
+	{
+		int clen = _reader->GetChar();
+		int code = _reader->GetChar();
+		for (int j = 0; j < 256 >> clen; )
+			huff[code + ++j] = clen << 8 | i;
+	}
+	_reader->get2();
+}
+
+void CImageLoader::foveon_dp_load_raw()
+{
+	unsigned roff[4];
+	unsigned short huff[512];
+	unsigned short vpred[2][2];
+	unsigned short hpred[2];
+
+	_reader->Seek(8, SEEK_CUR);
+	foveon_huff(huff);
+	roff[0] = 48;
+	for (size_t c = 0; c < 3; c++)
+		roff[c + 1] = -(-(roff[c] + _reader->get4()) & -16);
+	for (size_t c = 0; c < 3; c++)
+	{
+		_reader->Seek(_info->data_offset + roff[c], SEEK_SET);
+		_info->getbits(-1);
+		vpred[0][0] = vpred[0][1] = vpred[1][0] = vpred[1][1] = 512;
+		for (unsigned row = 0; row < _info->height; row++)
+		{
+			for (unsigned col = 0; col < _info->width; col++)
+			{
+				unsigned diff = jhead::ljpeg_diff(huff, *_info);
+				if (col < 2) hpred[col] = vpred[row & 1][col] += diff;
+				else hpred[col & 1] += diff;
+				_info->image[row*_info->width + col][c] = hpred[col & 1];
+			}
+		}
+	}
+}
+
+void CImageLoader::foveon_load_camf()
+{
+	unsigned short huff[258];
+	unsigned short vpred[2][2] = { { 512,512 },{ 512,512 } };
+	unsigned short hpred[2];
+
+	_reader->Seek(_info->meta_offset, SEEK_SET);
+	unsigned type = _reader->get4();
+	_reader->get4();
+	_reader->get4();
+	unsigned wide = _reader->get4();
+	unsigned high = _reader->get4();
+	if (type == 2)
+	{
+		_reader->Read(_info->meta_data, 1, _info->meta_length);
+		for (size_t i = 0; i < _info->meta_length; i++)
+		{
+			high = (high * 1597 + 51749) % 244944;
+			wide = high * (INT64)301593171 >> 24;
+			_info->meta_data[i] ^= ((((high << 8) - wide) >> 1) + wide) >> 17;
+		}
+	}
+	else if (type == 4)
+	{
+		free(_info->meta_data);
+		_info->meta_data = (char *)malloc(_info->meta_length = wide*high * 3 / 2);
+		if (!_info->meta_data)
+			throw CExceptionMemory();
+
+		foveon_huff(huff);
+		_reader->get4();
+		_info->getbits(-1);
+		unsigned j = 0;
+		for (unsigned row = 0; row < high; row++)
+		{
+			for (unsigned col = 0; col < wide; col++)
+			{
+				unsigned diff = jhead::ljpeg_diff(huff, *_info);
+				if (col < 2)
+					hpred[col] = vpred[row & 1][col] += diff;
+				else
+					hpred[col & 1] += diff;
+				if (col & 1)
+				{
+					_info->meta_data[j++] = hpred[0] >> 4;
+					_info->meta_data[j++] = hpred[0] << 4 | hpred[1] >> 8;
+					_info->meta_data[j++] = hpred[1];
+				}
+			}
+		}
+	}
+#ifdef _DEBUG
+	else
+		fprintf(stderr, ("%s has unknown CAMF type %d.\n"), _reader->GetFileName(), type);
+#endif // DEBUG
+}
+
+#define sget4(s) sget4((unsigned char *)s)
+const char* CImageLoader::foveon_camf_param(const char *block, const char *param)
+{
+	char* pos;
+	for (unsigned idx = 0; idx < _info->meta_length; idx += _reader->sget4(pos + 8))
+	{
+		pos = _info->meta_data + idx;
+		if (strncmp(pos, "CMb", 3))
+			break;
+		if (pos[3] != 'P')
+			continue;
+		if (strcmp(block, pos + _reader->sget4(pos + 12)))
+			continue;
+		char* cp = pos + _reader->sget4(pos + 16);
+		unsigned num = _reader->sget4(cp);
+		char* dp = pos + _reader->sget4(cp + 4);
+		while (num--)
+		{
+			cp += 8;
+			if (!strcmp(param, dp + _reader->sget4(cp)))
+				return dp + _reader->sget4(cp + 4);
+		}
+	}
+	return nullptr;
+}
+
+void* CImageLoader::foveon_camf_matrix(unsigned dim[3], const char *name)
+{
+	char* pos;
+	for (unsigned idx = 0; idx < _info->meta_length; idx += _reader->sget4(pos + 8))
+	{
+		pos = _info->meta_data + idx;
+		if (strncmp(pos, "CMb", 3))
+			break;
+		if (pos[3] != 'M')
+			continue;
+		if (strcmp(name, pos + _reader->sget4(pos + 12)))
+			continue;
+		dim[0] = dim[1] = dim[2] = 1;
+		char* cp = pos + _reader->sget4(pos + 16);
+		unsigned type = _reader->sget4(cp);
+		unsigned ndim = _reader->sget4(cp + 4);
+		if (ndim > 3)
+			break;
+		char* dp = pos + _reader->sget4(cp + 8);
+		for (unsigned i = ndim; i--; )
+		{
+			cp += 12;
+			dim[i] = _reader->sget4(cp);
+		}
+		double dsize = (double)dim[0] * dim[1] * dim[2];
+		if (dsize > _info->meta_length / 4)
+			break;
+		unsigned size = dsize;
+		unsigned* mat = (unsigned *)malloc((size) * 4);
+		if (!mat)
+			throw CExceptionMemory();
+
+		for (unsigned i = 0; i < size; i++)
+		{
+			if (type && type != 6)
+				mat[i] = _reader->sget4(dp + i * 4);
+			else
+				mat[i] = _reader->sget4(dp + i * 2) & 0xffff;
+		}
+		return mat;
+	}
+#ifdef _DEBUG
+	fprintf(stderr, ("%s: \"%s\" matrix not found!\n"), _reader->GetFileName(), name);
+#endif // DEBUG
+	return nullptr;
+}
+#undef sget4
+
+int CImageLoader::foveon_fixed(void *ptr, int size, const char *name)
+{
+	if (!name)
+		return 0;
+
+	unsigned dim[3];
+	void *dp = foveon_camf_matrix(dim, name);
+	if (!dp)
+		return 0;
+	CAutoFreeMemory autoFree(dp);
+	memcpy(ptr, dp, size * 4);
+	return 1;
+}
+
+float CImageLoader::foveon_avg(short *pix, int range[2], float cfilt)
+{
+	float min = FLT_MAX;
+	float max = -FLT_MAX;
+	float sum = 0;
+
+	for (int i = range[0]; i <= range[1]; i++)
+	{
+		float val = pix[i * 4] + (pix[i * 4] - pix[(i - 1) * 4]) * cfilt;
+		sum += val;
+		if (min > val) min = val;
+		if (max < val) max = val;
+	}
+	if (range[1] - range[0] == 1)
+		return sum / 2;
+	return (sum - min - max) / (range[1] - range[0] - 1);
+}
+
+short* CImageLoader::foveon_make_curve(double max, double mul, double filt)
+{
+	if (!filt)
+		filt = 0.8;
+	unsigned size = 4 * M_PI*max / filt;
+	if (size == UINT_MAX)
+		size--;
+	short* curve = (short *)calloc(size + 1, sizeof *curve);
+	if (!curve)
+		throw CExceptionMemory();
+
+	curve[0] = size;
+	for (unsigned i = 0; i < size; i++)
+	{
+		double x = i*filt / max / 4;
+		curve[i + 1] = (cos(x) + 1) / 2 * tanh(i*filt / mul) * mul + 0.5;
+	}
+	return curve;
+}
+
+void CImageLoader::foveon_make_curves(short **curvep, float dq[3], float div[3], float filt)
+{
+	double mul[3];
+	double max = 0;
+
+	for (size_t c = 0; c < 3; c++)
+		mul[c] = dq[c] / div[c];
+	for (size_t c = 0; c < 3; c++)
+		if (max < mul[c])
+			max = mul[c];
+	for (size_t c = 0; c < 3; c++)
+		curvep[c] = foveon_make_curve(max, mul[c], filt);
+}
+
+int CImageLoader::foveon_apply_curve(short *curve, int i)
+{
+	if (abs(i) >= curve[0])
+		return 0;
+	return i < 0 ? -curve[1 - i] : curve[1 + i];
+}
+
+#define image ((short (*)[4]) _info->image)
+void CImageLoader::foveon_interpolate()
+{
+	static const short hood[] = { -1,-1, -1,0, -1,1, 0,-1, 0,1, 1,-1, 1,0, 1,1 };
+
+	short prev[3];
+	float cfilt = 0;
+	float ddft[3][3][2];
+	float ppm[3][3][3];
+	float cam_xyz[3][3];
+	float correct[3][3];
+	float last[3][3];
+	float trans[3][3];
+	float chroma_dq[3];
+	float color_dq[3];
+	float diag[3][3];
+	float div[3];
+	float fsum[3];
+	int row;
+	int col;
+	int dscr[2][2];
+	int dstb[4];
+	int(*smrow[7])[3];
+	int total[4];
+	int ipix[3];
+	int work[3][3];
+	int smred_p = 0;
+	int dev[3];
+	int satlev[3];
+	int keep[4];
+	int active[4];
+	unsigned dim[3];
+	double dsum = 0;
+	double trsum[3];
+	char str[128];
+
+	foveon_load_camf();
+	foveon_fixed(dscr, 4, "DarkShieldColRange");
+	foveon_fixed(ppm[0][0], 27, "PostPolyMatrix");
+	foveon_fixed(satlev, 3, "SaturationLevel");
+	foveon_fixed(keep, 4, "KeepImageArea");
+	foveon_fixed(active, 4, "ActiveImageArea");
+	foveon_fixed(chroma_dq, 3, "ChromaDQ");
+	foveon_fixed(color_dq, 3,
+		foveon_camf_param("IncludeBlocks", "ColorDQ") ?
+		"ColorDQ" : "ColorDQCamRGB");
+	if (foveon_camf_param("IncludeBlocks", "ColumnFilter"))
+		foveon_fixed(&cfilt, 1, "ColumnFilter");
+
+	memset(ddft, 0, sizeof ddft);
+	if (!foveon_camf_param("IncludeBlocks", "DarkDrift")
+		|| !foveon_fixed(ddft[1][0], 12, "DarkDrift"))
+	{
+		for (int i = 0; i < 2; i++)
+		{
+			foveon_fixed(dstb, 4, i ? "DarkShieldBottom" : "DarkShieldTop");
+			for (row = dstb[1]; row <= dstb[3]; row++)
+				for (col = dstb[0]; col <= dstb[2]; col++)
+					for (size_t c = 0; c < 3; c++)
+						ddft[i + 1][c][1] += (short)image[row*_info->width + col][c];
+			for (size_t c = 0; c < 3; c++)
+				ddft[i + 1][c][1] /= (dstb[3] - dstb[1] + 1) * (dstb[2] - dstb[0] + 1);
+		}
+	}
+
+	const char* cp = foveon_camf_param("WhiteBalanceIlluminants", _info->model2);
+	if (!cp)
+	{
+#ifdef _DEBUG
+		fprintf(stderr, ("%s: Invalid white balance \"%s\"\n"), _reader->GetFileName(), _info->model2);
+#endif // DEBUG
+		return;
+	}
+	foveon_fixed(cam_xyz, 9, cp);
+	foveon_fixed(correct, 9, foveon_camf_param("WhiteBalanceCorrections", _info->model2));
+	memset(last, 0, sizeof last);
+	for (int i = 0; i < 3; i++)
+		for (int j = 0; j < 3; j++)
+			for (size_t c = 0; c < 3; c++)
+				last[i][j] += correct[i][c] * cam_xyz[c][j];
+
+#define LAST(x,y) last[(i+x)%3][(c+y)%3]
+	for (int i = 0; i < 3; i++)
+		for (size_t c = 0; c < 3; c++)
+			diag[c][i] = LAST(1, 1)*LAST(2, 2) - LAST(1, 2)*LAST(2, 1);
+#undef LAST
+	for (size_t c = 0; c < 3; c++)
+		div[c] = diag[c][0] * 0.3127 + diag[c][1] * 0.329 + diag[c][2] * 0.3583;
+	sprintf(str, "%sRGBNeutral", _info->model2);
+	if (foveon_camf_param("IncludeBlocks", str))
+		foveon_fixed(div, 3, str);
+	float num = 0;
+	for (size_t c = 0; c < 3; c++)
+		if (num < div[c])
+			num = div[c];
+	for (size_t c = 0; c < 3; c++)
+		div[c] /= num;
+
+	memset(trans, 0, sizeof trans);
+	for (int i = 0; i < 3; i++)
+		for (int j = 0; j < 3; j++)
+			for (size_t c = 0; c < 3; c++)
+				trans[i][j] += _info->rgb_cam[i][c] * last[c][j] * div[j];
+	for (size_t c = 0; c < 3; c++)
+		trsum[c] = trans[c][0] + trans[c][1] + trans[c][2];
+	dsum = (6 * trsum[0] + 11 * trsum[1] + 3 * trsum[2]) / 20;
+	for (int i = 0; i < 3; i++)
+		for (size_t c = 0; c < 3; c++)
+			last[i][c] = trans[i][c] * dsum / trsum[i];
+	memset(trans, 0, sizeof trans);
+	for (int i = 0; i < 3; i++)
+		for (int j = 0; j < 3; j++)
+			for (size_t c = 0; c < 3; c++)
+				trans[i][j] += (i == c ? 32 : -1) * last[c][j] / 30;
+
+	short *curve[8];
+	for (size_t c = 0; c < 8; c++)
+		curve[c] = nullptr;
+	CAutoFreeMemory autoFreeCurve0(curve[0]);
+	CAutoFreeMemory autoFreeCurve1(curve[1]);
+	CAutoFreeMemory autoFreeCurve2(curve[2]);
+	CAutoFreeMemory autoFreeCurve3(curve[3]);
+	CAutoFreeMemory autoFreeCurve4(curve[4]);
+	CAutoFreeMemory autoFreeCurve5(curve[5]);
+	CAutoFreeMemory autoFreeCurve6(curve[6]);
+	CAutoFreeMemory autoFreeCurve7(curve[7]);
+	foveon_make_curves(curve, color_dq, div, cfilt);
+	for (size_t c = 0; c < 3; c++)
+		chroma_dq[c] /= 3;
+	foveon_make_curves(curve + 3, chroma_dq, div, cfilt);
+	for (size_t c = 0; c < 3; c++)
+		dsum += chroma_dq[c] / div[c];
+	curve[6] = foveon_make_curve(dsum, dsum, cfilt);
+	curve[7] = foveon_make_curve(dsum * 2, dsum * 2, cfilt);
+
+	float(*sgain)[3] = (float(*)[3]) foveon_camf_matrix(dim, "SpatialGain");
+	if (!sgain)
+		return;
+	CAutoFreeMemory autoFreeSgain(sgain);
+	float(*sgrow)[3] = (float(*)[3]) calloc(dim[1], sizeof *sgrow);
+	CAutoFreeMemory autoFreeSgrow(sgrow);
+	int sgx = (_info->width + dim[1] - 2) / (dim[1] - 1);
+
+	float(*black)[3] = (float(*)[3]) calloc(_info->height, sizeof *black);
+	CAutoFreeMemory autoFreeBlack(black);
+	for (row = 0; row < _info->height; row++)
+	{
+		for (int i = 0; i < 6; i++)
+			((float *)ddft[0])[i] = ((float *)ddft[1])[i] + row / (_info->height - 1.0) * (((float *)ddft[2])[i] - ((float *)ddft[1])[i]);
+		for (size_t c = 0; c < 3; c++)
+			black[row][c] = (foveon_avg(image[row*_info->width] + c, dscr[0], cfilt) +
+				foveon_avg(image[row*_info->width] + c, dscr[1], cfilt) * 3
+				- ddft[0][c][0]) / 4 - ddft[0][c][1];
+	}
+	memcpy(black, black + 8, sizeof *black * 8);
+	memcpy(black + _info->height - 11, black + _info->height - 22, 11 * sizeof *black);
+	memcpy(last, black, sizeof last);
+
+	for (row = 1; row < _info->height - 1; row++)
+	{
+		for (size_t c = 0; c < 3; c++)
+		{
+			if (last[1][c] > last[0][c])
+			{
+				if (last[1][c] > last[2][c])
+					black[row][c] = (last[0][c] > last[2][c]) ? last[0][c] : last[2][c];
+			}
+			else
+			{
+				if (last[1][c] < last[2][c])
+					black[row][c] = (last[0][c] < last[2][c]) ? last[0][c] : last[2][c];
+			}
+		}
+		memmove(last, last + 1, 2 * sizeof last[0]);
+		memcpy(last[2], black[row + 1], sizeof last[2]);
+	}
+	for (size_t c = 0; c < 3; c++)
+		black[row][c] = (last[0][c] + last[1][c]) / 2;
+	for (size_t c = 0; c < 3; c++)
+		black[0][c] = (black[1][c] + black[3][c]) / 2;
+
+	float val = 1 - exp(-1 / 24.0);
+	memcpy(fsum, black, sizeof fsum);
+	for (row = 1; row < _info->height; row++)
+		for (size_t c = 0; c < 3; c++)
+			fsum[c] += black[row][c] = (black[row][c] - black[row - 1][c])*val + black[row - 1][c];
+	memcpy(last[0], black[_info->height - 1], sizeof last[0]);
+	for (size_t c = 0; c < 3; c++)
+		fsum[c] /= _info->height;
+	for (row = _info->height; row--; )
+		for (size_t c = 0; c < 3; c++)
+			last[0][c] = black[row][c] = (black[row][c] - fsum[c] - last[0][c])*val + last[0][c];
+
+	memset(total, 0, sizeof total);
+	for (row = 2; row < _info->height; row += 4)
+	{
+		for (col = 2; col < _info->width; col += 4)
+		{
+			for (size_t c = 0; c < 3; c++)
+				total[c] += (short)image[row*_info->width + col][c];
+			total[3]++;
+		}
+	}
+	for (row = 0; row < _info->height; row++)
+		for (size_t c = 0; c < 3; c++)
+			black[row][c] += fsum[c] / 2 + total[c] / (total[3] * 100.0);
+
+	for (row = 0; row < _info->height; row++)
+	{
+		for (int i = 0; i < 6; i++)
+			((float *)ddft[0])[i] = ((float *)ddft[1])[i] +
+			row / (_info->height - 1.0) * (((float *)ddft[2])[i] - ((float *)ddft[1])[i]);
+		short* pix = image[row*_info->width];
+		memcpy(prev, pix, sizeof prev);
+		float frow = row / (_info->height - 1.0) * (dim[2] - 1);
+		int irow = frow;
+		if (irow == dim[2] - 1)
+			irow--;
+		frow -= irow;
+		for (int i = 0; i < dim[1]; i++)
+			for (size_t c = 0; c < 3; c++)
+				sgrow[i][c] = sgain[irow   *dim[1] + i][c] * (1 - frow) + sgain[(irow + 1)*dim[1] + i][c] * frow;
+		for (col = 0; col < _info->width; col++)
+		{
+			for (size_t c = 0; c < 3; c++)
+			{
+				int diff = pix[c] - prev[c];
+				prev[c] = pix[c];
+				ipix[c] = pix[c] + floor((diff + (diff*diff >> 14)) * cfilt
+					- ddft[0][c][1] - ddft[0][c][0] * ((float)col / _info->width - 0.5)
+					- black[row][c]);
+			}
+			for (size_t c = 0; c < 3; c++)
+			{
+				work[0][c] = ipix[c] * ipix[c] >> 14;
+				work[2][c] = ipix[c] * work[0][c] >> 14;
+				work[1][2 - c] = ipix[(c + 1) % 3] * ipix[(c + 2) % 3] >> 14;
+			}
+			for (size_t c = 0; c < 3; c++)
+			{
+				val = 0;
+				for (int i = 0; i < 3; i++)
+					for (int j = 0; j < 3; j++)
+						val += ppm[c][i][j] * work[i][j];
+				ipix[c] = floor((ipix[c] + floor(val)) *
+					(sgrow[col / sgx][c] * (sgx - col%sgx) +
+						sgrow[col / sgx + 1][c] * (col%sgx)) / sgx / div[c]);
+				if (ipix[c] > 32000) ipix[c] = 32000;
+				pix[c] = ipix[c];
+			}
+			pix += 4;
+		}
+	}
+	autoFreeSgrow.Release();
+	autoFreeSgain.Release();
+
+	unsigned* badpix = (unsigned *)foveon_camf_matrix(dim, "BadPixels");
+	if (badpix)
+	{
+		CAutoFreeMemory autoFreeBadPix(badpix);
+		for (int i = 0; i < dim[0]; i++)
+		{
+			col = (badpix[i] >> 8 & 0xfff) - keep[0];
+			row = (badpix[i] >> 20) - keep[1];
+			if ((unsigned)(row - 1) > _info->height - 3 || (unsigned)(col - 1) > _info->width - 3)
+				continue;
+			memset(fsum, 0, sizeof fsum);
+			int sum = 0;
+			for (int j = 0; j < 8; j++)
+			{
+				if (badpix[i] & (1 << j))
+				{
+					for (size_t c = 0; c < 3; c++)
+						fsum[c] += (short)image[(row + hood[j * 2])*_info->width + col + hood[j * 2 + 1]][c];
+					sum++;
+				}
+			}
+			if (sum)
+				for (size_t c = 0; c < 3; c++)
+					image[row*_info->width + col][c] = fsum[c] / sum;
+		}
+	}
+
+	/* Array for 5x5 Gaussian averaging of red values */
+	smrow[6] = (int(*)[3]) calloc(_info->width * 5, sizeof **smrow);
+	CAutoFreeMemory autoFreeSmrow(smrow[6]);
+	for (int i = 0; i < 5; i++)
+		smrow[i] = smrow[6] + i*_info->width;
+
+	/* Sharpen the reds against these Gaussian averages */
+	int smlast = -1;
+	for (row = 2; row < _info->height - 2; row++)
+	{
+		while (smlast < row + 2)
+		{
+			for (int i = 0; i < 6; i++)
+				smrow[(i + 5) % 6] = smrow[i];
+			short* pix = image[++smlast*_info->width + 2];
+			for (col = 2; col < _info->width - 2; col++)
+			{
+				smrow[4][col][0] =
+					(pix[0] * 6 + (pix[-4] + pix[4]) * 4 + pix[-8] + pix[8] + 8) >> 4;
+				pix += 4;
+			}
+		}
+		short* pix = image[row*_info->width + 2];
+		for (col = 2; col < _info->width - 2; col++)
+		{
+			int smred = (6 * smrow[2][col][0]
+				+ 4 * (smrow[1][col][0] + smrow[3][col][0])
+				+ smrow[0][col][0] + smrow[4][col][0] + 8) >> 4;
+			if (col == 2)
+				smred_p = smred;
+			int i = pix[0] + ((pix[0] - ((smred * 7 + smred_p) >> 3)) >> 3);
+			if (i > 32000)
+				i = 32000;
+			pix[0] = i;
+			smred_p = smred;
+			pix += 4;
+		}
+	}
+
+	/* Adjust the brighter pixels for better linearity */
+	int min = 0xffff;
+	for (size_t c = 0; c < 3; c++)
+	{
+		int i = satlev[c] / div[c];
+		if (min > i)
+			min = i;
+	}
+	int limit = min * 9 >> 4;
+	for (short* pix = image[0]; pix < image[_info->height*_info->width]; pix += 4)
+	{
+		if (pix[0] <= limit || pix[1] <= limit || pix[2] <= limit)
+			continue;
+		int max = pix[0];
+		min = pix[0];
+		for (size_t c = 1; c < 3; c++)
+		{
+			if (min > pix[c])
+				min = pix[c];
+			if (max < pix[c])
+				max = pix[c];
+		}
+		if (min >= limit * 2)
+		{
+			pix[0] = pix[1] = pix[2] = max;
+		}
+		else
+		{
+			int i = 0x4000 - ((min - limit) << 14) / limit;
+			i = 0x4000 - (i*i >> 14);
+			i = i*i >> 14;
+			for (size_t c = 0; c < 3; c++)
+				pix[c] += (max - pix[c]) * i >> 14;
+		}
+	}
+	/*
+	Because photons that miss one detector often hit another,
+	the sum R+G+B is much less noisy than the individual colors.
+	So smooth the hues without smoothing the total.
+	*/
+	smlast = -1;
+	for (row = 2; row < _info->height - 2; row++)
+	{
+		while (smlast < row + 2)
+		{
+			for (int i = 0; i < 6; i++)
+				smrow[(i + 5) % 6] = smrow[i];
+			short* pix = image[++smlast*_info->width + 2];
+			for (col = 2; col < _info->width - 2; col++)
+			{
+				for (size_t c = 0; c < 3; c++)
+					smrow[4][col][c] = (pix[c - 4] + 2 * pix[c] + pix[c + 4] + 2) >> 2;
+				pix += 4;
+			}
+		}
+		short* pix = image[row*_info->width + 2];
+		for (col = 2; col < _info->width - 2; col++)
+		{
+			for (size_t c = 0; c < 3; c++)
+				dev[c] = -foveon_apply_curve(curve[7], pix[c] - ((smrow[1][col][c] + 2 * smrow[2][col][c] + smrow[3][col][c]) >> 2));
+			int sum = (dev[0] + dev[1] + dev[2]) >> 3;
+			for (size_t c = 0; c < 3; c++)
+				pix[c] += dev[c] - sum;
+			pix += 4;
+		}
+	}
+
+	smlast = -1;
+	for (row = 2; row < _info->height - 2; row++)
+	{
+		while (smlast < row + 2)
+		{
+			for (int i = 0; i < 6; i++)
+				smrow[(i + 5) % 6] = smrow[i];
+			short* pix = image[++smlast*_info->width + 2];
+			for (col = 2; col < _info->width - 2; col++)
+			{
+				for (size_t c = 0; c < 3; c++)
+					smrow[4][col][c] = (pix[c - 8] + pix[c - 4] + pix[c] + pix[c + 4] + pix[c + 8] + 2) >> 2;
+				pix += 4;
+			}
+		}
+		short* pix = image[row*_info->width + 2];
+		for (col = 2; col < _info->width - 2; col++)
+		{
+			total[3] = 375;
+			int sum = 60;
+			for (size_t c = 0; c < 3; c++)
+			{
+				total[c] = 0;
+				for (int i = 0; i < 5; i++)
+					total[c] += smrow[i][col][c];
+				total[3] += total[c];
+				sum += pix[c];
+			}
+			if (sum < 0)
+				sum = 0;
+			int j = total[3] > 375 ? (sum << 16) / total[3] : sum * 174;
+			for (size_t c = 0; c < 3; c++)
+				pix[c] += foveon_apply_curve(curve[6], ((j*total[c] + 0x8000) >> 16) - pix[c]);
+			pix += 4;
+		}
+	}
+
+	/* Transform the image to a different colorspace */
+	for (short* pix = image[0]; pix < image[_info->height*_info->width]; pix += 4)
+	{
+		for (size_t c = 0; c < 3; c++)
+			pix[c] -= foveon_apply_curve(curve[c], pix[c]);
+		int sum = (pix[0] + pix[1] + pix[1] + pix[2]) >> 2;
+		for (size_t c = 0; c < 3; c++)
+			pix[c] -= foveon_apply_curve(curve[c], pix[c] - sum);
+		for (size_t c = 0; c < 3; c++) 
+		{
+			dsum = 0;
+			for (int i = 0; i < 3; i++)
+				dsum += trans[c][i] * pix[i];
+			if (dsum < 0)
+				dsum = 0;
+			if (dsum > 24000)
+				dsum = 24000;
+			ipix[c] = dsum + 0.5;
+		}
+		for (size_t c = 0; c < 3; c++)
+			pix[c] = ipix[c];
+	}
+
+	/* Smooth the image bottom-to-top and save at 1/4 scale */
+	short(*shrink)[3] = (short(*)[3]) calloc((_info->height / 4), (_info->width / 4) * sizeof *shrink);
+	CAutoFreeMemory autoFreeShrink(shrink);
+	for (row = _info->height / 4; row--; )
+		for (col = 0; col < _info->width / 4; col++)
+		{
+			ipix[0] = ipix[1] = ipix[2] = 0;
+			for (int i = 0; i < 4; i++)
+				for (int j = 0; j < 4; j++)
+					for (size_t c = 0; c < 3; c++)
+						ipix[c] += image[(row * 4 + i)*_info->width + col * 4 + j][c];
+			for (size_t c = 0; c < 3; c++)
+			{
+				if (row + 2 > _info->height / 4)
+					shrink[row*(_info->width / 4) + col][c] = ipix[c] >> 4;
+				else
+					shrink[row*(_info->width / 4) + col][c] = (shrink[(row + 1)*(_info->width / 4) + col][c] * 1840 + ipix[c] * 141 + 2048) >> 12;
+			}
+		}
+	/* From the 1/4-scale image, smooth right-to-left */
+	for (row = 0; row < (_info->height & ~3); row++)
+	{
+		ipix[0] = ipix[1] = ipix[2] = 0;
+		if ((row & 3) == 0)
+			for (col = _info->width & ~3; col--; )
+				for (size_t c = 0; c < 3; c++)
+					smrow[0][col][c] = ipix[c] = (shrink[(row / 4)*(_info->width / 4) + col / 4][c] * 1485 + ipix[c] * 6707 + 4096) >> 13;
+
+		/* Then smooth left-to-right */
+		ipix[0] = ipix[1] = ipix[2] = 0;
+		for (col = 0; col < (_info->width & ~3); col++)
+			for (size_t c = 0; c < 3; c++)
+				smrow[1][col][c] = ipix[c] = (smrow[0][col][c] * 1485 + ipix[c] * 6707 + 4096) >> 13;
+
+		/* Smooth top-to-bottom */
+		if (row == 0)
+			memcpy(smrow[2], smrow[1], sizeof **smrow * _info->width);
+		else
+			for (col = 0; col < (_info->width & ~3); col++)
+				for (size_t c = 0; c < 3; c++)
+					smrow[2][col][c] = (smrow[2][col][c] * 6707 + smrow[1][col][c] * 1485 + 4096) >> 13;
+
+		/* Adjust the chroma toward the smooth values */
+		for (col = 0; col < (_info->width & ~3); col++)
+		{
+			int j = 30;
+			int i = 30;
+			for (size_t c = 0; c < 3; c++)
+			{
+				i += smrow[2][col][c];
+				j += image[row*_info->width + col][c];
+			}
+			j = (j << 16) / i;
+			int sum = 0;
+			for (size_t c = 0; c < 3; c++) {
+				ipix[c] = foveon_apply_curve(curve[c + 3],
+					((smrow[2][col][c] * j + 0x8000) >> 16) - image[row*_info->width + col][c]);
+				sum += ipix[c];
+			}
+			sum >>= 3;
+			for (size_t c = 0; c < 3; c++)
+			{
+				i = image[row*_info->width + col][c] + ipix[c] - sum;
+				if (i < 0)
+					i = 0;
+				image[row*_info->width + col][c] = i;
+			}
+		}
+	}
+
+	/* Trim off the black border */
+	active[1] -= keep[1];
+	active[3] -= 2;
+	int i = active[2] - active[0];
+	for (row = 0; row < active[3] - active[1]; row++)
+		memcpy(image[row*i], image[(row + active[1])*_info->width + active[0]],
+			i * sizeof *image);
+	_info->width = i;
+	_info->height = row;
+}
+#undef image
+
+void CImageLoader::foveon_thumb()
+{
+	unsigned bwide = _reader->get4();
+	_writer->Print("P6\n%d %d\n255\n", _info->thumb_width, _info->thumb_height);
+	if (bwide > 0)
+	{
+		if (bwide < _info->thumb_width * 3)
+			return;
+		char* buf = (char *)malloc(bwide);
+		CAutoFreeMemory autoFree(buf);
+		for (unsigned row = 0; row < _info->thumb_height; row++)
+		{
+			_reader->Read(buf, 1, bwide);
+			_writer->Write(buf, 3, _info->thumb_width);
+		}
+		return;
+	}
+	foveon_decoder(256, 0);
+
+	unsigned bitbuf = 0;
+	unsigned bit = 1;
+	decode* dindex;
+	short pred[3];
+	for (unsigned row = 0; row < _info->thumb_height; row++)
+	{
+		memset(pred, 0, sizeof pred);
+		if (!bit)
+			_reader->get4();
+		bit = 0;
+		for (unsigned col = 0; col < _info->thumb_width; col++)
+		{
+			for (size_t c = 0; c < 3; c++)
+			{
+				for (dindex = first_decode; dindex->branch[0]; )
+				{
+					if ((bit = (bit - 1) & 31) == 31)
+						for (size_t i = 0; i < 4; i++)
+							bitbuf = (bitbuf << 8) + _reader->GetChar();
+					dindex = dindex->branch[bitbuf >> bit & 1];
+				}
+				pred[c] += dindex->leaf;
+				_writer->PutChar(pred[c]);
+			}
+		}
+	}
+}
+
+/* RESTRICTED code ends here */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void CImageLoader::ppm_thumb()
+{
+	_info->thumb_length = _info->thumb_width*_info->thumb_height * 3;
+	char* thumb = (char *)malloc(_info->thumb_length);
+	CAutoFreeMemory autoFree(thumb);
+	_writer->Print("P6\n%d %d\n255\n", _info->thumb_width, _info->thumb_height);
+	_reader->Read(thumb, 1, _info->thumb_length);
+	_writer->Write(thumb, 1, _info->thumb_length);
+}
+
+void CImageLoader::ppm16_thumb()
+{
+	_info->thumb_length = _info->thumb_width*_info->thumb_height * 3;
+	char* thumb = (char *)calloc(_info->thumb_length, 2);
+	CAutoFreeMemory autoFree(thumb);
+	_reader->read_shorts((unsigned short *)thumb, _info->thumb_length);
+	for (int i = 0; i < _info->thumb_length; i++)
+		thumb[i] = ((unsigned short *)thumb)[i] >> 8;
+	_writer->Print("P6\n%d %d\n255\n", _info->thumb_width, _info->thumb_height);
+	_writer->Write(thumb, 1, _info->thumb_length);
+}
+
+void CImageLoader::layer_thumb()
+{
+	char map[][4] = { "012","102" };
+
+	_info->colors = _info->thumb_misc >> 5 & 7;
+	_info->thumb_length = _info->thumb_width*_info->thumb_height;
+	char* thumb = (char *)calloc(_info->colors, _info->thumb_length);
+	CAutoFreeMemory autoFree(thumb);
+	_writer->Print("P%d\n%d %d\n255\n", 5 + (_info->colors >> 1), _info->thumb_width, _info->thumb_height);
+	_reader->Read(thumb, _info->thumb_length, _info->colors);
+	for (int i = 0; i < _info->thumb_length; i++)
+		for (size_t c = 0; c < _info->colors; c++)
+			_writer->PutChar(thumb[i + _info->thumb_length*(map[_info->thumb_misc >> 8][c] - '0')]);
+}
+
+void CImageLoader::rollei_thumb()
+{
+	_info->thumb_length = _info->thumb_width * _info->thumb_height;
+	unsigned short* thumb = (unsigned short *)calloc(_info->thumb_length, 2);
+	CAutoFreeMemory autoFree(thumb);
+	_writer->Print("P6\n%d %d\n255\n", _info->thumb_width, _info->thumb_height);
+	_reader->read_shorts(thumb, _info->thumb_length);
+	for (size_t i = 0; i < _info->thumb_length; i++)
+	{
+		_writer->PutChar(thumb[i] << 3);
+		_writer->PutChar(thumb[i] >> 5 << 2);
+		_writer->PutChar(thumb[i] >> 11 << 3);
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void CImageLoader::median_filter()
+{
+	unsigned short(*pix)[4];
+	int pass, c, i, j, k, med[9];
+	static const unsigned char opt[] =	/* Optimal 9-element median search */
+	{ 1,2, 4,5, 7,8, 0,1, 3,4, 6,7, 1,2, 4,5, 7,8,
+		0,3, 5,8, 4,7, 3,6, 1,4, 2,5, 4,7, 4,2, 6,4, 4,2 };
+
+	for (pass = 1; pass <= _options->med_passes; pass++)
+	{
+		for (c = 0; c < 3; c += 2)
+		{
+			for (pix = _info->image; pix < _info->image + _info->width*_info->height; pix++)
+				pix[0][3] = pix[0][c];
+			for (pix = _info->image + _info->width; pix < _info->image + _info->width*(_info->height - 1); pix++)
+			{
+				if ((pix - _info->image + 1) % _info->width < 2)
+					continue;
+				for (k = 0, i = -_info->width; i <= _info->width; i += _info->width)
+					for (j = i - 1; j <= i + 1; j++)
+						med[k++] = pix[j][3] - pix[j][1];
+				for (i = 0; i < sizeof opt; i += 2)
+					if (med[opt[i]] > med[opt[i + 1]])
+						SWAP(med[opt[i]], med[opt[i + 1]]);
+				pix[0][c] = CLIP(med[4] + pix[0][1]);
+			}
+		}
+	}
+}
+
+void CImageLoader::blend_highlights()
+{
+	int clip = INT_MAX, row, col, i, j;
+	static const float trans[2][4][4] =
+	{ { { 1,1,1 },{ 1.7320508,-1.7320508,0 },{ -1,-1,2 } },
+	{ { 1,1,1,1 },{ 1,-1,1,-1 },{ 1,1,-1,-1 },{ 1,-1,-1,1 } } };
+	static const float itrans[2][4][4] =
+	{ { { 1,0.8660254,-0.5 },{ 1,-0.8660254,-0.5 },{ 1,0,1 } },
+	{ { 1,1,1,1 },{ 1,-1,1,-1 },{ 1,1,-1,-1 },{ 1,-1,-1,1 } } };
+	float cam[2][4], lab[2][4], sum[2], chratio;
+
+	if ((unsigned)(_info->colors - 3) > 1)
+		return;
+	for (size_t c = 0; c < _info->colors; c++)
+		if (clip > (i = 65535 * _info->pre_mul[c]))
+			clip = i;
+	for (row = 0; row < _info->height; row++)
+	{
+		for (col = 0; col < _info->width; col++)
+		{
+			int c;
+			for (c = 0; c < _info->colors; c++)
+				if (_info->image[row*_info->width + col][c] > clip)
+					break;
+			if (c == _info->colors)
+				continue;
+			for (size_t c = 0; c < _info->colors; c++)
+			{
+				cam[0][c] = _info->image[row*_info->width + col][c];
+				cam[1][c] = MIN(cam[0][c], clip);
+			}
+			for (i = 0; i < 2; i++)
+			{
+				for (size_t c = 0; c < _info->colors; c++)
+					for (lab[i][c] = j = 0; j < _info->colors; j++)
+						lab[i][c] += trans[_info->colors - 3][c][j] * cam[i][j];
+				sum[i] = 0;
+				for (size_t c = 1; c < _info->colors; c++)
+					sum[i] += SQR(lab[i][c]);
+			}
+			chratio = sqrt(sum[1] / sum[0]);
+			for (c = 1; c < _info->colors; c++)
+				lab[0][c] *= chratio;
+			for (size_t c = 0; c < _info->colors; c++)
+				for (cam[0][c] = j = 0; j < _info->colors; j++)
+					cam[0][c] += itrans[_info->colors - 3][c][j] * lab[0][j];
+			for (size_t c = 0; c < _info->colors; c++)
+				_info->image[row*_info->width + col][c] = cam[0][c] / _info->colors;
+		}
+	}
+}
+
+#define SCALE (4 >> _info->shrink)
+void CImageLoader::recover_highlights()
+{
+	float sum, wgt, grow;
+	int hsat[4], count, spread, change, val, i;
+	unsigned high, wide, mrow, mcol, row, col, kc, c, d, y, x;
+	unsigned short *pixel;
+	static const signed char dir[8][2] =
+	{ { -1,-1 },{ -1,0 },{ -1,1 },{ 0,1 },{ 1,1 },{ 1,0 },{ 1,-1 },{ 0,-1 } };
+
+	grow = pow(2, 4 - _options->highlight);
+	for (size_t c = 0; c < _info->colors; c++)
+		hsat[c] = 32000 * _info->pre_mul[c];
+	kc = 0;
+	for (size_t c = 1; c < _info->colors; c++)
+		if (_info->pre_mul[kc] < _info->pre_mul[c])
+			kc = c;
+	high = _info->height / SCALE;
+	wide = _info->width / SCALE;
+	float* map = (float *)calloc(high, wide * sizeof *map);
+	CAutoFreeMemory autoFree(map);
+	for (size_t c = 0; c < _info->colors; c++)
+	{
+		if (c != kc)
+		{
+			memset(map, 0, high*wide * sizeof *map);
+			for (mrow = 0; mrow < high; mrow++)
+			{
+				for (mcol = 0; mcol < wide; mcol++)
+				{
+					count = 0;
+					wgt = 0;
+					sum = 0;
+					for (row = mrow*SCALE; row < (mrow + 1)*SCALE; row++)
+					{
+						for (col = mcol*SCALE; col < (mcol + 1)*SCALE; col++)
+						{
+							pixel = _info->image[row*_info->width + col];
+							if (pixel[c] / hsat[c] == 1 && pixel[kc] > 24000)
+							{
+								sum += pixel[c];
+								wgt += pixel[kc];
+								count++;
+							}
+						}
+					}
+					if (count == SCALE*SCALE)
+						map[mrow*wide + mcol] = sum / wgt;
+				}
+			}
+			for (spread = 32 / grow; spread--; )
+			{
+				for (mrow = 0; mrow < high; mrow++)
+				{
+					for (mcol = 0; mcol < wide; mcol++)
+					{
+						if (map[mrow*wide + mcol])
+							continue;
+						count = 0;
+						sum = 0;
+						for (d = 0; d < 8; d++)
+						{
+							y = mrow + dir[d][0];
+							x = mcol + dir[d][1];
+							if (y < high && x < wide && map[y*wide + x] > 0)
+							{
+								sum += (1 + (d & 1)) * map[y*wide + x];
+								count += 1 + (d & 1);
+							}
+						}
+						if (count > 3)
+							map[mrow*wide + mcol] = -(sum + grow) / (count + grow);
+					}
+				}
+				for (change = i = 0; i < high*wide; i++)
+				{
+					if (map[i] < 0)
+					{
+						map[i] = -map[i];
+						change = 1;
+					}
+				}
+				if (!change)
+					break;
+			}
+			for (i = 0; i < high*wide; i++)
+				if (map[i] == 0) map[i] = 1;
+			for (mrow = 0; mrow < high; mrow++)
+			{
+				for (mcol = 0; mcol < wide; mcol++)
+				{
+					for (row = mrow*SCALE; row < (mrow + 1)*SCALE; row++)
+					{
+						for (col = mcol*SCALE; col < (mcol + 1)*SCALE; col++)
+						{
+							pixel = _info->image[row*_info->width + col];
+							if (pixel[c] / hsat[c] > 1)
+							{
+								val = pixel[kc] * map[mrow*wide + mcol];
+								if (pixel[c] < val) pixel[c] = CLIP(val);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+#undef SCALE
+
+#ifndef NO_LCMS
+void CImageLoader::apply_profile(const char *input, const char *output)
+{
+	char *prof;
+	cmsHPROFILE hInProfile = 0;
+	cmsHPROFILE hOutProfile = 0;
+	cmsHTRANSFORM hTransform;
+	FILE *fp;
+	unsigned size;
+
+	if (strcmp(input, "embed"))
+	{
+		hInProfile = cmsOpenProfileFromFile(input, "r");
+	}
+	else if (_info->profile_length)
+	{
+		prof = (char *)malloc(_info->profile_length);
+		CAutoFreeMemory autoFree(prof);
+		_reader->Seek(_info->profile_offset, SEEK_SET);
+		_reader->Read(prof, 1, _info->profile_length);
+		hInProfile = cmsOpenProfileFromMem(prof, _info->profile_length);
+	}
+	else
+	{
+		fprintf(stderr, ("%s has no embedded profile.\n"), _reader->GetFileName());
+	}
+	if (!hInProfile)
+		return;
+	if (!output)
+		hOutProfile = cmsCreate_sRGBProfile();
+	else if ((fp = fopen(output, "rb")))
+	{
+		fread(&size, 4, 1, fp);
+		fseek(fp, 0, SEEK_SET);
+		_info->oprof = (unsigned *)malloc(size = ntohl(size));
+		if (!_info->oprof)
+			throw CExceptionMemory();
+		fread(_info->oprof, 1, size, fp);
+		fclose(fp);
+		if (!(hOutProfile = cmsOpenProfileFromMem(_info->oprof, size)))
+		{
+			free(_info->oprof);
+			_info->oprof = nullptr;
+		}
+	}
+	else
+	{
+		fprintf(stderr, ("Cannot open file %s!\n"), output);
+	}
+	if (!hOutProfile)
+		goto quit;
+	hTransform = cmsCreateTransform(hInProfile, TYPE_RGBA_16, hOutProfile, TYPE_RGBA_16, INTENT_PERCEPTUAL, 0);
+	cmsDoTransform(hTransform, _info->image, _info->image, _info->width*_info->height);
+	_info->raw_color = 1;		/* Don't use rgb_cam with a profile */
+	cmsDeleteTransform(hTransform);
+	cmsCloseProfile(hOutProfile);
+quit:
+	cmsCloseProfile(hInProfile);
+}
+#endif
+
+void CImageLoader::convert_to_rgb()
+{
+	static const double xyzd50_srgb[3][3] =
+	{
+		{ 0.436083, 0.385083, 0.143055 },
+		{ 0.222507, 0.716888, 0.060608 },
+		{ 0.013930, 0.097097, 0.714022 }
+	};
+	static const double rgb_rgb[3][3] =
+	{
+		{ 1,0,0 },{ 0,1,0 },{ 0,0,1 }
+	};
+	static const double adobe_rgb[3][3] =
+	{
+		{ 0.715146, 0.284856, 0.000000 },
+		{ 0.000000, 1.000000, 0.000000 },
+		{ 0.000000, 0.041166, 0.958839 }
+	};
+	static const double wide_rgb[3][3] =
+	{
+		{ 0.593087, 0.404710, 0.002206 },
+		{ 0.095413, 0.843149, 0.061439 },
+		{ 0.011621, 0.069091, 0.919288 }
+	};
+	static const double prophoto_rgb[3][3] =
+	{
+		{ 0.529317, 0.330092, 0.140588 },
+		{ 0.098368, 0.873465, 0.028169 },
+		{ 0.016879, 0.117663, 0.865457 }
+	};
+	static const double aces_rgb[3][3] =
+	{
+		{ 0.432996, 0.375380, 0.189317 },
+		{ 0.089427, 0.816523, 0.102989 },
+		{ 0.019165, 0.118150, 0.941914 }
+	};
+	static const double(*out_rgb[])[3] =
+	{ rgb_rgb, adobe_rgb, wide_rgb, prophoto_rgb, _info->xyz_rgb, aces_rgb };
+	static const char *name[] =
+	{ "sRGB", "Adobe RGB (1998)", "WideGamut D65", "ProPhoto D65", "XYZ", "ACES" };
+	static const unsigned phead[] =
+	{
+		1024, 0, 0x2100000, 0x6d6e7472, 0x52474220, 0x58595a20, 0, 0, 0,
+		0x61637370, 0, 0, 0x6e6f6e65, 0, 0, 0, 0, 0xf6d6, 0x10000, 0xd32d
+	};
+	static const unsigned pwhite[] = { 0xf351, 0x10000, 0x116cc };
+
+	unsigned pbody[] =
+	{ 10, 0x63707274, 0, 36,	/* cprt */
+		0x64657363, 0, 40,	/* desc */
+		0x77747074, 0, 20,	/* wtpt */
+		0x626b7074, 0, 20,	/* bkpt */
+		0x72545243, 0, 14,	/* rTRC */
+		0x67545243, 0, 14,	/* gTRC */
+		0x62545243, 0, 14,	/* bTRC */
+		0x7258595a, 0, 20,	/* rXYZ */
+		0x6758595a, 0, 20,	/* gXYZ */
+		0x6258595a, 0, 20	/* bXYZ */
+	};
+	unsigned pcurve[] = { 0x63757276, 0, 1, 0x1000000 };
+	int row, col, i, j, k;
+	unsigned short *img;
+	float out[3], out_cam[3][4];
+	double num, inverse[3][3];
+
+	_info->gamma_curve(_info->gamm[0], _info->gamm[1], 0, 0);
+	memcpy(out_cam, _info->rgb_cam, sizeof out_cam);
+	_info->raw_color |= _info->colors == 1 || _options->document_mode ||
+		_options->output_color < 1 || _options->output_color > 6;
+	if (!_info->raw_color)
+	{
+		_info->oprof = (unsigned *)calloc(phead[0], 1);
+		if (!_info->oprof)
+			throw CExceptionMemory();
+
+		memcpy(_info->oprof, phead, sizeof phead);
+		if (_options->output_color == 5)
+			_info->oprof[4] = _info->oprof[5];
+		_info->oprof[0] = 132 + 12 * pbody[0];
+		for (i = 0; i < pbody[0]; i++)
+		{
+			_info->oprof[_info->oprof[0] / 4] = i ? (i > 1 ? 0x58595a20 : 0x64657363) : 0x74657874;
+			pbody[i * 3 + 2] = _info->oprof[0];
+			_info->oprof[0] += (pbody[i * 3 + 3] + 3) & -4;
+		}
+		memcpy(_info->oprof + 32, pbody, sizeof pbody);
+		_info->oprof[pbody[5] / 4 + 2] = strlen(name[_options->output_color - 1]) + 1;
+		memcpy((char *)_info->oprof + pbody[8] + 8, pwhite, sizeof pwhite);
+		pcurve[3] = (short)(256 / _info->gamm[5] + 0.5) << 16;
+		for (i = 4; i < 7; i++)
+			memcpy((char *)_info->oprof + pbody[i * 3 + 2], pcurve, sizeof pcurve);
+		pseudoinverse((double(*)[3]) out_rgb[_options->output_color - 1], inverse, 3);
+		for (i = 0; i < 3; i++)
+		{
+			for (j = 0; j < 3; j++)
+			{
+				for (num = k = 0; k < 3; k++)
+					num += xyzd50_srgb[i][k] * inverse[j][k];
+				_info->oprof[pbody[j * 3 + 23] / 4 + i + 2] = num * 0x10000 + 0.5;
+			}
+		}
+		for (i = 0; i < phead[0] / 4; i++)
+			_info->oprof[i] = htonl(_info->oprof[i]);
+		strcpy((char *)_info->oprof + pbody[2] + 8, "auto-generated by dcraw");
+		strcpy((char *)_info->oprof + pbody[5] + 12, name[_options->output_color - 1]);
+		for (i = 0; i < 3; i++)
+			for (j = 0; j < _info->colors; j++)
+				for (out_cam[i][j] = k = 0; k < 3; k++)
+					out_cam[i][j] += out_rgb[_options->output_color - 1][i][k] * _info->rgb_cam[k][j];
+	}
+
+	memset(_info->histogram, 0, sizeof _info->histogram);
+	for (img = _info->image[0], row = 0; row < _info->height; row++)
+	{
+		for (col = 0; col < _info->width; col++, img += 4)
+		{
+			if (!_info->raw_color)
+			{
+				out[0] = out[1] = out[2] = 0;
+				for (size_t c = 0; c < _info->colors; c++)
+				{
+					out[0] += out_cam[0][c] * img[c];
+					out[1] += out_cam[1][c] * img[c];
+					out[2] += out_cam[2][c] * img[c];
+				}
+				for (size_t c = 0; c < 3; c++)
+					img[c] = CLIP((int)out[c]);
+			}
+			else if (_options->document_mode)
+			{
+				img[0] = img[fcol(row, col)];
+			}
+			for (size_t c = 0; c < _info->colors; c++)
+				_info->histogram[c][img[c] >> 3]++;
+		}
+	}
+	if (_info->colors == 4 && _options->output_color)
+		_info->colors = 3;
+	if (_options->document_mode && _info->filters)
+		_info->colors = 1;
+}
+
+void CImageLoader::fuji_rotate()
+{
+	int i, row, col;
+	double step;
+	float r, c, fr, fc;
+	unsigned ur, uc;
+	unsigned short wide, high, (*img)[4], (*pix)[4];
+
+	if (!_info->fuji_width)
+		return;
+	_info->fuji_width = (_info->fuji_width - 1 + _info->shrink) >> _info->shrink;
+	step = sqrt(0.5);
+	wide = _info->fuji_width / step;
+	high = (_info->height - _info->fuji_width) / step;
+	img = (unsigned short(*)[4]) calloc(high, wide * sizeof *img);
+	if (!img)
+		throw CExceptionMemory();
+
+	for (row = 0; row < high; row++)
+	{
+		for (col = 0; col < wide; col++)
+		{
+			ur = r = _info->fuji_width + (row - col)*step;
+			uc = c = (row + col)*step;
+			if (ur > _info->height - 2 || uc > _info->width - 2)
+				continue;
+			fr = r - ur;
+			fc = c - uc;
+			pix = _info->image + ur*_info->width + uc;
+			for (i = 0; i < _info->colors; i++)
+				img[row*wide + col][i] = (pix[0][i] * (1 - fc) + pix[1][i] * fc) * (1 - fr) + (pix[_info->width][i] * (1 - fc) + pix[_info->width + 1][i] * fc) * fr;
+		}
+	}
+	free(_info->image);
+	_info->width = wide;
+	_info->height = high;
+	_info->image = img;
+	_info->fuji_width = 0;
+}
+
+void CImageLoader::stretch()
+{
+	unsigned short newdim, (*img)[4], *pix0, *pix1;
+	int row, col;
+	double rc, frac;
+
+	if (_info->pixel_aspect == 1)
+		return;
+	if (_info->pixel_aspect < 1)
+	{
+		newdim = _info->height / _info->pixel_aspect + 0.5;
+		img = (unsigned short(*)[4]) calloc(_info->width, newdim * sizeof *img);
+		if (!img)
+			throw CExceptionMemory();
+		rc = 0;
+		for (row = 0; row < newdim; row++, rc += _info->pixel_aspect)
+		{
+			int c = rc;
+			frac = rc - c;
+			pix0 = pix1 = _info->image[c*_info->width];
+			if (c + 1 < _info->height)
+				pix1 += _info->width * 4;
+			for (col = 0; col < _info->width; col++, pix0 += 4, pix1 += 4)
+				for (size_t c = 0; c < _info->colors; c++)
+					img[row*_info->width + col][c] = pix0[c] * (1 - frac) + pix1[c] * frac + 0.5;
+		}
+		_info->height = newdim;
+	}
+	else
+	{
+		newdim = _info->width * _info->pixel_aspect + 0.5;
+		img = (unsigned short(*)[4]) calloc(_info->height, newdim * sizeof *img);
+		if (!img)
+			throw CExceptionMemory();
+		for (rc = col = 0; col < newdim; col++, rc += 1 / _info->pixel_aspect)
+		{
+			int c = rc;
+			frac = rc - c;
+			pix0 = pix1 = _info->image[c];
+			if (c + 1 < _info->width) pix1 += 4;
+			for (row = 0; row < _info->height; row++, pix0 += _info->width * 4, pix1 += _info->width * 4)
+				for (size_t c = 0; c < _info->colors; c++)
+					img[row*newdim + col][c] = pix0[c] * (1 - frac) + pix1[c] * frac + 0.5;
+		}
+		_info->width = newdim;
+	}
+	free(_info->image);
+	_info->image = img;
+}
+
+int CImageLoader::flip_index(int row, int col)
+{
+	if (_info->flip & 4)
+		SWAP(row, col);
+	if (_info->flip & 2)
+		row = _info->iheight - 1 - row;
+	if (_info->flip & 1)
+		col = _info->iwidth - 1 - col;
+	return row * _info->iwidth + col;
+}
+
+void CImageLoader::tiff_set(tiff_hdr *th, unsigned short *ntag, unsigned short tag, unsigned short type, int count, int val)
+{
+	tiff_tag* tt = (tiff_tag *)(ntag + 1) + (*ntag)++;
+	tt->val.i = val;
+	if (type == 1 && count <= 4)
+		for (int c = 0; c < 4; c++)
+			tt->val.c[c] = val >> (c << 3);
+	else if (type == 2)
+	{
+		count = strnlen((char *)th + val, count - 1) + 1;
+		if (count <= 4)
+			for (int c = 0; c < 4; c++)
+				tt->val.c[c] = ((char *)th)[val + c];
+	}
+	else if (type == 3 && count <= 2)
+	{
+		for (int c = 0; c < 2; c++)
+			tt->val.s[c] = val >> (c << 4);
+	}
+	tt->count = count;
+	tt->type = type;
+	tt->tag = tag;
+}
+
+#define TOFF(ptr) ((char *)(&(ptr)) - (char *)th)
+void CImageLoader::tiff_head(tiff_hdr *th, int full)
+{
+	int psize = 0;
+
+	memset(th, 0, sizeof *th);
+	th->order = htonl(0x4d4d4949) >> 16;
+	th->magic = 42;
+	th->ifd = 10;
+	th->rat[0] = th->rat[2] = 300;
+	th->rat[1] = th->rat[3] = 1;
+	for (size_t c = 0; c < 6; c++)
+		th->rat[4 + c] = 1000000;
+	th->rat[4] *= _info->shutter;
+	th->rat[6] *= _info->aperture;
+	th->rat[8] *= _info->focal_len;
+	strncpy(th->desc, _info->desc, 512);
+	strncpy(th->make, _info->make, 64);
+	strncpy(th->model, _info->model, 64);
+	//strcpy(th->soft, "CRL v""1.0.0.0");
+	strcpy(th->soft, "dcraw v9.27");
+	tm* t = localtime(&_info->timestamp);
+	sprintf(th->date, "%04d:%02d:%02d %02d:%02d:%02d",
+		t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
+	strncpy(th->artist, _info->artist, 64);
+	if (full) {
+		tiff_set(th, &th->ntag, 254, 4, 1, 0);
+		tiff_set(th, &th->ntag, 256, 4, 1, _info->width);
+		tiff_set(th, &th->ntag, 257, 4, 1, _info->height);
+		tiff_set(th, &th->ntag, 258, 3, _info->colors, _options->output_bps);
+		if (_info->colors > 2)
+			th->tag[th->ntag - 1].val.i = TOFF(th->bps);
+		for (size_t c = 0; c < 4; c++)
+			th->bps[c] = _options->output_bps;
+		tiff_set(th, &th->ntag, 259, 3, 1, 1);
+		tiff_set(th, &th->ntag, 262, 3, 1, 1 + (_info->colors > 1));
+	}
+	tiff_set(th, &th->ntag, 270, 2, 512, TOFF(th->desc));
+	tiff_set(th, &th->ntag, 271, 2, 64, TOFF(th->make));
+	tiff_set(th, &th->ntag, 272, 2, 64, TOFF(th->model));
+	if (full)
+	{
+		if (_info->oprof)
+			psize = ntohl(_info->oprof[0]);
+		tiff_set(th, &th->ntag, 273, 4, 1, sizeof *th + psize);
+		tiff_set(th, &th->ntag, 277, 3, 1, _info->colors);
+		tiff_set(th, &th->ntag, 278, 4, 1, _info->height);
+		tiff_set(th, &th->ntag, 279, 4, 1, _info->height*_info->width*_info->colors*_options->output_bps / 8);
+	}
+	else
+	{
+		tiff_set(th, &th->ntag, 274, 3, 1, "12435867"[_info->flip] - '0');
+	}
+	tiff_set(th, &th->ntag, 282, 5, 1, TOFF(th->rat[0]));
+	tiff_set(th, &th->ntag, 283, 5, 1, TOFF(th->rat[2]));
+	tiff_set(th, &th->ntag, 284, 3, 1, 1);
+	tiff_set(th, &th->ntag, 296, 3, 1, 2);
+	tiff_set(th, &th->ntag, 305, 2, 32, TOFF(th->soft));
+	tiff_set(th, &th->ntag, 306, 2, 20, TOFF(th->date));
+	tiff_set(th, &th->ntag, 315, 2, 64, TOFF(th->artist));
+	tiff_set(th, &th->ntag, 34665, 4, 1, TOFF(th->nexif));
+	if (psize)
+		tiff_set(th, &th->ntag, 34675, 7, psize, sizeof *th);
+	tiff_set(th, &th->nexif, 33434, 5, 1, TOFF(th->rat[4]));
+	tiff_set(th, &th->nexif, 33437, 5, 1, TOFF(th->rat[6]));
+	tiff_set(th, &th->nexif, 34855, 3, 1, _info->iso_speed);
+	tiff_set(th, &th->nexif, 37386, 5, 1, TOFF(th->rat[8]));
+	if (_info->gpsdata[1])
+	{
+		tiff_set(th, &th->ntag, 34853, 4, 1, TOFF(th->ngps));
+		tiff_set(th, &th->ngps, 0, 1, 4, 0x202);
+		tiff_set(th, &th->ngps, 1, 2, 2, _info->gpsdata[29]);
+		tiff_set(th, &th->ngps, 2, 5, 3, TOFF(th->gps[0]));
+		tiff_set(th, &th->ngps, 3, 2, 2, _info->gpsdata[30]);
+		tiff_set(th, &th->ngps, 4, 5, 3, TOFF(th->gps[6]));
+		tiff_set(th, &th->ngps, 5, 1, 1, _info->gpsdata[31]);
+		tiff_set(th, &th->ngps, 6, 5, 1, TOFF(th->gps[18]));
+		tiff_set(th, &th->ngps, 7, 5, 3, TOFF(th->gps[12]));
+		tiff_set(th, &th->ngps, 18, 2, 12, TOFF(th->gps[20]));
+		tiff_set(th, &th->ngps, 29, 2, 12, TOFF(th->gps[23]));
+		memcpy(th->gps, _info->gpsdata, sizeof th->gps);
+	}
+}
+#undef TOFF
+void CImageLoader::jpeg_thumb()
+{
+	unsigned short exif[5];
+	tiff_hdr th;
+
+	char* thumb = (char *)malloc(_info->thumb_length);
+	CAutoFreeMemory autoFree(thumb);
+
+	_reader->Read(thumb, 1, _info->thumb_length);
+	_writer->PutChar(0xff);
+	_writer->PutChar(0xd8);
+	if (strcmp(thumb + 6, "Exif"))
+	{
+		memcpy(exif, "\xff\xe1  Exif\0\0", 10);
+		exif[1] = htons(8 + sizeof th);
+		_writer->Write(exif, 1, sizeof exif);
+		tiff_head(&th, 0);
+		_writer->Write(&th, 1, sizeof th);
+	}
+	_writer->Write(thumb + 2, 1, _info->thumb_length - 2);
+}
+
+void CImageLoader::write_ppm_tiff()
+{
+	tiff_hdr th;
+	int row, col, soff, rstep, cstep;
+	int perc, val, total, white = 0x2000;
+
+	perc = _info->width * _info->height * 0.01;		/* 99th percentile white level */
+	if (_info->fuji_width)
+		perc /= 2;
+	if (!((_options->highlight & ~2) || _options->no_auto_bright))
+	{
+		white = 0;
+		for (size_t c = 0; c < _info->colors; c++)
+		{
+			for (val = 0x2000, total = 0; --val > 32; )
+				if ((total += _info->histogram[c][val]) > perc)
+					break;
+			if (white < val)
+				white = val;
+		}
+	}
+	_info->gamma_curve(_info->gamm[0], _info->gamm[1], 2, (white << 3) / _options->bright);
+	_info->iheight = _info->height;
+	_info->iwidth = _info->width;
+	if (_info->flip & 4) SWAP(_info->height, _info->width);
+	unsigned char* ppm = (unsigned char *)calloc(_info->width, _info->colors*_options->output_bps / 8);
+	CAutoFreeMemory autoFree(ppm);
+	unsigned short* ppm2 = (unsigned short *)ppm;
+	if (_options->output_tiff)
+	{
+		tiff_head(&th, 1);
+		_writer->Write(&th, sizeof th, 1);
+		if (_info->oprof)
+			_writer->Write(_info->oprof, ntohl(_info->oprof[0]), 1);
+	}
+	else if (_info->colors > 3)
+	{
+		_writer->Print("P7\nWIDTH %d\nHEIGHT %d\nDEPTH %d\nMAXVAL %d\nTUPLTYPE %s\nENDHDR\n",
+			_info->width, _info->height, _info->colors, (1 << _options->output_bps) - 1, _info->cdesc);
+	}
+	else
+	{
+		_writer->Print("P%d\n%d %d\n%d\n",
+			_info->colors / 2 + 5, _info->width, _info->height, (1 << _options->output_bps) - 1);
+	}
+	soff = flip_index(0, 0);
+	cstep = flip_index(0, 1) - soff;
+	rstep = flip_index(1, 0) - flip_index(0, _info->width);
+	for (row = 0; row < _info->height; row++, soff += rstep)
+	{
+		for (col = 0; col < _info->width; col++, soff += cstep)
+			if (_options->output_bps == 8)
+				for (size_t c = 0; c < _info->colors; c++)
+					ppm[col*_info->colors + c] = _info->curve[_info->image[soff][c]] >> 8;
+			else
+				for (size_t c = 0; c < _info->colors; c++)
+					ppm2[col*_info->colors + c] = _info->curve[_info->image[soff][c]];
+			if (_options->output_bps == 16 && !_options->output_tiff && htons(0x55aa) != 0x55aa)
+				swab((char*)ppm2, (char*)ppm2, _info->width*_info->colors * 2);
+			_writer->Write(ppm, _info->colors*_options->output_bps / 8, _info->width);
+	}
 }

@@ -178,3 +178,15 @@ const char* CExceptionJpegError::what() const noexcept
 {
 	return _what ? _what : Message;
 }
+
+
+const char* CExceptionDecoderTableOverflow::Message = "Decoder table overflow";
+
+CExceptionDecoderTableOverflow::CExceptionDecoderTableOverflow()
+{
+}
+
+const char* CExceptionDecoderTableOverflow::what() const noexcept
+{
+	return _what ? _what : Message;
+}

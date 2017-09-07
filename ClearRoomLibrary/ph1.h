@@ -19,7 +19,13 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 
 struct ph1
 {
-	int format, key_off, tag_21a;
-	int black, split_col, black_col, split_row, black_row;
+	int format;
+	int key_off;
+	int tag_21a;
+	int black;
+	int split_col;
+	int black_col;
+	int split_row;
+	int black_row;
 	float tag_210;
 };

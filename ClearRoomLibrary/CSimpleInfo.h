@@ -19,7 +19,7 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "CReader.h"
 #include "CWriter.h"
-#include "tiff_ifd.h"
+#include "tiffIfd.h"
 #include "ph1.h"
 #include "Enumerate.h"
 
@@ -116,8 +116,12 @@ namespace Unmanaged
 		unsigned colors;
 		unsigned flip;
 
-		unsigned tiff_flip, filters;
-		unsigned short raw_height, raw_width, top_margin, left_margin;
+		unsigned tiff_flip;
+		unsigned filters;
+		unsigned short raw_height;
+		unsigned short raw_width;
+		unsigned short top_margin;
+		unsigned short left_margin;
 
 		float canon_ev;
 
@@ -125,33 +129,74 @@ namespace Unmanaged
 		char* meta_data;
 		unsigned short* raw_image;
 		unsigned short(*image)[4];
+		unsigned* oprof;
 
-		float cam_mul[4], pre_mul[4], cmatrix[3][4], rgb_cam[3][4];
-		unsigned short cblack[4102];
-		off_t thumb_offset, meta_offset, profile_offset;
-		unsigned shot_order, kodak_cbpp, exif_cfa, unique_id;
-		unsigned thumb_length, meta_length, profile_length;
-		unsigned thumb_misc, *oprof, fuji_layout, shot_select = 0;
-		unsigned tiff_nifds, tiff_samples, tiff_bps, tiff_compress;
-		unsigned black, maximum, mix_green, raw_color, zero_is_bad;
-		unsigned zero_after_ff, is_raw, dng_version, is_foveon, data_error;
-		unsigned tile_width, tile_length, gpsdata[32], load_flags;
-		off_t strip_offset, data_offset;
-		unsigned short white[8][8], curve[0x10000], cr2_slice[3], sraw_mul[4];
-		double pixel_aspect, gamm[6] = { 0.45,4.5,0,0,0,0 };
-		unsigned short shrink, iheight, iwidth, fuji_width, thumb_width, thumb_height;
-		char xtrans[6][6], xtrans_abs[6][6];
-		int mask[8][4];
+		unsigned shot_select = 0;
+		double gamm[6] = { 0.45,4.5,0,0,0,0 };
 		int half_size = 0;
-		int use_camera_wb = 0, use_camera_matrix = 1;
+		int use_camera_wb = 0;
+		int use_camera_matrix = 1;
+
+		double pixel_aspect;
+		float cam_mul[4];
+		float pre_mul[4];
+		float cmatrix[3][4];
+		float rgb_cam[3][4];
+		unsigned short cblack[4102];
+		off_t thumb_offset;
+		off_t meta_offset;
+		off_t profile_offset;
+		unsigned shot_order;
+		unsigned kodak_cbpp;
+		unsigned exif_cfa;
+		unsigned unique_id;
+		unsigned thumb_length;
+		unsigned meta_length;
+		unsigned profile_length;
+		unsigned thumb_misc;
+		unsigned fuji_layout;
+		unsigned tiff_nifds;
+		unsigned tiff_samples;
+		unsigned tiff_bps;
+		unsigned tiff_compress;
+		unsigned black;
+		unsigned maximum;
+		unsigned mix_green;
+		unsigned raw_color;
+		unsigned zero_is_bad;
+		unsigned zero_after_ff;
+		unsigned is_raw;
+		unsigned dng_version;
+		unsigned is_foveon;
+		unsigned data_error;
+		unsigned tile_width;
+		unsigned tile_length;
+		unsigned gpsdata[32];
+		unsigned load_flags;
+		off_t strip_offset;
+		off_t data_offset;
+		unsigned short white[8][8];
+		unsigned short curve[0x10000];
+		unsigned short cr2_slice[3];
+		unsigned short sraw_mul[4];
+		unsigned short shrink;
+		unsigned short iheight;
+		unsigned short iwidth;
+		unsigned short fuji_width;
+		unsigned short thumb_width;
+		unsigned short thumb_height;
+		char xtrans[6][6];
+		char xtrans_abs[6][6];
+		int mask[8][4];
 		int histogram[4][0x2000];
 		const float d65_white[3] = { 0.950456f, 1.0f, 1.088754f };
 
-		const double xyz_rgb[3][3] = {			/* XYZ from RGB */
+		const double xyz_rgb[3][3] =			/* XYZ from RGB */
+		{
 			{ 0.412453, 0.357580, 0.180423 },
 			{ 0.212671, 0.715160, 0.072169 },
-			{ 0.019334, 0.119193, 0.950227 } };
-
+			{ 0.019334, 0.119193, 0.950227 }
+		};
 
 		tiff_ifd tiff_ifd[10];
 		ph1 ph1;
@@ -159,5 +204,6 @@ namespace Unmanaged
 		LoadRawType load_raw;
 		LoadRawType thumb_load_raw;
 		WriteThumbType write_thumb;
+		WriteThumbType write_fun;
 	};
 }

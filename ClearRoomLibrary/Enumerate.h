@@ -74,6 +74,7 @@ namespace Unmanaged
 
 	enum WriteThumbType
 	{
+		unknown_write,
 		layer_thumb,
 		ppm_thumb,
 		ppm16_thumb,

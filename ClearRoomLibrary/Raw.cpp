@@ -30,7 +30,7 @@ Raw::Raw(String^ fileName)
 
 Raw::~Raw()
 {
-	if (_raw != nullptr)
+	if (_raw)
 	{
 		delete _raw;
 		_raw = nullptr;

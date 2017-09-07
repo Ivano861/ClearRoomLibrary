@@ -153,7 +153,8 @@ namespace Unmanaged
 		// puts(_("-W        Don't automatically brighten the image"));
 		//no_auto_bright = true;
 
-		bool output_tiff = false;
+		//bool output_tiff = false;
+		bool output_tiff = true;
 		// puts(_("-T        Write TIFF instead of PPM"));
 		//output_tiff = true;
 

@@ -31,7 +31,7 @@ namespace Unmanaged
 		static CWriter* CreateTempFile();
 
 	private:
-		FILE* _ifp;
+		FILE* _ofp;
 		short _order;
 		unsigned _dataError;
 		char* _fileName;
@@ -44,6 +44,11 @@ namespace Unmanaged
 
 		int Seek(long offset, int origin);
 		size_t Write(void* buffer, size_t elementSize, size_t elementCount);
+		int PutChar(int c);
+		int Print(const char* format, unsigned short value1, unsigned short value2);
+		int Print(const char* format, int value1, unsigned short value2, unsigned short value3);
+		int Print(const char* format, unsigned short value1, unsigned short value2, unsigned int value3, int value4, const char* value5);
+		int Print(const char* format, int value1, unsigned short value2, unsigned short value3, int value4);
 		long GetPosition(); //const;
 		int Eof();
 	};
