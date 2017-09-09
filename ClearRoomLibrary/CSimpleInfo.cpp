@@ -341,7 +341,7 @@ void CSimpleInfo::GetInfo()
 	}
 	colors = 3;
 	for (size_t i = 0; i < 0x10000; i++)
-		curve[i] = static_cast<unsigned short>(i);
+		curve[i] = (unsigned short)i;
 
 	tiff_nifds = 0;
 
@@ -1241,7 +1241,7 @@ void CSimpleInfo::GetInfo()
 		maximum = 0x3fff;
 		_reader->Seek(data_offset, SEEK_SET);
 		jhead jh(*_reader, *this, true);
-		if (jh._success && jh.jh.bits == 15)
+		if (jh._success && jh.jdata.bits == 15)
 			maximum = 0x1fff;
 		if (tiff_samples > 1) filters = 0;
 		if (tiff_samples > 1 || tile_length < raw_height)
@@ -1620,8 +1620,8 @@ void CSimpleInfo::GetInfo()
 		jhead jh(*_reader, *this, true);
 		if (jh._success)
 		{
-			thumb_width = jh.jh.wide;
-			thumb_height = jh.jh.high;
+			thumb_width = jh.jdata.wide;
+			thumb_height = jh.jdata.high;
 		}
 	}
 dng_skip:
@@ -1810,13 +1810,13 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 				if (jh._success)
 				{
 					tiff_ifd[ifd].comp = 6;
-					tiff_ifd[ifd].width = jh.jh.wide;
-					tiff_ifd[ifd].height = jh.jh.high;
-					tiff_ifd[ifd].bps = jh.jh.bits;
-					tiff_ifd[ifd].samples = jh.jh.clrs;
-					if (!(jh.jh.sraw || (jh.jh.clrs & 1)))
-						tiff_ifd[ifd].width *= jh.jh.clrs;
-					if ((tiff_ifd[ifd].width > 4 * tiff_ifd[ifd].height) & ~jh.jh.clrs)
+					tiff_ifd[ifd].width = jh.jdata.wide;
+					tiff_ifd[ifd].height = jh.jdata.high;
+					tiff_ifd[ifd].bps = jh.jdata.bits;
+					tiff_ifd[ifd].samples = jh.jdata.clrs;
+					if (!(jh.jdata.sraw || (jh.jdata.clrs & 1)))
+						tiff_ifd[ifd].width *= jh.jdata.clrs;
+					if ((tiff_ifd[ifd].width > 4 * tiff_ifd[ifd].height) & ~jh.jdata.clrs)
 					{
 						tiff_ifd[ifd].width /= 2;
 						tiff_ifd[ifd].height *= 2;
@@ -2800,9 +2800,9 @@ void CSimpleInfo::apply_tiff()
 		jhead jh(*_reader, *this, true);
 		if (jh._success)
 		{
-			thumb_misc = jh.jh.bits;
-			thumb_width = jh.jh.wide;
-			thumb_height = jh.jh.high;
+			thumb_misc = jh.jdata.bits;
+			thumb_width = jh.jdata.wide;
+			thumb_height = jh.jdata.high;
 		}
 	}
 	for (size_t i = tiff_nifds; i--; )

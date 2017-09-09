@@ -47,7 +47,7 @@ namespace Unmanaged
 			unsigned short* huff[20];
 			unsigned short* free[20];
 			unsigned short* row;
-		} jh;
+		} jdata;
 
 		bool _success;
 

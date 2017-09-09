@@ -778,21 +778,21 @@ void CImageLoader::lossless_dng_load_raw()
 		jhead jh(*_reader, *_info, false);
 		if (!jh._success)
 			break;
-		unsigned jwide = jh.jh.wide;
+		unsigned jwide = jh.jdata.wide;
 		if (_info->filters)
-			jwide *= jh.jh.clrs;
+			jwide *= jh.jdata.clrs;
 		jwide /= MIN(_info->is_raw, _info->tiff_samples);
-		switch (jh.jh.algo)
+		switch (jh.jdata.algo)
 		{
 		case 0xc1:
-			jh.jh.vpred[0] = 16384;
+			jh.jdata.vpred[0] = 16384;
 			_info->getbits(-1);
-			for (unsigned jrow = 0; jrow + 7 < jh.jh.high; jrow += 8)
+			for (unsigned jrow = 0; jrow + 7 < jh.jdata.high; jrow += 8)
 			{
-				for (unsigned jcol = 0; jcol + 7 < jh.jh.wide; jcol += 8)
+				for (unsigned jcol = 0; jcol + 7 < jh.jdata.wide; jcol += 8)
 				{
 					jh.ljpeg_idct();
-					unsigned short* rp = jh.jh.idct;
+					unsigned short* rp = jh.jdata.idct;
 					unsigned row = trow + jcol / _info->tile_width + jrow * 2;
 					unsigned col = tcol + jcol % _info->tile_width;
 					for (unsigned i = 0; i < 16; i += 2)
@@ -804,7 +804,7 @@ void CImageLoader::lossless_dng_load_raw()
 		case 0xc3:
 			unsigned row = 0;
 			unsigned col = 0;
-			for (unsigned jrow = 0; jrow < jh.jh.high; jrow++)
+			for (unsigned jrow = 0; jrow < jh.jdata.high; jrow++)
 			{
 				unsigned short* rp = jh.ljpeg_row(jrow);
 				for (unsigned jcol = 0; jcol < jwide; jcol++)
@@ -939,11 +939,11 @@ void CImageLoader::lossless_jpeg_load_raw()
 	if (!jh._success)
 		return;
 
-	int jwide = jh.jh.wide * jh.jh.clrs;
+	int jwide = jh.jdata.wide * jh.jdata.clrs;
 	int row = 0;
 	int col = 0;
 
-	for (int jrow = 0; jrow < jh.jh.high; jrow++)
+	for (int jrow = 0; jrow < jh.jdata.high; jrow++)
 	{
 		unsigned short* rp = jh.ljpeg_row(jrow);
 		if (_info->load_flags & 1)
@@ -1106,29 +1106,29 @@ void CImageLoader::canon_sraw_load_raw()
 	int v[3] = { 0,0,0 };
 
 	jhead jh(*_reader, *_info, 0);
-	if (!jh._success || jh.jh.clrs < 4)
+	if (!jh._success || jh.jdata.clrs < 4)
 		return;
-	int jwide = (jh.jh.wide >>= 1) * jh.jh.clrs;
+	int jwide = (jh.jdata.wide >>= 1) * jh.jdata.clrs;
 
 	int ecol = 0;
 	for (int slice = 0; slice <= _info->cr2_slice[0]; slice++)
 	{
 		int scol = ecol;
-		ecol += _info->cr2_slice[1] * 2 / jh.jh.clrs;
+		ecol += _info->cr2_slice[1] * 2 / jh.jdata.clrs;
 		if (!_info->cr2_slice[0] || ecol > _info->raw_width - 1) ecol = _info->raw_width & -2;
-		for (int row = 0; row < _info->height; row += (jh.jh.clrs >> 1) - 1)
+		for (int row = 0; row < _info->height; row += (jh.jdata.clrs >> 1) - 1)
 		{
 			ip = (short(*)[4]) _info->image + row*_info->width;
-			for (int col = scol; col < ecol; col += 2, jcol += jh.jh.clrs)
+			for (int col = scol; col < ecol; col += 2, jcol += jh.jdata.clrs)
 			{
 				if ((jcol %= jwide) == 0)
 					rp = (short *)jh.ljpeg_row(jrow++);
 				if (col >= _info->width)
 					continue;
-				for (size_t c = 0; c < (jh.jh.clrs - 2); c++)
+				for (size_t c = 0; c < (jh.jdata.clrs - 2); c++)
 					ip[col + (c >> 1)*_info->width + (c & 1)][0] = rp[jcol + c];
-				ip[col][1] = rp[jcol + jh.jh.clrs - 2] - 16384;
-				ip[col][2] = rp[jcol + jh.jh.clrs - 1] - 16384;
+				ip[col][1] = rp[jcol + jh.jdata.clrs - 2] - 16384;
+				ip[col][2] = rp[jcol + jh.jdata.clrs - 1] - 16384;
 			}
 		}
 	}
@@ -1138,14 +1138,14 @@ void CImageLoader::canon_sraw_load_raw()
 	sscanf(cp, "%d.%d.%d", v, v + 1, v + 2);
 
 	int ver = (v[0] * 1000 + v[1]) * 1000 + v[2];
-	int hue = (jh.jh.sraw + 1) << 2;
+	int hue = (jh.jdata.sraw + 1) << 2;
 	if (_info->unique_id >= 0x80000281 || (_info->unique_id == 0x80000218 && ver > 1000006))
-		hue = jh.jh.sraw << 1;
+		hue = jh.jdata.sraw << 1;
 	ip = (short(*)[4]) _info->image;
 	rp = ip[0];
 	for (int row = 0; row < _info->height; row++, ip += _info->width)
 	{
-		if (row & (jh.jh.sraw >> 1))
+		if (row & (jh.jdata.sraw >> 1))
 		{
 			for (int col = 0; col < _info->width; col += 2)
 			{
@@ -1241,7 +1241,7 @@ void CImageLoader::hasselblad_load_raw()
 			for (int s = 0; s < _info->tiff_samples * 2; s += 2)
 			{
 				for (size_t c = 0; c < 2; c++)
-					len[c] = ph1_huff(jh.jh.huff[0]);
+					len[c] = ph1_huff(jh.jdata.huff[0]);
 				for (size_t c = 0; c < 2; c++)
 				{
 					diff[s + c] = ph1_bits(len[c]);
@@ -1258,7 +1258,7 @@ void CImageLoader::hasselblad_load_raw()
 					pred = back[2][s - 2];
 				if (col && row > 1)
 				{
-					switch (jh.jh.psv)
+					switch (jh.jdata.psv)
 					{
 					case 11:
 						pred += back[0][s] / 2 - back[0][s - 2] / 2;

@@ -30,8 +30,8 @@ jhead::jhead(CReader& reader, CSimpleInfo& info, bool info_only) : _reader(reade
 {
 	unsigned char data[0x10000];
 
-	memset(&jh, 0, sizeof jh);
-	jh.restart = INT_MAX;
+	memset(&jdata, 0, sizeof jdata);
+	jdata.restart = INT_MAX;
 	if ((_reader.GetChar(), _reader.GetChar()) != 0xd8)
 	{
 		_success = false;
@@ -57,14 +57,14 @@ jhead::jhead(CReader& reader, CSimpleInfo& info, bool info_only) : _reader(reade
 		switch (tag)
 		{
 		case 0xffc3:
-			jh.sraw = ((data[7] >> 4) * (data[7] & 15) - 1) & 3;
+			jdata.sraw = ((data[7] >> 4) * (data[7] & 15) - 1) & 3;
 		case 0xffc1:
 		case 0xffc0:
-			jh.algo = tag & 0xff;
-			jh.bits = data[0];
-			jh.high = data[1] << 8 | data[2];
-			jh.wide = data[3] << 8 | data[4];
-			jh.clrs = data[5] + jh.sraw;
+			jdata.algo = tag & 0xff;
+			jdata.bits = data[0];
+			jdata.high = data[1] << 8 | data[2];
+			jdata.wide = data[3] << 8 | data[4];
+			jdata.clrs = data[5] + jdata.sraw;
 			if (len == 9 && !info.dng_version)
 				_reader.GetChar();
 			break;
@@ -74,23 +74,23 @@ jhead::jhead(CReader& reader, CSimpleInfo& info, bool info_only) : _reader(reade
 			{
 				unsigned short c;
 				for (const unsigned char* dp = data; dp < data + len && !((c = *dp++) & -20); )
-					jh.free[c] = jh.huff[c] = CDecoder::make_decoder_ref(&dp);
+					jdata.free[c] = jdata.huff[c] = CDecoder::make_decoder_ref(&dp);
 			}
 			break;
 		case 0xffda:
-			jh.psv = data[1 + data[0] * 2];
-			jh.bits -= data[3 + data[0] * 2] & 15;
+			jdata.psv = data[1 + data[0] * 2];
+			jdata.bits -= data[3 + data[0] * 2] & 15;
 			break;
 		case 0xffdb:
 			for (size_t c = 0; c < 64; c++)
-				jh.quant[c] = data[c * 2 + 1] << 8 | data[c * 2 + 2];
+				jdata.quant[c] = data[c * 2 + 1] << 8 | data[c * 2 + 2];
 			break;
 		case 0xffdd:
-			jh.restart = data[0] << 8 | data[1];
+			jdata.restart = data[0] << 8 | data[1];
 		}
 	} while (tag != 0xffda);
 
-	if (jh.bits > 16 || jh.clrs > 6 || !jh.bits || !jh.high || !jh.wide || !jh.clrs)
+	if (jdata.bits > 16 || jdata.clrs > 6 || !jdata.bits || !jdata.high || !jdata.wide || !jdata.clrs)
 	{
 		_success = false;
 		return;
@@ -100,23 +100,23 @@ jhead::jhead(CReader& reader, CSimpleInfo& info, bool info_only) : _reader(reade
 		_success = true;
 		return;
 	}
-	if (!jh.huff[0])
+	if (!jdata.huff[0])
 	{
 		_success = false;
 		return;
 	}
 	for (size_t c = 0; c < 19; c++)
-		if (!jh.huff[c + 1])
-			jh.huff[c + 1] = jh.huff[c];
-	if (jh.sraw)
+		if (!jdata.huff[c + 1])
+			jdata.huff[c + 1] = jdata.huff[c];
+	if (jdata.sraw)
 	{
 		for (size_t c = 0; c < 4; c++)
-			jh.huff[2 + c] = jh.huff[1];
-		for (int c = 0; c < jh.sraw; c++)
-			jh.huff[1 + c] = jh.huff[0];
+			jdata.huff[2 + c] = jdata.huff[1];
+		for (int c = 0; c < jdata.sraw; c++)
+			jdata.huff[1 + c] = jdata.huff[0];
 	}
-	jh.row = (unsigned short *)calloc(jh.wide*jh.clrs, 4);
-	if (!jh.row)
+	jdata.row = (unsigned short *)calloc(jdata.wide*jdata.clrs, 4);
+	if (!jdata.row)
 		throw CExceptionMemory("ljpeg::ctor");
 
 	info.zero_after_ff = 1;
@@ -125,10 +125,10 @@ jhead::jhead(CReader& reader, CSimpleInfo& info, bool info_only) : _reader(reade
 jhead::jhead::~jhead()
 {
 	for (size_t c = 0; c < 4; c++)
-		if (jh.free[c])
-			::free(jh.free[c]);
+		if (jdata.free[c])
+			::free(jdata.free[c]);
 
-	::free(jh.row);
+	::free(jdata.row);
 }
 
 unsigned short* jhead::ljpeg_row(int jrow)
@@ -136,10 +136,10 @@ unsigned short* jhead::ljpeg_row(int jrow)
 	int col, c, diff, pred, spred = 0;
 	unsigned short mark = 0, *row[3];
 
-	if (jrow * jh.wide % jh.restart == 0)
+	if (jrow * jdata.wide % jdata.restart == 0)
 	{
 		for (size_t c = 0; c < 6; c++)
-			jh.vpred[c] = 1 << (jh.bits - 1);
+			jdata.vpred[c] = 1 << (jdata.bits - 1);
 		if (jrow)
 		{
 			_reader.Seek(-2, SEEK_CUR);
@@ -149,43 +149,43 @@ unsigned short* jhead::ljpeg_row(int jrow)
 		_info.getbits(-1);
 	}
 	for (size_t c = 0; c < 3; c++)
-		row[c] = jh.row + jh.wide*jh.clrs*((jrow + c) & 1);
-	for (col = 0; col < jh.wide; col++)
+		row[c] = jdata.row + jdata.wide*jdata.clrs*((jrow + c) & 1);
+	for (col = 0; col < jdata.wide; col++)
 	{
-		for (size_t c = 0; c < jh.clrs; c++)
+		for (size_t c = 0; c < jdata.clrs; c++)
 		{
-			diff = jhead::ljpeg_diff(jh.huff[c], _info);
-			if (jh.sraw && c <= jh.sraw && (col | c))
+			diff = jhead::ljpeg_diff(jdata.huff[c], _info);
+			if (jdata.sraw && c <= jdata.sraw && (col | c))
 				pred = spred;
 			else if (col)
-				pred = row[0][-jh.clrs];
+				pred = row[0][-jdata.clrs];
 			else
-				pred = (jh.vpred[c] += diff) - diff;
+				pred = (jdata.vpred[c] += diff) - diff;
 			if (jrow && col)
 			{
-				switch (jh.psv)
+				switch (jdata.psv)
 				{
 				case 1:
 					break;
 				case 2: pred = row[1][0];
 					break;
-				case 3: pred = row[1][-jh.clrs];
+				case 3: pred = row[1][-jdata.clrs];
 					break;
-				case 4: pred = pred + row[1][0] - row[1][-jh.clrs];
+				case 4: pred = pred + row[1][0] - row[1][-jdata.clrs];
 					break;
-				case 5: pred = pred + ((row[1][0] - row[1][-jh.clrs]) >> 1);
+				case 5: pred = pred + ((row[1][0] - row[1][-jdata.clrs]) >> 1);
 					break;
-				case 6: pred = row[1][0] + ((pred - row[1][-jh.clrs]) >> 1);
+				case 6: pred = row[1][0] + ((pred - row[1][-jdata.clrs]) >> 1);
 					break;
 				case 7: pred = (pred + row[1][0]) >> 1;
 					break;
 				default: pred = 0;
 				}
 			}
-			if ((**row = pred + diff) >> jh.bits)
+			if ((**row = pred + diff) >> jdata.bits)
 				throw CExceptionFile();
 
-			if (c <= jh.sraw)
+			if (c <= jdata.sraw)
 				spred = **row;
 			row[0]++; row[1]++;
 		}
@@ -211,17 +211,17 @@ void jhead::ljpeg_idct()
 			cs[c] = cos((c & 31)*M_PI / 16) / 2;
 	}
 	memset(work, 0, sizeof work);
-	work[0][0][0] = jh.vpred[0] += jhead::ljpeg_diff(jh.huff[0], _info) * jh.quant[0];
+	work[0][0][0] = jdata.vpred[0] += jhead::ljpeg_diff(jdata.huff[0], _info) * jdata.quant[0];
 	for (int i = 1; i < 64; i++)
 	{
-		int len = _info.gethuff(jh.huff[16]);
+		int len = _info.gethuff(jdata.huff[16]);
 		int skip = len >> 4;
 		i += skip;
 		if (!(len &= 15) && skip < 15) break;
 		int coef = _info.getbits(len);
 		if ((coef & (1 << (len - 1))) == 0)
 			coef -= (1 << len) - 1;
-		((float *)work)[zigzag[i]] = coef * jh.quant[i];
+		((float *)work)[zigzag[i]] = coef * jdata.quant[i];
 	}
 	for (size_t c = 0; c < 8; c++)
 		work[0][0][c] *= M_SQRT1_2;
@@ -237,7 +237,7 @@ void jhead::ljpeg_idct()
 				work[2][i][j] += work[1][c][j] * cs[(i * 2 + 1)*c];
 
 	for (size_t c = 0; c < 64; c++)
-		jh.idct[c] = CLIP(((float *)work[2])[c] + 0.5);
+		jdata.idct[c] = CLIP(((float *)work[2])[c] + 0.5);
 }
 
 int jhead::ljpeg_diff(unsigned short *huff, CSimpleInfo& info)
