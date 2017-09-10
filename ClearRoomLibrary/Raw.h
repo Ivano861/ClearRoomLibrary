@@ -34,6 +34,7 @@ namespace ClearRoomLibrary
 
 		SimpleInfo^ GetInfo();
 		ImageLoader^ GetImageRaw();
+		array<System::Byte>^ GetImage();
 
 	private:
 		//Private members

@@ -55,14 +55,14 @@ then the code is
 1111110		0x0b
 1111111		0xff
 */
-unsigned short* CDecoder::make_decoder_ref(const unsigned char** source)
+unsigned short* CDecoder::MakeDecoderRef(const unsigned char** source)
 {
 	const unsigned char* count = (*source += 16) - 17;
 	int max;
 	for (max = 16; max && !count[max]; max--);
 	unsigned short* huff = (unsigned short *)calloc(1 + (1 << max), sizeof *huff);
 	if (!huff)
-		throw CExceptionMemory("make_decoder()");
+		throw CExceptionMemory("MakeDecoder()");
 
 	huff[0] = max;
 	int h = 1;
@@ -74,7 +74,7 @@ unsigned short* CDecoder::make_decoder_ref(const unsigned char** source)
 	return huff;
 }
 
-unsigned short* CDecoder::make_decoder(const unsigned char* source)
+unsigned short* CDecoder::MakeDecoder(const unsigned char* source)
 {
-	return make_decoder_ref(&source);
+	return MakeDecoderRef(&source);
 }

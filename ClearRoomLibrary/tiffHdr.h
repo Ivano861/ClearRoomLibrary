@@ -19,21 +19,21 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "tiffTag.h"
 
-struct tiff_hdr
+struct TiffHDR
 {
 	unsigned short order;
 	unsigned short magic;
 	int ifd;
 	unsigned short pad;
 	unsigned short ntag;
-	tiff_tag tag[23];
+	TiffTAG tag[23];
 	int nextifd;
 	unsigned short pad2;
 	unsigned short nexif;
-	tiff_tag exif[4];
+	TiffTAG exif[4];
 	unsigned short pad3;
 	unsigned short ngps;
-	tiff_tag gpst[10];
+	TiffTAG gpst[10];
 	short bps[4];
 	int rat[10];
 	unsigned gps[26];

@@ -264,7 +264,7 @@ typedef struct {
 	jas_image_t *(*decode)(jas_stream_t *in, char *opts);
 	/* Decode image data from a stream. */
 
-	int (*encode)(jas_image_t *image, jas_stream_t *out, char *opts);
+	int (*encode)(jas_image_t *_image, jas_stream_t *out, char *opts);
 	/* Encode image data to a stream. */
 
 	int (*validate)(jas_stream_t *in);
@@ -305,128 +305,128 @@ jas_image_t *jas_image_create(int numcmpts,
 jas_image_t *jas_image_create0(void);
 
 /* Clone an image. */
-jas_image_t *jas_image_copy(jas_image_t *image);
+jas_image_t *jas_image_copy(jas_image_t *_image);
 
 /* Deallocate any resources associated with an image. */
-void jas_image_destroy(jas_image_t *image);
+void jas_image_destroy(jas_image_t *_image);
 
 /* Get the width of the image in units of the image reference grid. */
-#define jas_image_width(image) \
-	((image)->brx_ - (image)->tlx_)
+#define jas_image_width(_image) \
+	((_image)->brx_ - (_image)->tlx_)
 
 /* Get the height of the image in units of the image reference grid. */
-#define	jas_image_height(image) \
-	((image)->bry_ - (image)->tly_)
+#define	jas_image_height(_image) \
+	((_image)->bry_ - (_image)->tly_)
 
 /* Get the x-coordinate of the top-left corner of the image bounding box
   on the reference grid. */
-#define jas_image_tlx(image) \
-	((image)->tlx_)
+#define jas_image_tlx(_image) \
+	((_image)->tlx_)
 
 /* Get the y-coordinate of the top-left corner of the image bounding box
   on the reference grid. */
-#define jas_image_tly(image) \
-	((image)->tly_)
+#define jas_image_tly(_image) \
+	((_image)->tly_)
 
 /* Get the x-coordinate of the bottom-right corner of the image bounding box
   on the reference grid (plus one). */
-#define jas_image_brx(image) \
-	((image)->brx_)
+#define jas_image_brx(_image) \
+	((_image)->brx_)
 
 /* Get the y-coordinate of the bottom-right corner of the image bounding box
   on the reference grid (plus one). */
-#define jas_image_bry(image) \
-	((image)->bry_)
+#define jas_image_bry(_image) \
+	((_image)->bry_)
 
 /* Get the number of image components. */
-#define	jas_image_numcmpts(image) \
-	((image)->numcmpts_)
+#define	jas_image_numcmpts(_image) \
+	((_image)->numcmpts_)
 
 /* Get the color model used by the image. */
-#define	jas_image_clrspc(image) \
-	((image)->clrspc_)
+#define	jas_image_clrspc(_image) \
+	((_image)->clrspc_)
 
 /* Set the color model for an image. */
-#define jas_image_setclrspc(image, clrspc) \
-	((image)->clrspc_ = (clrspc))
+#define jas_image_setclrspc(_image, clrspc) \
+	((_image)->clrspc_ = (clrspc))
 
-#define jas_image_cmpttype(image, cmptno) \
-	((image)->cmpts_[(cmptno)]->type_)
-#define jas_image_setcmpttype(image, cmptno, type) \
-	((image)->cmpts_[(cmptno)]->type_ = (type))
+#define jas_image_cmpttype(_image, cmptno) \
+	((_image)->cmpts_[(cmptno)]->type_)
+#define jas_image_setcmpttype(_image, cmptno, type) \
+	((_image)->cmpts_[(cmptno)]->type_ = (type))
 
 /* Get the width of a component. */
-#define	jas_image_cmptwidth(image, cmptno) \
-	((image)->cmpts_[cmptno]->width_)
+#define	jas_image_cmptwidth(_image, cmptno) \
+	((_image)->cmpts_[cmptno]->width_)
 
 /* Get the height of a component. */
-#define	jas_image_cmptheight(image, cmptno) \
-	((image)->cmpts_[cmptno]->height_)
+#define	jas_image_cmptheight(_image, cmptno) \
+	((_image)->cmpts_[cmptno]->height_)
 
 /* Get the signedness of the sample data for a component. */
-#define	jas_image_cmptsgnd(image, cmptno) \
-	((image)->cmpts_[cmptno]->sgnd_)
+#define	jas_image_cmptsgnd(_image, cmptno) \
+	((_image)->cmpts_[cmptno]->sgnd_)
 
 /* Get the precision of the sample data for a component. */
-#define	jas_image_cmptprec(image, cmptno) \
-	((image)->cmpts_[cmptno]->prec_)
+#define	jas_image_cmptprec(_image, cmptno) \
+	((_image)->cmpts_[cmptno]->prec_)
 
 /* Get the horizontal subsampling factor for a component. */
-#define	jas_image_cmpthstep(image, cmptno) \
-	((image)->cmpts_[cmptno]->hstep_)
+#define	jas_image_cmpthstep(_image, cmptno) \
+	((_image)->cmpts_[cmptno]->hstep_)
 
 /* Get the vertical subsampling factor for a component. */
-#define	jas_image_cmptvstep(image, cmptno) \
-	((image)->cmpts_[cmptno]->vstep_)
+#define	jas_image_cmptvstep(_image, cmptno) \
+	((_image)->cmpts_[cmptno]->vstep_)
 
 /* Get the x-coordinate of the top-left corner of a component. */
-#define	jas_image_cmpttlx(image, cmptno) \
-	((image)->cmpts_[cmptno]->tlx_)
+#define	jas_image_cmpttlx(_image, cmptno) \
+	((_image)->cmpts_[cmptno]->tlx_)
 
 /* Get the y-coordinate of the top-left corner of a component. */
-#define	jas_image_cmpttly(image, cmptno) \
-	((image)->cmpts_[cmptno]->tly_)
+#define	jas_image_cmpttly(_image, cmptno) \
+	((_image)->cmpts_[cmptno]->tly_)
 
 /* Get the x-coordinate of the bottom-right corner of a component
   (plus "one"). */
-#define	jas_image_cmptbrx(image, cmptno) \
-	((image)->cmpts_[cmptno]->tlx_ + (image)->cmpts_[cmptno]->width_ * \
-	  (image)->cmpts_[cmptno]->hstep_)
+#define	jas_image_cmptbrx(_image, cmptno) \
+	((_image)->cmpts_[cmptno]->tlx_ + (_image)->cmpts_[cmptno]->width_ * \
+	  (_image)->cmpts_[cmptno]->hstep_)
 
 /* Get the y-coordinate of the bottom-right corner of a component
   (plus "one"). */
-#define	jas_image_cmptbry(image, cmptno) \
-	((image)->cmpts_[cmptno]->tly_ + (image)->cmpts_[cmptno]->height_ * \
-	  (image)->cmpts_[cmptno]->vstep_)
+#define	jas_image_cmptbry(_image, cmptno) \
+	((_image)->cmpts_[cmptno]->tly_ + (_image)->cmpts_[cmptno]->height_ * \
+	  (_image)->cmpts_[cmptno]->vstep_)
 
 /* Get the raw size of an image (i.e., the nominal size of the image without
   any compression. */
-uint_fast32_t jas_image_rawsize(jas_image_t *image);
+uint_fast32_t jas_image_rawsize(jas_image_t *_image);
 
 /* Create an image from a stream in some specified format. */
 jas_image_t *jas_image_decode(jas_stream_t *in, int fmt, char *optstr);
 
 /* Write an image to a stream in a specified format. */
-int jas_image_encode(jas_image_t *image, jas_stream_t *out, int fmt,
+int jas_image_encode(jas_image_t *_image, jas_stream_t *out, int fmt,
   char *optstr);
 
 /* Read a rectangular region of an image component. */
 /* The position and size of the rectangular region to be read is specified
 relative to the component's coordinate system. */
-int jas_image_readcmpt(jas_image_t *image, int cmptno,
+int jas_image_readcmpt(jas_image_t *_image, int cmptno,
   jas_image_coord_t x, jas_image_coord_t y, jas_image_coord_t width, jas_image_coord_t height,
   jas_matrix_t *data);
 
 /* Write a rectangular region of an image component. */
-int jas_image_writecmpt(jas_image_t *image, int cmptno,
+int jas_image_writecmpt(jas_image_t *_image, int cmptno,
   jas_image_coord_t x, jas_image_coord_t y, jas_image_coord_t width, jas_image_coord_t height,
   jas_matrix_t *data);
 
 /* Delete a component from an image. */
-void jas_image_delcmpt(jas_image_t *image, int cmptno);
+void jas_image_delcmpt(jas_image_t *_image, int cmptno);
 
 /* Add a component to an image. */
-int jas_image_addcmpt(jas_image_t *image, int cmptno,
+int jas_image_addcmpt(jas_image_t *_image, int cmptno,
   jas_image_cmptparm_t *cmptparm);
 
 /* Copy a component from one image to another. */
@@ -438,17 +438,17 @@ int jas_image_copycmpt(jas_image_t *dstimage, int dstcmptno,
 #define	JAS_IMAGE_CDT_GETPREC(dtype) ((dtype) & 0x7f)
 #define	JAS_IMAGE_CDT_SETPREC(dtype) ((dtype) & 0x7f)
 
-#define	jas_image_cmptdtype(image, cmptno) \
-	(JAS_IMAGE_CDT_SETSGND((image)->cmpts_[cmptno]->sgnd_) | JAS_IMAGE_CDT_SETPREC((image)->cmpts_[cmptno]->prec_))
+#define	jas_image_cmptdtype(_image, cmptno) \
+	(JAS_IMAGE_CDT_SETSGND((_image)->cmpts_[cmptno]->sgnd_) | JAS_IMAGE_CDT_SETPREC((_image)->cmpts_[cmptno]->prec_))
 
-int jas_image_depalettize(jas_image_t *image, int cmptno, int numlutents,
+int jas_image_depalettize(jas_image_t *_image, int cmptno, int numlutents,
   int_fast32_t *lutents, int dtype, int newcmptno);
 
-int jas_image_readcmptsample(jas_image_t *image, int cmptno, int x, int y);
-void jas_image_writecmptsample(jas_image_t *image, int cmptno, int x, int y,
+int jas_image_readcmptsample(jas_image_t *_image, int cmptno, int x, int y);
+void jas_image_writecmptsample(jas_image_t *_image, int cmptno, int x, int y,
   int_fast32_t v);
 
-int jas_image_getcmptbytype(jas_image_t *image, int ctype);
+int jas_image_getcmptbytype(jas_image_t *_image, int ctype);
 
 /******************************************************************************\
 * Image format-related operations.
@@ -480,22 +480,22 @@ int jas_image_fmtfromname(char *filename);
 int jas_image_getfmt(jas_stream_t *in);
 
 
-#define	jas_image_cmprof(image)	((image)->cmprof_)
-int jas_image_ishomosamp(jas_image_t *image);
-int jas_image_sampcmpt(jas_image_t *image, int cmptno, int newcmptno,
+#define	jas_image_cmprof(_image)	((_image)->cmprof_)
+int jas_image_ishomosamp(jas_image_t *_image);
+int jas_image_sampcmpt(jas_image_t *_image, int cmptno, int newcmptno,
   jas_image_coord_t ho, jas_image_coord_t vo, jas_image_coord_t hs,
   jas_image_coord_t vs, int sgnd, int prec);
-int jas_image_writecmpt2(jas_image_t *image, int cmptno, jas_image_coord_t x,
+int jas_image_writecmpt2(jas_image_t *_image, int cmptno, jas_image_coord_t x,
   jas_image_coord_t y, jas_image_coord_t width, jas_image_coord_t height,
   long *buf);
-int jas_image_readcmpt2(jas_image_t *image, int cmptno, jas_image_coord_t x,
+int jas_image_readcmpt2(jas_image_t *_image, int cmptno, jas_image_coord_t x,
   jas_image_coord_t y, jas_image_coord_t width, jas_image_coord_t height,
   long *buf);
 
-#define	jas_image_setcmprof(image, cmprof) ((image)->cmprof_ = cmprof)
-jas_image_t *jas_image_chclrspc(jas_image_t *image, jas_cmprof_t *outprof,
+#define	jas_image_setcmprof(_image, cmprof) ((_image)->cmprof_ = cmprof)
+jas_image_t *jas_image_chclrspc(jas_image_t *_image, jas_cmprof_t *outprof,
   int intent);
-void jas_image_dump(jas_image_t *image, FILE *out);
+void jas_image_dump(jas_image_t *_image, FILE *out);
 
 /******************************************************************************\
 * Image format-dependent operations.
@@ -504,56 +504,56 @@ void jas_image_dump(jas_image_t *image, FILE *out);
 #if !defined(EXCLUDE_JPG_SUPPORT)
 /* Format-dependent operations for JPG support. */
 jas_image_t *jpg_decode(jas_stream_t *in, char *optstr);
-int jpg_encode(jas_image_t *image, jas_stream_t *out, char *optstr);
+int jpg_encode(jas_image_t *_image, jas_stream_t *out, char *optstr);
 int jpg_validate(jas_stream_t *in);
 #endif
 
 #if !defined(EXCLUDE_MIF_SUPPORT)
 /* Format-dependent operations for MIF support. */
 jas_image_t *mif_decode(jas_stream_t *in, char *optstr);
-int mif_encode(jas_image_t *image, jas_stream_t *out, char *optstr);
+int mif_encode(jas_image_t *_image, jas_stream_t *out, char *optstr);
 int mif_validate(jas_stream_t *in);
 #endif
 
 #if !defined(EXCLUDE_PNM_SUPPORT)
 /* Format-dependent operations for PNM support. */
 jas_image_t *pnm_decode(jas_stream_t *in, char *optstr);
-int pnm_encode(jas_image_t *image, jas_stream_t *out, char *optstr);
+int pnm_encode(jas_image_t *_image, jas_stream_t *out, char *optstr);
 int pnm_validate(jas_stream_t *in);
 #endif
 
 #if !defined(EXCLUDE_RAS_SUPPORT)
 /* Format-dependent operations for Sun Rasterfile support. */
 jas_image_t *ras_decode(jas_stream_t *in, char *optstr);
-int ras_encode(jas_image_t *image, jas_stream_t *out, char *optstr);
+int ras_encode(jas_image_t *_image, jas_stream_t *out, char *optstr);
 int ras_validate(jas_stream_t *in);
 #endif
 
 #if !defined(EXCLUDE_BMP_SUPPORT)
 /* Format-dependent operations for BMP support. */
 jas_image_t *bmp_decode(jas_stream_t *in, char *optstr);
-int bmp_encode(jas_image_t *image, jas_stream_t *out, char *optstr);
+int bmp_encode(jas_image_t *_image, jas_stream_t *out, char *optstr);
 int bmp_validate(jas_stream_t *in);
 #endif
 
 #if !defined(EXCLUDE_JP2_SUPPORT)
 /* Format-dependent operations for JP2 support. */
 jas_image_t *jp2_decode(jas_stream_t *in, char *optstr);
-int jp2_encode(jas_image_t *image, jas_stream_t *out, char *optstr);
+int jp2_encode(jas_image_t *_image, jas_stream_t *out, char *optstr);
 int jp2_validate(jas_stream_t *in);
 #endif
 
 #if !defined(EXCLUDE_JPC_SUPPORT)
 /* Format-dependent operations for JPEG-2000 code stream support. */
 jas_image_t *jpc_decode(jas_stream_t *in, char *optstr);
-int jpc_encode(jas_image_t *image, jas_stream_t *out, char *optstr);
+int jpc_encode(jas_image_t *_image, jas_stream_t *out, char *optstr);
 int jpc_validate(jas_stream_t *in);
 #endif
 
 #if !defined(EXCLUDE_PGX_SUPPORT)
 /* Format-dependent operations for PGX support. */
 jas_image_t *pgx_decode(jas_stream_t *in, char *optstr);
-int pgx_encode(jas_image_t *image, jas_stream_t *out, char *optstr);
+int pgx_encode(jas_image_t *_image, jas_stream_t *out, char *optstr);
 int pgx_validate(jas_stream_t *in);
 #endif
 

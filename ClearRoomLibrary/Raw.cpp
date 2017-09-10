@@ -54,3 +54,13 @@ ImageLoader^ Raw::GetImageRaw()
 
 	return simple;
 }
+
+array<System::Byte>^ Raw::GetImage()
+{
+	CSimpleInfo& s = _raw->Info();
+
+	int len = s._iheight * s._iwidth * sizeof s._image * 2; //strlen(buf);
+	array<Byte>^ byteArray = gcnew array<Byte>(len);
+	System::Runtime::InteropServices::Marshal::Copy((IntPtr)s._image, byteArray, 0, len);
+	return byteArray;
+}

@@ -34,12 +34,12 @@ COptions::~COptions()
 
 float& COptions::Threshold()
 {
-	return threshold;
+	return _threshold;
 }
 
 float& COptions::Bright()
 {
-	return bright;
+	return _bright;
 }
 
 void COptions::SetGammaCurveCustom(double g0, double g1)
@@ -53,45 +53,45 @@ void COptions::SetGammaCurveCustom(double g0, double g1)
 void COptions::SelectRawImage(unsigned select)
 {
 	shot_select = select;
-	multi_out = false;
+	_multiOut = false;
 }
 void COptions::SelectAllRawImage()
 {
 	shot_select = 0;
-	multi_out = true;
+	_multiOut = true;
 }
 
 void COptions::SetHalfSize(bool halfSize)
 {
-	half_size = halfSize;
+	_halfSize = halfSize;
 }
 
 void COptions::SetInterpolationQuality(int quality)
 {
-	user_qual = quality;
+	_userQuality = quality;
 }
 
 void COptions::SetWhiteBalanceAverageBox(unsigned int x, unsigned int y, unsigned int w, unsigned int h)
 {
-	greybox[0] = x;
-	greybox[1] = y;
-	greybox[2] = w;
-	greybox[3] = h;
+	_greybox[0] = x;
+	_greybox[1] = y;
+	_greybox[2] = w;
+	_greybox[3] = h;
 }
 
 void COptions::SetWhiteBalanceAverageWholeImage(bool whole)
 {
-	use_auto_wb = whole;
+	_useAutoWB = whole;
 }
 
 void COptions::SetWhiteBalanceCamera(bool camera)
 {
-	use_camera_wb = camera;
+	_useCameraWB = camera;
 }
 
 void COptions::UseCameraMatrix(bool useEmbedded)
 {
-	use_camera_matrix = useEmbedded;
-	//int use_camera_matrix = 3 * (opm == '+');
+	_useCameraMatrix = useEmbedded;
+	//int _useCameraMatrix = 3 * (opm == '+');
 }
 */

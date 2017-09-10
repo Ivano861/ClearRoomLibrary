@@ -34,26 +34,26 @@ SimpleInfo::~SimpleInfo()
 #pragma region Property
 String^ SimpleInfo::Make::get()
 {
-	return marshal_as<String^>(_info->make);
+	return marshal_as<String^>(_info->_make);
 }
 
 String^ SimpleInfo::Model::get()
 {
-	return marshal_as<String^>(_info->model);
+	return marshal_as<String^>(_info->_model);
 }
 
 String^ SimpleInfo::Model2::get()
 {
-	return marshal_as<String^>(_info->model2);
+	return marshal_as<String^>(_info->_model2);
 }
 
 String^ SimpleInfo::Artist::get()
 {
-	return marshal_as<String^>(_info->artist);
+	return marshal_as<String^>(_info->_artist);
 }
 
 String^ SimpleInfo::Description::get()
 {
-	return marshal_as<String^>(_info->desc);
+	return marshal_as<String^>(_info->_desc);
 }
 #pragma endregion

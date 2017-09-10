@@ -33,54 +33,54 @@ namespace Unmanaged
 
 		void GetInfo();
 
-		void gamma_curve(double pwr, double ts, int mode, int imax);
-		unsigned getbithuff(int nbits, unsigned short *huff);
-#define getbits(n) getbithuff(n, nullptr)
-#define gethuff(h) getbithuff(*h, h+1)
+		void GammaCurve(double pwr, double ts, int mode, int imax);
+		unsigned GetBitHuff(int nbits, unsigned short *huff);
+#define getbits(n) GetBitHuff(n, nullptr)
+#define gethuff(h) GetBitHuff(*h, h+1)
+		void CamXyzCoeff(float _rgbCam[3][4], double cam_xyz[4][3]);
+		void PseudoInverse(double(*in)[3], double(*out)[3], int size);
+		void SonyDecrypt(unsigned* data, int len, int start, int key);
 
 	private:
-		int parse_tiff(int base);
-		int parse_tiff_ifd(int base);
-		void parse_exif(int base);
-		void parse_gps(int base);
-		void parse_makernote(int base, int uptag);
-		void parse_thumb_note(int base, unsigned toff, unsigned tlen);
-		void get_timestamp(int reversed);
-		void tiff_get(unsigned base, unsigned* tag, unsigned* type, unsigned* len, unsigned* save);
-		void apply_tiff();
-		void parse_external_jpeg();
-		void adobe_coeff(const char *make, const char *model);
-		void cam_xyz_coeff(float rgb_cam[3][4], double cam_xyz[4][3]);
-		void pseudoinverse(double(*in)[3], double(*out)[3], int size);
-		float find_green(int bps, int bite, int off0, int off1);
-		void simple_coeff(int index);
-		short guess_byte_order(int words);
-		int canon_s2is();
-		int nikon_e995();
-		int nikon_e2100();
-		void nikon_3700();
-		int minolta_z2();
-		void parse_phase_one(int base);
-		void parse_ciff(int offset, int length, int depth);
-		void ciff_block_1030();
-		void parse_fuji(int offset);
-		int parse_jpeg(int offset);
-		void parse_riff();
-		void parse_qt(int end);
-		void parse_smal(int offset, int fsize);
-		void parse_cine();
-		void parse_redcine();
-		void parse_rollei();
-		void parse_sinar_ia();
-		void parse_minolta(int base);
-		void parse_foveon();
-		char* foveon_gets(int offset, char* str, int len);
-		void parse_kodak_ifd(int base);
-		void parse_mos(int offset);
+		int ParseTiff(int base);
+		int ParseTiffIFD(int base);
+		void ParseExif(int base);
+		void ParseGps(int base);
+		void ParseMakernote(int base, int uptag);
+		void ParseThumbNote(int base, unsigned toff, unsigned tlen);
+		void GetTimestamp(int reversed);
+		void TiffGet(unsigned base, unsigned* tag, unsigned* type, unsigned* len, unsigned* save);
+		void ApplyTiff();
+		void ParseExternalJpeg();
+		void AdobeCoeff(const char *make, const char *model);
+		float FindGreen(int bps, int bite, int off0, int off1);
+		void SimpleCoeff(int index);
+		short GuessByteOrder(int words);
+		int CanonS2is();
+		int NikonE995();
+		int NikonE2100();
+		void Nikon3700();
+		int MinoltaZ2();
+		void ParsePhaseOne(int base);
+		void ParseCiff(int offset, int length, int depth);
+		void CiffBlock1030();
+		void ParseFuji(int offset);
+		int ParseJpeg(int offset);
+		void ParseRiff();
+		void ParseQt(int end);
+		void ParseSmal(int offset, int fsize);
+		void ParseCine();
+		void ParseRedcine();
+		void ParseRollei();
+		void ParseSinarIA();
+		void ParseMinolta(int base);
+		void ParseFoveon();
+		char* FoveonGets(int offset, char* str, int len);
+		void ParseKodakIFD(int base);
+		void ParseMos(int offset);
 
-		void sony_decrypt(unsigned* data, int len, int start, int key);
-		void linear_table(unsigned len);
-		void romm_coeff(float romm_cam[3][3]);
+		void LinearTable(unsigned len);
+		void RommCoeff(float romm_cam[3][3]);
 
 		char* memmem(char* haystack, size_t haystacklen, char* needle, size_t needlelen);
 		char* strcasestr(char* haystack, const char* needle);
@@ -89,6 +89,15 @@ namespace Unmanaged
 
 		// TODO: is private
 	//private:
+
+		const float d65White[3] = { 0.950456f, 1.0f, 1.088754f };
+
+		const double xyzRGB[3][3] =			/* XYZ from RGB */
+		{
+			{ 0.412453, 0.357580, 0.180423 },
+			{ 0.212671, 0.715160, 0.072169 },
+			{ 0.019334, 0.119193, 0.950227 }
+		};
 
 		CReader* _reader;
 
@@ -99,111 +108,102 @@ namespace Unmanaged
 		static const size_t LenCDesc = 5;
 		static const size_t LenDesc = 512;
 
-		char make[LenMake];
-		char model[LenModel];
-		char model2[LenModel2];
-		char artist[LenArtist];
-		char desc[LenDesc];
-		char cdesc[LenCDesc];
-		float flash_used;
-		float iso_speed;
-		float shutter;
-		float aperture;
-		float focal_len;
-		time_t timestamp;
-		unsigned short width;
-		unsigned short height;
-		unsigned colors;
-		unsigned flip;
+		char* _metaData;
+		unsigned short* _rawImage;
+		unsigned short(*_image)[4];
+		unsigned* _profile;
 
-		unsigned tiff_flip;
-		unsigned filters;
-		unsigned short raw_height;
-		unsigned short raw_width;
-		unsigned short top_margin;
-		unsigned short left_margin;
+		char _make[LenMake];
+		char _model[LenModel];
+		char _model2[LenModel2];
+		char _artist[LenArtist];
+		char _desc[LenDesc];
+		char _cdesc[LenCDesc];
+		float _flashUsed;
+		float _isoSpeed;
+		float _shutter;
+		float _aperture;
+		float _focalLen;
+		time_t _timestamp;
+		unsigned short _width;
+		unsigned short _height;
+		unsigned _colors;
+		unsigned _flip;
 
-		float canon_ev;
+		unsigned _tiffFlip;
+		unsigned _filters;
+		unsigned short _rawHeight;
+		unsigned short _rawWidth;
+		unsigned short _topMargin;
+		unsigned short _leftMargin;
 
-		// Managed
-		char* meta_data;
-		unsigned short* raw_image;
-		unsigned short(*image)[4];
-		unsigned* oprof;
+		float _canonEV;
 
-		unsigned shot_select = 0;
-		double gamm[6] = { 0.45,4.5,0,0,0,0 };
-		int half_size = 0;
-		int use_camera_wb = 0;
-		int use_camera_matrix = 1;
+		unsigned _shotSelect = 0;
+		double _gamma[6] = { 0.45,4.5,0,0,0,0 };
+		bool _halfSize = false;
+		int _useCameraWB = 0;
+		int _useCameraMatrix = 1;
 
-		double pixel_aspect;
-		float cam_mul[4];
-		float pre_mul[4];
-		float cmatrix[3][4];
-		float rgb_cam[3][4];
-		unsigned short cblack[4102];
-		off_t thumb_offset;
-		off_t meta_offset;
-		off_t profile_offset;
-		unsigned shot_order;
-		unsigned kodak_cbpp;
-		unsigned exif_cfa;
-		unsigned unique_id;
-		unsigned thumb_length;
-		unsigned meta_length;
-		unsigned profile_length;
-		unsigned thumb_misc;
-		unsigned fuji_layout;
-		unsigned tiff_nifds;
-		unsigned tiff_samples;
-		unsigned tiff_bps;
-		unsigned tiff_compress;
-		unsigned black;
-		unsigned maximum;
-		unsigned mix_green;
-		unsigned raw_color;
-		unsigned zero_is_bad;
-		unsigned zero_after_ff;
-		unsigned is_raw;
-		unsigned dng_version;
-		unsigned is_foveon;
-		unsigned data_error;
-		unsigned tile_width;
-		unsigned tile_length;
-		unsigned gpsdata[32];
-		unsigned load_flags;
-		off_t strip_offset;
-		off_t data_offset;
-		unsigned short white[8][8];
-		unsigned short curve[0x10000];
-		unsigned short cr2_slice[3];
-		unsigned short sraw_mul[4];
-		unsigned short shrink;
-		unsigned short iheight;
-		unsigned short iwidth;
-		unsigned short fuji_width;
-		unsigned short thumb_width;
-		unsigned short thumb_height;
-		char xtrans[6][6];
-		char xtrans_abs[6][6];
-		int mask[8][4];
-		int histogram[4][0x2000];
-		const float d65_white[3] = { 0.950456f, 1.0f, 1.088754f };
+		double _pixelAspect;
+		float _camMul[4];
+		float _preMul[4];
+		float _cMatrix[3][4];
+		float _rgbCam[3][4];
+		unsigned short _cBlack[4102];
+		off_t _thumbOffset;
+		off_t _metaOffset;
+		off_t _profileOffset;
+		unsigned _shotOrder;
+		unsigned _kodakCbpp;
+		unsigned _exifCfa;
+		unsigned _uniqueId;
+		unsigned _thumbLength;
+		unsigned _metaLength;
+		unsigned _profileLength;
+		unsigned _thumbMisc;
+		unsigned _fujiLayout;
+		unsigned _tiffNifds;
+		unsigned _tiffSamples;
+		unsigned _tiffBps;
+		unsigned _tiffCompress;
+		unsigned _black;
+		unsigned _maximum;
+		unsigned _mixGreen;
+		unsigned _rawColor;
+		unsigned _zeroIsBad;
+		unsigned _zeroAfterFF;
+		unsigned _isRaw;
+		unsigned _dngVersion;
+		unsigned _isFoveon;
+		unsigned _dataError;
+		unsigned _tileWidth;
+		unsigned _tileLength;
+		unsigned _gpsData[32];
+		unsigned _loadFlags;
+		off_t _stripOffset;
+		off_t _dataOffset;
+		unsigned short _white[8][8];
+		unsigned short _curve[0x10000];
+		unsigned short _cr2Slice[3];
+		unsigned short _srawMul[4];
+		unsigned short _shrink;
+		unsigned short _iheight;
+		unsigned short _iwidth;
+		unsigned short _fujiWidth;
+		unsigned short _thumbWidth;
+		unsigned short _thumbHeight;
+		char _xtrans[6][6];
+		char _xtransAbs[6][6];
+		int _mask[8][4];
+		int _histogram[4][0x2000];
 
-		const double xyz_rgb[3][3] =			/* XYZ from RGB */
-		{
-			{ 0.412453, 0.357580, 0.180423 },
-			{ 0.212671, 0.715160, 0.072169 },
-			{ 0.019334, 0.119193, 0.950227 }
-		};
+		TiffIFD _tiffIfd[10];
+		Ph1 _ph1;
 
-		tiff_ifd tiff_ifd[10];
-		ph1 ph1;
-
-		LoadRawType load_raw;
-		LoadRawType thumb_load_raw;
-		WriteThumbType write_thumb;
-		WriteThumbType write_fun;
+		LoadRawType _loadRaw;
+		LoadRawType _thumbLoadRaw;
+		WriteThumbType _writeThumb;
+		WriteThumbType _writeFun;
 	};
 }

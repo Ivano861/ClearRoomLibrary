@@ -91,12 +91,12 @@ char* CReader::GetString(char* str, int n)
 	return fgets(str, n, _ifp);
 }
 
-int CReader::scanf(const char *format, void* arg)
+int CReader::GetScanf(const char *format, void* arg)
 {
 	return fscanf_s(_ifp, format, arg);
 }
 
-unsigned short CReader::sget2(unsigned char* s)
+unsigned short CReader::GetUShort(unsigned char* s)
 {
 	if (_order == 0x4949)		/* "II" means little-endian */
 		return s[0] | s[1] << 8;
@@ -104,14 +104,14 @@ unsigned short CReader::sget2(unsigned char* s)
 		return s[0] << 8 | s[1];
 }
 
-unsigned short CReader::get2()
+unsigned short CReader::GetUShort()
 {
 	unsigned char str[2] = { 0xff,0xff };
 	fread(str, 1, 2, _ifp);
-	return sget2(str);
+	return GetUShort(str);
 }
 
-unsigned CReader::sget4(unsigned char* s)
+unsigned CReader::GetUInt(unsigned char* s)
 {
 	if (_order == 0x4949)
 		return s[0] | s[1] << 8 | s[2] << 16 | s[3] << 24;
@@ -119,19 +119,19 @@ unsigned CReader::sget4(unsigned char* s)
 		return s[0] << 24 | s[1] << 16 | s[2] << 8 | s[3];
 }
 
-unsigned CReader::get4()
+unsigned CReader::GetUInt()
 {
 	unsigned char str[4] = { 0xff,0xff,0xff,0xff };
 	fread(str, 1, 4, _ifp);
-	return sget4(str);
+	return GetUInt(str);
 }
 
-unsigned CReader::getint(int type)
+unsigned CReader::GetUInt(int type)
 {
-	return type == 3 ? get2() : get4();
+	return type == 3 ? GetUShort() : GetUInt();
 }
 
-float CReader::int_to_float(int i)
+float CReader::IntToFloat(int i)
 {
 	union
 	{
@@ -141,7 +141,7 @@ float CReader::int_to_float(int i)
 	return u.f;
 }
 
-double CReader::getreal(int type)
+double CReader::GetReal(int type)
 {
 	union
 	{
@@ -151,15 +151,15 @@ double CReader::getreal(int type)
 
 	switch (type)
 	{
-	case 3: return (unsigned short)get2();
-	case 4: return (unsigned int)get4();
-	case 5:  u.d = (unsigned int)get4();
-		return u.d / (unsigned int)get4();
-	case 8: return (signed short)get2();
-	case 9: return (signed int)get4();
-	case 10: u.d = (signed int)get4();
-		return u.d / (signed int)get4();
-	case 11: return int_to_float(get4());
+	case 3: return (unsigned short)GetUShort();
+	case 4: return (unsigned int)GetUInt();
+	case 5:  u.d = (unsigned int)GetUInt();
+		return u.d / (unsigned int)GetUInt();
+	case 8: return (signed short)GetUShort();
+	case 9: return (signed int)GetUInt();
+	case 10: u.d = (signed int)GetUInt();
+		return u.d / (signed int)GetUInt();
+	case 11: return IntToFloat(GetUInt());
 	case 12:
 		rev = 7 * ((_order == 0x4949) == (ntohs(0x1234) == 0x1234));
 		for (i = 0; i < 8; i++)
@@ -169,7 +169,7 @@ double CReader::getreal(int type)
 	}
 }
 
-void CReader::read_shorts(unsigned short* pixel, unsigned count)
+void CReader::ReadShorts(unsigned short* pixel, unsigned count)
 {
 	if (fread(pixel, 2, count, _ifp) < count)
 		throw CExceptionFile();

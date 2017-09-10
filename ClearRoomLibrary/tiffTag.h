@@ -17,7 +17,7 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
-struct tiff_tag
+struct TiffTAG
 {
 	unsigned short tag;
 	unsigned short type;

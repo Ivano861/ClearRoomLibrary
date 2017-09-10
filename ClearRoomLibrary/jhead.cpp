@@ -26,12 +26,12 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 
 using namespace Unmanaged;
 
-jhead::jhead(CReader& reader, CSimpleInfo& info, bool info_only) : _reader(reader), _info(info)
+JHead::JHead(CReader& reader, CSimpleInfo& info, bool info_only) : _reader(reader), _info(info)
 {
 	unsigned char data[0x10000];
 
-	memset(&jdata, 0, sizeof jdata);
-	jdata.restart = INT_MAX;
+	memset(&_jdata, 0, sizeof _jdata);
+	_jdata.restart = INT_MAX;
 	if ((_reader.GetChar(), _reader.GetChar()) != 0xd8)
 	{
 		_success = false;
@@ -57,15 +57,15 @@ jhead::jhead(CReader& reader, CSimpleInfo& info, bool info_only) : _reader(reade
 		switch (tag)
 		{
 		case 0xffc3:
-			jdata.sraw = ((data[7] >> 4) * (data[7] & 15) - 1) & 3;
+			_jdata.sraw = ((data[7] >> 4) * (data[7] & 15) - 1) & 3;
 		case 0xffc1:
 		case 0xffc0:
-			jdata.algo = tag & 0xff;
-			jdata.bits = data[0];
-			jdata.high = data[1] << 8 | data[2];
-			jdata.wide = data[3] << 8 | data[4];
-			jdata.clrs = data[5] + jdata.sraw;
-			if (len == 9 && !info.dng_version)
+			_jdata.algo = tag & 0xff;
+			_jdata.bits = data[0];
+			_jdata.high = data[1] << 8 | data[2];
+			_jdata.wide = data[3] << 8 | data[4];
+			_jdata.clrs = data[5] + _jdata.sraw;
+			if (len == 9 && !info._dngVersion)
 				_reader.GetChar();
 			break;
 		case 0xffc4:
@@ -74,23 +74,23 @@ jhead::jhead(CReader& reader, CSimpleInfo& info, bool info_only) : _reader(reade
 			{
 				unsigned short c;
 				for (const unsigned char* dp = data; dp < data + len && !((c = *dp++) & -20); )
-					jdata.free[c] = jdata.huff[c] = CDecoder::make_decoder_ref(&dp);
+					_jdata.free[c] = _jdata.huff[c] = CDecoder::MakeDecoderRef(&dp);
 			}
 			break;
 		case 0xffda:
-			jdata.psv = data[1 + data[0] * 2];
-			jdata.bits -= data[3 + data[0] * 2] & 15;
+			_jdata.psv = data[1 + data[0] * 2];
+			_jdata.bits -= data[3 + data[0] * 2] & 15;
 			break;
 		case 0xffdb:
 			for (size_t c = 0; c < 64; c++)
-				jdata.quant[c] = data[c * 2 + 1] << 8 | data[c * 2 + 2];
+				_jdata.quant[c] = data[c * 2 + 1] << 8 | data[c * 2 + 2];
 			break;
 		case 0xffdd:
-			jdata.restart = data[0] << 8 | data[1];
+			_jdata.restart = data[0] << 8 | data[1];
 		}
 	} while (tag != 0xffda);
 
-	if (jdata.bits > 16 || jdata.clrs > 6 || !jdata.bits || !jdata.high || !jdata.wide || !jdata.clrs)
+	if (_jdata.bits > 16 || _jdata.clrs > 6 || !_jdata.bits || !_jdata.high || !_jdata.wide || !_jdata.clrs)
 	{
 		_success = false;
 		return;
@@ -100,46 +100,46 @@ jhead::jhead(CReader& reader, CSimpleInfo& info, bool info_only) : _reader(reade
 		_success = true;
 		return;
 	}
-	if (!jdata.huff[0])
+	if (!_jdata.huff[0])
 	{
 		_success = false;
 		return;
 	}
 	for (size_t c = 0; c < 19; c++)
-		if (!jdata.huff[c + 1])
-			jdata.huff[c + 1] = jdata.huff[c];
-	if (jdata.sraw)
+		if (!_jdata.huff[c + 1])
+			_jdata.huff[c + 1] = _jdata.huff[c];
+	if (_jdata.sraw)
 	{
 		for (size_t c = 0; c < 4; c++)
-			jdata.huff[2 + c] = jdata.huff[1];
-		for (int c = 0; c < jdata.sraw; c++)
-			jdata.huff[1 + c] = jdata.huff[0];
+			_jdata.huff[2 + c] = _jdata.huff[1];
+		for (int c = 0; c < _jdata.sraw; c++)
+			_jdata.huff[1 + c] = _jdata.huff[0];
 	}
-	jdata.row = (unsigned short *)calloc(jdata.wide*jdata.clrs, 4);
-	if (!jdata.row)
+	_jdata.row = (unsigned short *)calloc(_jdata.wide*_jdata.clrs, 4);
+	if (!_jdata.row)
 		throw CExceptionMemory("ljpeg::ctor");
 
-	info.zero_after_ff = 1;
+	info._zeroAfterFF = 1;
 	_success = true;
 }
-jhead::jhead::~jhead()
+JHead::JHead::~JHead()
 {
 	for (size_t c = 0; c < 4; c++)
-		if (jdata.free[c])
-			::free(jdata.free[c]);
+		if (_jdata.free[c])
+			::free(_jdata.free[c]);
 
-	::free(jdata.row);
+	::free(_jdata.row);
 }
 
-unsigned short* jhead::ljpeg_row(int jrow)
+unsigned short* JHead::LJpegRow(int jrow)
 {
 	int col, c, diff, pred, spred = 0;
 	unsigned short mark = 0, *row[3];
 
-	if (jrow * jdata.wide % jdata.restart == 0)
+	if (jrow * _jdata.wide % _jdata.restart == 0)
 	{
 		for (size_t c = 0; c < 6; c++)
-			jdata.vpred[c] = 1 << (jdata.bits - 1);
+			_jdata.vpred[c] = 1 << (_jdata.bits - 1);
 		if (jrow)
 		{
 			_reader.Seek(-2, SEEK_CUR);
@@ -149,43 +149,43 @@ unsigned short* jhead::ljpeg_row(int jrow)
 		_info.getbits(-1);
 	}
 	for (size_t c = 0; c < 3; c++)
-		row[c] = jdata.row + jdata.wide*jdata.clrs*((jrow + c) & 1);
-	for (col = 0; col < jdata.wide; col++)
+		row[c] = _jdata.row + _jdata.wide*_jdata.clrs*((jrow + c) & 1);
+	for (col = 0; col < _jdata.wide; col++)
 	{
-		for (size_t c = 0; c < jdata.clrs; c++)
+		for (size_t c = 0; c < _jdata.clrs; c++)
 		{
-			diff = jhead::ljpeg_diff(jdata.huff[c], _info);
-			if (jdata.sraw && c <= jdata.sraw && (col | c))
+			diff = JHead::LJpegDiff(_jdata.huff[c], _info);
+			if (_jdata.sraw && c <= _jdata.sraw && (col | c))
 				pred = spred;
 			else if (col)
-				pred = row[0][-jdata.clrs];
+				pred = row[0][-_jdata.clrs];
 			else
-				pred = (jdata.vpred[c] += diff) - diff;
+				pred = (_jdata.vpred[c] += diff) - diff;
 			if (jrow && col)
 			{
-				switch (jdata.psv)
+				switch (_jdata.psv)
 				{
 				case 1:
 					break;
 				case 2: pred = row[1][0];
 					break;
-				case 3: pred = row[1][-jdata.clrs];
+				case 3: pred = row[1][-_jdata.clrs];
 					break;
-				case 4: pred = pred + row[1][0] - row[1][-jdata.clrs];
+				case 4: pred = pred + row[1][0] - row[1][-_jdata.clrs];
 					break;
-				case 5: pred = pred + ((row[1][0] - row[1][-jdata.clrs]) >> 1);
+				case 5: pred = pred + ((row[1][0] - row[1][-_jdata.clrs]) >> 1);
 					break;
-				case 6: pred = row[1][0] + ((pred - row[1][-jdata.clrs]) >> 1);
+				case 6: pred = row[1][0] + ((pred - row[1][-_jdata.clrs]) >> 1);
 					break;
 				case 7: pred = (pred + row[1][0]) >> 1;
 					break;
 				default: pred = 0;
 				}
 			}
-			if ((**row = pred + diff) >> jdata.bits)
+			if ((**row = pred + diff) >> _jdata.bits)
 				throw CExceptionFile();
 
-			if (c <= jdata.sraw)
+			if (c <= _jdata.sraw)
 				spred = **row;
 			row[0]++; row[1]++;
 		}
@@ -193,7 +193,7 @@ unsigned short* jhead::ljpeg_row(int jrow)
 	return row[2];
 }
 
-void jhead::ljpeg_idct()
+void JHead::LJpegIdct()
 {
 	float work[3][8][8];
 	static float cs[106] = { 0 };
@@ -211,17 +211,17 @@ void jhead::ljpeg_idct()
 			cs[c] = cos((c & 31)*M_PI / 16) / 2;
 	}
 	memset(work, 0, sizeof work);
-	work[0][0][0] = jdata.vpred[0] += jhead::ljpeg_diff(jdata.huff[0], _info) * jdata.quant[0];
+	work[0][0][0] = _jdata.vpred[0] += JHead::LJpegDiff(_jdata.huff[0], _info) * _jdata.quant[0];
 	for (int i = 1; i < 64; i++)
 	{
-		int len = _info.gethuff(jdata.huff[16]);
+		int len = _info.gethuff(_jdata.huff[16]);
 		int skip = len >> 4;
 		i += skip;
 		if (!(len &= 15) && skip < 15) break;
 		int coef = _info.getbits(len);
 		if ((coef & (1 << (len - 1))) == 0)
 			coef -= (1 << len) - 1;
-		((float *)work)[zigzag[i]] = coef * jdata.quant[i];
+		((float *)work)[zigzag[i]] = coef * _jdata.quant[i];
 	}
 	for (size_t c = 0; c < 8; c++)
 		work[0][0][c] *= M_SQRT1_2;
@@ -237,15 +237,15 @@ void jhead::ljpeg_idct()
 				work[2][i][j] += work[1][c][j] * cs[(i * 2 + 1)*c];
 
 	for (size_t c = 0; c < 64; c++)
-		jdata.idct[c] = CLIP(((float *)work[2])[c] + 0.5);
+		_jdata.idct[c] = CLIP(((float *)work[2])[c] + 0.5);
 }
 
-int jhead::ljpeg_diff(unsigned short *huff, CSimpleInfo& info)
+int JHead::LJpegDiff(unsigned short *huff, CSimpleInfo& info)
 {
 	int len, diff;
 
 	len = info.gethuff(huff);
-	if (len == 16 && (!info.dng_version || info.dng_version >= 0x1010000))
+	if (len == 16 && (!info._dngVersion || info._dngVersion >= 0x1010000))
 		return -32768;
 	diff = info.getbits(len);
 	if ((diff & (1 << (len - 1))) == 0)

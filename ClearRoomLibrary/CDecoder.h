@@ -26,7 +26,7 @@ namespace Unmanaged
 		~CDecoder();
 
 	public:
-		static unsigned short * make_decoder_ref(const unsigned char **source);
-		static unsigned short * make_decoder(const unsigned char *source);
+		static unsigned short * MakeDecoderRef(const unsigned char **source);
+		static unsigned short * MakeDecoder(const unsigned char *source);
 	};
 }

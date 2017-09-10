@@ -31,9 +31,9 @@ using namespace System::Security::Permissions;
 // È possibile specificare tutti i valori o impostare come predefiniti i valori Revisione e Numero di build
 // usando l'asterisco '*' come illustrato di seguito:
 
-[assembly:AssemblyVersionAttribute("1.0.*")];
+[assembly:AssemblyVersionAttribute("1.0.0.0")];
 
-[assembly:AssemblyFileVersionAttribute("1.0.*")];
+[assembly:AssemblyFileVersionAttribute("1.0.0.0")];
 
 [assembly:ComVisible(false)];
 

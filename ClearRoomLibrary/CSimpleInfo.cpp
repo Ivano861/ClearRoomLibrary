@@ -26,7 +26,7 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 using namespace Unmanaged;
 
 #pragma region Costructors
-CSimpleInfo::CSimpleInfo(CReader* reader) : _reader(reader), meta_data(nullptr), raw_image(nullptr), image(nullptr), oprof(nullptr)
+CSimpleInfo::CSimpleInfo(CReader* reader) : _reader(reader), _metaData(nullptr), _rawImage(nullptr), _image(nullptr), _profile(nullptr)
 {
 }
 #pragma endregion
@@ -34,25 +34,25 @@ CSimpleInfo::CSimpleInfo(CReader* reader) : _reader(reader), meta_data(nullptr),
 #pragma region Destructor
 CSimpleInfo::~CSimpleInfo()
 {
-	if (meta_data)
+	if (_metaData)
 	{
-		free(meta_data);
-		meta_data = nullptr;
+		free(_metaData);
+		_metaData = nullptr;
 	}
-	if (raw_image)
+	if (_rawImage)
 	{
-		free(raw_image);
-		raw_image = nullptr;
+		free(_rawImage);
+		_rawImage = nullptr;
 	}
-	if (image)
+	if (_image)
 	{
-		free(image);
-		image = nullptr;
+		free(_image);
+		_image = nullptr;
 	}
-	if (oprof)
+	if (_profile)
 	{
-		free(oprof);
-		oprof = nullptr;
+		free(_profile);
+		_profile = nullptr;
 	}
 	_reader = nullptr;
 }
@@ -307,46 +307,46 @@ void CSimpleInfo::GetInfo()
 		"Nikon", "Nokia", "Olympus", "Ricoh", "Pentax", "Phase One",
 		"Samsung", "Sigma", "Sinar", "Sony" };
 
-	tiff_flip = flip = filters = UINT_MAX;	/* unknown */
-	raw_height = raw_width = fuji_width = fuji_layout = cr2_slice[0] = 0;
-	maximum = height = width = top_margin = left_margin = 0;
-	cdesc[0] = desc[0] = artist[0] = make[0] = model[0] = model2[0] = 0;
-	iso_speed = shutter = aperture = focal_len = 0;
-	unique_id = 0;
-	tiff_nifds = 0;
-	memset(tiff_ifd, 0, sizeof tiff_ifd);
-	memset(gpsdata, 0, sizeof gpsdata);
-	memset(cblack, 0, sizeof cblack);
-	memset(white, 0, sizeof white);
-	memset(mask, 0, sizeof mask);
-	thumb_offset = thumb_length = thumb_width = thumb_height = 0;
-	load_raw = LoadRawType::unknown_load_raw;
-	thumb_load_raw = LoadRawType::unknown_load_raw;
-	write_thumb = WriteThumbType::jpeg_thumb;
-	write_fun = WriteThumbType::unknown_write;
-	data_offset = meta_offset = meta_length = tiff_bps = tiff_compress = 0;
-	kodak_cbpp = zero_after_ff = dng_version = load_flags = 0;
-	timestamp = shot_order = tiff_samples = black = is_foveon = 0;
-	mix_green = profile_length = data_error = zero_is_bad = 0;
-	pixel_aspect = is_raw = raw_color = 1;
-	tile_width = tile_length = 0;
+	_tiffFlip = _flip = _filters = UINT_MAX;	/* unknown */
+	_rawHeight = _rawWidth = _fujiWidth = _fujiLayout = _cr2Slice[0] = 0;
+	_maximum = _height = _width = _topMargin = _leftMargin = 0;
+	_cdesc[0] = _desc[0] = _artist[0] = _make[0] = _model[0] = _model2[0] = 0;
+	_isoSpeed = _shutter = _aperture = _focalLen = 0;
+	_uniqueId = 0;
+	_tiffNifds = 0;
+	memset(_tiffIfd, 0, sizeof _tiffIfd);
+	memset(_gpsData, 0, sizeof _gpsData);
+	memset(_cBlack, 0, sizeof _cBlack);
+	memset(_white, 0, sizeof _white);
+	memset(_mask, 0, sizeof _mask);
+	_thumbOffset = _thumbLength = _thumbWidth = _thumbHeight = 0;
+	_loadRaw = LoadRawType::UnknownLoadRaw;
+	_thumbLoadRaw = LoadRawType::UnknownLoadRaw;
+	_writeThumb = WriteThumbType::JpegThumb;
+	_writeFun = WriteThumbType::UnknownWrite;
+	_dataOffset = _metaOffset = _metaLength = _tiffBps = _tiffCompress = 0;
+	_kodakCbpp = _zeroAfterFF = _dngVersion = _loadFlags = 0;
+	_timestamp = _shotOrder = _tiffSamples = _black = _isFoveon = 0;
+	_mixGreen = _profileLength = _dataError = _zeroIsBad = 0;
+	_pixelAspect = _isRaw = _rawColor = 1;
+	_tileWidth = _tileLength = 0;
 	for (size_t i = 0; i < 4; i++)
 	{
-		cam_mul[i] = i == 1;
-		pre_mul[i] = i < 3;
+		_camMul[i] = i == 1;
+		_preMul[i] = i < 3;
 		for (size_t c = 0; c < 3; c++)
-			cmatrix[c][i] = 0;
+			_cMatrix[c][i] = 0;
 		for (size_t c = 0; c < 3; c++)
-			rgb_cam[c][i] = c == i;
+			_rgbCam[c][i] = c == i;
 	}
-	colors = 3;
+	_colors = 3;
 	for (size_t i = 0; i < 0x10000; i++)
-		curve[i] = (unsigned short)i;
+		_curve[i] = (unsigned short)i;
 
-	tiff_nifds = 0;
+	_tiffNifds = 0;
 
-	_reader->SetOrder(_reader->get2());
-	int hlen = _reader->get4();
+	_reader->SetOrder(_reader->GetUShort());
+	int hlen = _reader->GetUInt();
 
 	_reader->Seek(0, SEEK_SET);
 	char head[32];
@@ -359,1334 +359,1336 @@ void CSimpleInfo::GetInfo()
 	if ((cp = (char *)memmem(head, 32, "MMMM", 4)) ||
 		(cp = (char *)memmem(head, 32, "IIII", 4)))
 	{
-		parse_phase_one(cp - head);
-		if (cp - head && parse_tiff(0))
-			apply_tiff();
+		ParsePhaseOne(cp - head);
+		if (cp - head && ParseTiff(0))
+			ApplyTiff();
 	}
 	else if (_reader->GetOrder() == 0x4949 || _reader->GetOrder() == 0x4d4d)
 	{
 		if (!memcmp(head + 6, "HEAPCCDR", 8))
 		{
-			data_offset = hlen;
-			parse_ciff(hlen, flen - hlen, 0);
-			load_raw = LoadRawType::canon_load_raw;
+			_dataOffset = hlen;
+			ParseCiff(hlen, flen - hlen, 0);
+			_loadRaw = LoadRawType::CanonLoadRaw;
 		}
-		else if (parse_tiff(0))
-			apply_tiff();
+		else if (ParseTiff(0))
+			ApplyTiff();
 	}
 	else if (!memcmp(head, "\xff\xd8\xff\xe1", 4) &&
 		!memcmp(head + 6, "Exif", 4))
 	{
 		_reader->Seek(4, SEEK_SET);
-		data_offset = 4 + _reader->get2();
-		_reader->Seek(data_offset, SEEK_SET);
+		_dataOffset = 4 + _reader->GetUShort();
+		_reader->Seek(_dataOffset, SEEK_SET);
 		if (_reader->GetChar() != 0xff)
-			parse_tiff(12);
-		thumb_offset = 0;
+			ParseTiff(12);
+		_thumbOffset = 0;
 	}
 	else if (!memcmp(head + 25, "ARECOYK", 7))
 	{
-		strcpy_s(make, LenMake, "Contax");
-		strcpy_s(model, LenModel, "N Digital");
+		strcpy_s(_make, LenMake, "Contax");
+		strcpy_s(_model, LenModel, "N Digital");
 		_reader->Seek(33, SEEK_SET);
-		get_timestamp(1);
+		GetTimestamp(1);
 		_reader->Seek(60, SEEK_SET);
 		for (size_t c = 0; c < 4; c++)
-			cam_mul[c ^ (c >> 1)] = _reader->get4();
+			_camMul[c ^ (c >> 1)] = _reader->GetUInt();
 	}
 	else if (!strcmp(head, "PXN"))
 	{
-		strcpy_s(make, LenMake, "Logitech");
-		strcpy_s(model, LenModel, "Fotoman Pixtura");
+		strcpy_s(_make, LenMake, "Logitech");
+		strcpy_s(_model, LenModel, "Fotoman Pixtura");
 	}
 	else if (!strcmp(head, "qktk"))
 	{
-		strcpy_s(make, LenMake, "Apple");
-		strcpy_s(model, LenModel, "QuickTake 100");
-		load_raw = LoadRawType::quicktake_100_load_raw;
+		strcpy_s(_make, LenMake, "Apple");
+		strcpy_s(_model, LenModel, "QuickTake 100");
+		_loadRaw = LoadRawType::Quicktake100LoadRaw;
 	}
 	else if (!strcmp(head, "qktn"))
 	{
-		strcpy_s(make, LenMake, "Apple");
-		strcpy_s(model, LenModel, "QuickTake 150");
-		load_raw = LoadRawType::kodak_radc_load_raw;
+		strcpy_s(_make, LenMake, "Apple");
+		strcpy_s(_model, LenModel, "QuickTake 150");
+		_loadRaw = LoadRawType::KodakRadcLoadRaw;
 	}
 	else if (!memcmp(head, "FUJIFILM", 8))
 	{
 		_reader->Seek(84, SEEK_SET);
-		thumb_offset = _reader->get4();
-		thumb_length = _reader->get4();
+		_thumbOffset = _reader->GetUInt();
+		_thumbLength = _reader->GetUInt();
 		_reader->Seek(92, SEEK_SET);
-		parse_fuji(_reader->get4());
-		if (thumb_offset > 120)
+		ParseFuji(_reader->GetUInt());
+		if (_thumbOffset > 120)
 		{
 			int i;
 			_reader->Seek(120, SEEK_SET);
-			is_raw += (i = _reader->get4()) && 1;
-			if (is_raw == 2 && shot_select)
-				parse_fuji(i);
+			_isRaw += (i = _reader->GetUInt()) && 1;
+			if (_isRaw == 2 && _shotSelect)
+				ParseFuji(i);
 		}
-		load_raw = LoadRawType::unpacked_load_raw;
-		_reader->Seek(100 + 28 * (shot_select > 0), SEEK_SET);
-		parse_tiff(data_offset = _reader->get4());
-		parse_tiff(thumb_offset + 12);
-		apply_tiff();
+		_loadRaw = LoadRawType::UnpackedLoadRaw;
+		_reader->Seek(100 + 28 * (_shotSelect > 0), SEEK_SET);
+		ParseTiff(_dataOffset = _reader->GetUInt());
+		ParseTiff(_thumbOffset + 12);
+		ApplyTiff();
 	}
 	else if (!memcmp(head, "RIFF", 4))
 	{
 		_reader->Seek(0, SEEK_SET);
-		parse_riff();
+		ParseRiff();
 	}
 	else if (!memcmp(head + 4, "ftypqt   ", 9))
 	{
 		_reader->Seek(0, SEEK_SET);
-		parse_qt(fsize);
-		is_raw = 0;
+		ParseQt(fsize);
+		_isRaw = 0;
 	}
 	else if (!memcmp(head, "\0\001\0\001\0@", 6))
 	{
 		_reader->Seek(6, SEEK_SET);
-		_reader->Read(make, 1, 8);
-		_reader->Read(model, 1, 8);
-		_reader->Read(model2, 1, 16);
-		data_offset = _reader->get2();
-		_reader->get2();
-		raw_width = _reader->get2();
-		raw_height = _reader->get2();
-		load_raw = LoadRawType::nokia_load_raw;
-		filters = 0x61616161;
+		_reader->Read(_make, 1, 8);
+		_reader->Read(_model, 1, 8);
+		_reader->Read(_model2, 1, 16);
+		_dataOffset = _reader->GetUShort();
+		_reader->GetUShort();
+		_rawWidth = _reader->GetUShort();
+		_rawHeight = _reader->GetUShort();
+		_loadRaw = LoadRawType::NokiaLoadRaw;
+		_filters = 0x61616161;
 	}
 	else if (!memcmp(head, "NOKIARAW", 8))
 	{
-		strcpy_s(make, LenMake, "NOKIA");
+		strcpy_s(_make, LenMake, "NOKIA");
 		_reader->SetOrder(0x4949);
 		_reader->Seek(300, SEEK_SET);
-		data_offset = _reader->get4();
-		unsigned int i = _reader->get4();
-		width = _reader->get2();
-		height = _reader->get2();
-		tiff_bps = i * 8 / (width * height);
-		switch (tiff_bps)
+		_dataOffset = _reader->GetUInt();
+		unsigned int i = _reader->GetUInt();
+		_width = _reader->GetUShort();
+		_height = _reader->GetUShort();
+		_tiffBps = i * 8 / (_width * _height);
+		switch (_tiffBps)
 		{
 		case  8:
-			load_raw = LoadRawType::eight_bit_load_raw;
+			_loadRaw = LoadRawType::EightBitLoadRaw;
 			break;
 		case 10:
-			load_raw = LoadRawType::nokia_load_raw;
+			_loadRaw = LoadRawType::NokiaLoadRaw;
 		}
-		top_margin = i / (width * tiff_bps / 8) - height;
-		raw_height = height + top_margin;
-		mask[0][3] = 1;
-		filters = 0x61616161;
+		_topMargin = i / (_width * _tiffBps / 8) - _height;
+		_rawHeight = _height + _topMargin;
+		_mask[0][3] = 1;
+		_filters = 0x61616161;
 	}
 	else if (!memcmp(head, "ARRI", 4))
 	{
 		_reader->SetOrder(0x4949);
 		_reader->Seek(20, SEEK_SET);
-		width = _reader->get4();
-		height = _reader->get4();
-		strcpy_s(make, LenMake, "ARRI");
+		_width = _reader->GetUInt();
+		_height = _reader->GetUInt();
+		strcpy_s(_make, LenMake, "ARRI");
 		_reader->Seek(668, SEEK_SET);
-		_reader->Read(model, 1, LenModel);
-		data_offset = 4096;
-		load_raw = LoadRawType::packed_load_raw;
-		load_flags = 88;
-		filters = 0x61616161;
+		_reader->Read(_model, 1, LenModel);
+		_dataOffset = 4096;
+		_loadRaw = LoadRawType::PackedLoadRaw;
+		_loadFlags = 88;
+		_filters = 0x61616161;
 	}
 	else if (!memcmp(head, "XPDS", 4))
 	{
 		_reader->SetOrder( 0x4949);
 		_reader->Seek(0x800, SEEK_SET);
-		_reader->Read(make, 1, 41);
-		raw_height = _reader->get2();
-		raw_width = _reader->get2();
+		_reader->Read(_make, 1, 41);
+		_rawHeight = _reader->GetUShort();
+		_rawWidth = _reader->GetUShort();
 		_reader->Seek(56, SEEK_CUR);
-		_reader->Read(model, 1, 30);
-		data_offset = 0x10000;
-		load_raw = LoadRawType::canon_rmf_load_raw;
-		gamma_curve(0, 12.25, 1, 1023);
+		_reader->Read(_model, 1, 30);
+		_dataOffset = 0x10000;
+		_loadRaw = LoadRawType::CanonRmfLoadRaw;
+		GammaCurve(0, 12.25, 1, 1023);
 	}
 	else if (!memcmp(head + 4, "RED1", 4))
 	{
-		strcpy_s(make, LenMake, "Red");
-		strcpy_s(model, LenModel, "One");
-		parse_redcine();
-		load_raw = LoadRawType::redcine_load_raw;
-		gamma_curve(1 / 2.4, 12.92, 1, 4095);
-		filters = 0x49494949;
+		strcpy_s(_make, LenMake, "Red");
+		strcpy_s(_model, LenModel, "One");
+		ParseRedcine();
+		_loadRaw = LoadRawType::RedcineLoadRaw;
+		GammaCurve(1 / 2.4, 12.92, 1, 4095);
+		_filters = 0x49494949;
 	}
 	else if (!memcmp(head, "DSC-Image", 9))
-		parse_rollei();
+		ParseRollei();
 	else if (!memcmp(head, "PWAD", 4))
-		parse_sinar_ia();
+		ParseSinarIA();
 	else if (!memcmp(head, "\0MRM", 4))
-		parse_minolta(0);
+		ParseMinolta(0);
 	else if (!memcmp(head, "FOVb", 4))
-		parse_foveon();
+		ParseFoveon();
 	else if (!memcmp(head, "CI", 2))
-		parse_cine();
+		ParseCine();
 
 	int zero_fsize = 1;
-	if (make[0] == 0)
+	if (_make[0] == 0)
 	{
 		zero_fsize = 0;
 		for (size_t i = 0; i < sizeof table / sizeof *table; i++)
 		{
 			if (fsize == table[i].fsize)
 			{
-				strcpy_s(make, LenMake, table[i].make);
-				strcpy_s(model, LenModel, table[i].model);
-				flip = table[i].flags >> 2;
-				zero_is_bad = table[i].flags & 2;
+				strcpy_s(_make, LenMake, table[i].make);
+				strcpy_s(_model, LenModel, table[i].model);
+				_flip = table[i].flags >> 2;
+				_zeroIsBad = table[i].flags & 2;
 				if (table[i].flags & 1)
-					parse_external_jpeg();
-				data_offset = table[i].offset;
-				raw_width = table[i].rw;
-				raw_height = table[i].rh;
-				left_margin = table[i].lm;
-				top_margin = table[i].tm;
-				width = raw_width - left_margin - table[i].rm;
-				height = raw_height - top_margin - table[i].bm;
-				filters = 0x1010101 * table[i].cf;
-				colors = 4 - !((filters & filters >> 1) & 0x5555);
-				load_flags = table[i].lf;
-				tiff_bps = (fsize - data_offset) * 8 / (raw_width*raw_height);
-				switch (tiff_bps)
+					ParseExternalJpeg();
+				_dataOffset = table[i].offset;
+				_rawWidth = table[i].rw;
+				_rawHeight = table[i].rh;
+				_leftMargin = table[i].lm;
+				_topMargin = table[i].tm;
+				_width = _rawWidth - _leftMargin - table[i].rm;
+				_height = _rawHeight - _topMargin - table[i].bm;
+				_filters = 0x1010101 * table[i].cf;
+				_colors = 4 - !((_filters & _filters >> 1) & 0x5555);
+				_loadFlags = table[i].lf;
+				_tiffBps = (fsize - _dataOffset) * 8 / (_rawWidth*_rawHeight);
+				switch (_tiffBps)
 				{
 				case 6:
-					load_raw = LoadRawType::minolta_rd175_load_raw;
+					_loadRaw = LoadRawType::MinoltaRD175LoadRaw;
 					break;
 				case 8:
-					load_raw = LoadRawType::eight_bit_load_raw;
+					_loadRaw = LoadRawType::EightBitLoadRaw;
 					break;
 				case 10: case 12:
-					load_flags |= 128;
-					load_raw = LoadRawType::packed_load_raw;
+					_loadFlags |= 128;
+					_loadRaw = LoadRawType::PackedLoadRaw;
 					break;
 				case 16:
-					_reader->SetOrder(0x4949 | 0x404 * (load_flags & 1));
-					tiff_bps -= load_flags >> 4;
-					tiff_bps -= load_flags = load_flags >> 1 & 7;
-					load_raw = LoadRawType::unpacked_load_raw;
+					_reader->SetOrder(0x4949 | 0x404 * (_loadFlags & 1));
+					_tiffBps -= _loadFlags >> 4;
+					_tiffBps -= _loadFlags = _loadFlags >> 1 & 7;
+					_loadRaw = LoadRawType::UnpackedLoadRaw;
 				}
-				maximum = (1 << tiff_bps) - (1 << table[i].max);
+				_maximum = (1 << _tiffBps) - (1 << table[i].max);
 			}
 		}
 	}
 	if (zero_fsize)
 		fsize = 0;
-	if (make[0] == 0)
+	if (_make[0] == 0)
 	{
-		parse_smal(0, flen);
+		ParseSmal(0, flen);
 	}
-	if (make[0] == 0)
+	if (_make[0] == 0)
 	{
-		parse_jpeg(0);
-		if (!(strncmp(model, "ov", 2) && strncmp(model, "RP_OV", 5)) &&
+		ParseJpeg(0);
+		if (!(strncmp(_model, "ov", 2) && strncmp(_model, "RP_OV", 5)) &&
 			!_reader->Seek(-6404096, SEEK_END) &&
 			_reader->Read(head, 1, 32) && !strcmp(head, "BRCMn"))
 		{
-			strcpy_s(make, LenMake, "OmniVision");
-			data_offset = _reader->GetPosition() + 0x8000 - 32;
-			width = raw_width;
-			raw_width = 2611;
-			load_raw = LoadRawType::nokia_load_raw;
-			filters = 0x16161616;
+			strcpy_s(_make, LenMake, "OmniVision");
+			_dataOffset = _reader->GetPosition() + 0x8000 - 32;
+			_width = _rawWidth;
+			_rawWidth = 2611;
+			_loadRaw = LoadRawType::NokiaLoadRaw;
+			_filters = 0x16161616;
 		}
 		else
 		{
-			is_raw = 0;
+			_isRaw = 0;
 		}
 	}
 
 	for (size_t i = 0; i < sizeof corp / sizeof *corp; i++)
-		if (strcasestr(make, corp[i]))	/* Simplify company names */
-			strcpy_s(make, LenMake, corp[i]);
-	if ((!strcmp(make, "Kodak") || !strcmp(make, "Leica")) &&
-		((cp = strcasestr(model, " DIGITAL CAMERA")) ||
-		(cp = strstr(model, "FILE VERSION"))))
+		if (strcasestr(_make, corp[i]))	/* Simplify company names */
+			strcpy_s(_make, LenMake, corp[i]);
+	if ((!strcmp(_make, "Kodak") || !strcmp(_make, "Leica")) &&
+		((cp = strcasestr(_model, " DIGITAL CAMERA")) ||
+		(cp = strstr(_model, "FILE VERSION"))))
 	{
 		*cp = 0;
 	}
-	if (!_strnicmp(model, "PENTAX", 6))
-		strcpy_s(make, LenMake, "Pentax");
-	cp = make + strlen(make);		/* Remove trailing spaces */
+	if (!_strnicmp(_model, "PENTAX", 6))
+		strcpy_s(_make, LenMake, "Pentax");
+	cp = _make + strlen(_make);		/* Remove trailing spaces */
 	while (*--cp == ' ')
 		*cp = 0;
-	cp = model + strlen(model);
+	cp = _model + strlen(_model);
 	while (*--cp == ' ')
 		*cp = 0;
-	size_t ii = strlen(make);			/* Remove make from model */
-	if (!_strnicmp(model, make, ii) && model[ii++] == ' ')
-		memmove(model, model + ii, LenModel - ii);
-	if (!strncmp(model, "FinePix ", 8))
-		strcpy_s(model, LenModel, model + 8);
-	if (!strncmp(model, "Digital Camera ", 15))
-		strcpy_s(model, LenModel, model + 15);
-	desc[511] = artist[63] = make[63] = model[63] = model2[63] = 0;
-	if (!is_raw)
+	size_t ii = strlen(_make);			/* Remove make from model */
+	if (!_strnicmp(_model, _make, ii) && _model[ii++] == ' ')
+		memmove(_model, _model + ii, LenModel - ii);
+	if (!strncmp(_model, "FinePix ", 8))
+		strcpy_s(_model, LenModel, _model + 8);
+	if (!strncmp(_model, "Digital Camera ", 15))
+		strcpy_s(_model, LenModel, _model + 15);
+	_desc[511] = _artist[63] = _make[63] = _model[63] = _model2[63] = 0;
+	if (!_isRaw)
 		goto notraw;
 
-	if (!height)
-		height = raw_height;
-	if (!width)
-		width = raw_width;
-	if (height == 2624 && width == 3936)	/* Pentax K10D and Samsung GX10 */
+	if (!_height)
+		_height = _rawHeight;
+	if (!_width)
+		_width = _rawWidth;
+	if (_height == 2624 && _width == 3936)	/* Pentax K10D and Samsung GX10 */
 	{
-		height = 2616;   width = 3896;
+		_height = 2616;   _width = 3896;
 	}
-	if (height == 3136 && width == 4864)  /* Pentax K20D and Samsung GX20 */
+	if (_height == 3136 && _width == 4864)  /* Pentax K20D and Samsung GX20 */
 	{
-		height = 3124;   width = 4688; filters = 0x16161616;
+		_height = 3124;   _width = 4688; _filters = 0x16161616;
 	}
-	if (width == 4352 && (!strcmp(model, "K-r") || !strcmp(model, "K-x")))
+	if (_width == 4352 && (!strcmp(_model, "K-r") || !strcmp(_model, "K-x")))
 	{
-		width = 4309; filters = 0x16161616;
+		_width = 4309; _filters = 0x16161616;
 	}
-	if (width >= 4960 && !strncmp(model, "K-5", 3))
+	if (_width >= 4960 && !strncmp(_model, "K-5", 3))
 	{
-		left_margin = 10; width = 4950; filters = 0x16161616;
+		_leftMargin = 10; _width = 4950; _filters = 0x16161616;
 	}
-	if (width == 4736 && !strcmp(model, "K-7"))
+	if (_width == 4736 && !strcmp(_model, "K-7"))
 	{
-		height = 3122;   width = 4684; filters = 0x16161616; top_margin = 2;
+		_height = 3122;   _width = 4684; _filters = 0x16161616; _topMargin = 2;
 	}
-	if (width == 6080 && !strcmp(model, "K-3"))
+	if (_width == 6080 && !strcmp(_model, "K-3"))
 	{
-		left_margin = 4;  width = 6040;
+		_leftMargin = 4;  _width = 6040;
 	}
-	if (width == 7424 && !strcmp(model, "645D"))
+	if (_width == 7424 && !strcmp(_model, "645D"))
 	{
-		height = 5502;   width = 7328; filters = 0x61616161; top_margin = 29;
-		left_margin = 48;
+		_height = 5502;   _width = 7328; _filters = 0x61616161; _topMargin = 29;
+		_leftMargin = 48;
 	}
-	if (height == 3014 && width == 4096)	/* Ricoh GX200 */
-		width = 4014;
-	if (dng_version)
+	if (_height == 3014 && _width == 4096)	/* Ricoh GX200 */
+		_width = 4014;
+	if (_dngVersion)
 	{
-		if (filters == UINT_MAX)
-			filters = 0;
-		if (filters)
-			is_raw *= tiff_samples;
+		if (_filters == UINT_MAX)
+			_filters = 0;
+		if (_filters)
+			_isRaw *= _tiffSamples;
 		else
-			colors = tiff_samples;
-		switch (tiff_compress)
+			_colors = _tiffSamples;
+		switch (_tiffCompress)
 		{
 		case 0:
 		case 1:
-			load_raw = LoadRawType::packed_dng_load_raw;
+			_loadRaw = LoadRawType::PackedDngLoadRaw;
 			break;
 		case 7:
-			load_raw = LoadRawType::lossless_dng_load_raw;
+			_loadRaw = LoadRawType::LosslessDngLoadRaw;
 			break;
 		case 34892:
-			load_raw = LoadRawType::lossy_dng_load_raw;
+			_loadRaw = LoadRawType::LossyDngLoadRaw;
 			break;
 		default:
-			load_raw = LoadRawType::unknown_load_raw;
+			_loadRaw = LoadRawType::UnknownLoadRaw;
 		}
 		goto dng_skip;
 	}
-	if (!strcmp(make, "Canon") && !fsize && tiff_bps != 15)
+	if (!strcmp(_make, "Canon") && !fsize && _tiffBps != 15)
 	{
-		if (!load_raw)
-			load_raw = LoadRawType::lossless_jpeg_load_raw;
+		if (!_loadRaw)
+			_loadRaw = LoadRawType::LosslessJpegLoadRaw;
 		for (size_t i = 0; i < sizeof canon / sizeof *canon; i++)
 		{
-			if (raw_width == canon[i][0] && raw_height == canon[i][1])
+			if (_rawWidth == canon[i][0] && _rawHeight == canon[i][1])
 			{
-				width = raw_width - (left_margin = canon[i][2]);
-				height = raw_height - (top_margin = canon[i][3]);
-				width -= canon[i][4];
-				height -= canon[i][5];
-				mask[0][1] = canon[i][6];
-				mask[0][3] = -canon[i][7];
-				mask[1][1] = canon[i][8];
-				mask[1][3] = -canon[i][9];
+				_width = _rawWidth - (_leftMargin = canon[i][2]);
+				_height = _rawHeight - (_topMargin = canon[i][3]);
+				_width -= canon[i][4];
+				_height -= canon[i][5];
+				_mask[0][1] = canon[i][6];
+				_mask[0][3] = -canon[i][7];
+				_mask[1][1] = canon[i][8];
+				_mask[1][3] = -canon[i][9];
 				if (canon[i][10])
-					filters = canon[i][10] * 0x01010101;
+					_filters = canon[i][10] * 0x01010101;
 			}
 		}
-		if ((unique_id | 0x20000) == 0x2720000)
+		if ((_uniqueId | 0x20000) == 0x2720000)
 		{
-			left_margin = 8;
-			top_margin = 16;
+			_leftMargin = 8;
+			_topMargin = 16;
 		}
 	}
 	for (size_t i = 0; i < sizeof unique / sizeof *unique; i++)
 	{
-		if (unique_id == 0x80000000 + unique[i].id)
+		if (_uniqueId == 0x80000000 + unique[i].id)
 		{
-			adobe_coeff("Canon", unique[i].model);
-			if (model[4] == 'K' && strlen(model) == 8)
-				strcpy_s(model, LenModel, unique[i].model);
+			AdobeCoeff("Canon", unique[i].model);
+			if (_model[4] == 'K' && strlen(_model) == 8)
+				strcpy_s(_model, LenModel, unique[i].model);
 		}
 	}
 	for (size_t i = 0; i < sizeof sonique / sizeof *sonique; i++)
 	{
-		if (unique_id == sonique[i].id)
-			strcpy_s(model, LenModel, sonique[i].model);
+		if (_uniqueId == sonique[i].id)
+			strcpy_s(_model, LenModel, sonique[i].model);
 	}
-	if (!strcmp(make, "Nikon"))
+	if (!strcmp(_make, "Nikon"))
 	{
-		if (!load_raw)
-			load_raw = LoadRawType::packed_load_raw;
-		if (model[0] == 'E')
-			load_flags |= !data_offset << 2 | 2;
+		if (!_loadRaw)
+			_loadRaw = LoadRawType::PackedLoadRaw;
+		if (_model[0] == 'E')
+			_loadFlags |= !_dataOffset << 2 | 2;
 	}
 
 	/* Set parameters based on camera name (for non-DNG files). */
 
-	if (!strcmp(model, "KAI-0340")
-		&& find_green(16, 16, 3840, 5120) < 25)
+	if (!strcmp(_model, "KAI-0340")
+		&& FindGreen(16, 16, 3840, 5120) < 25)
 	{
-		height = 480;
-		top_margin = filters = 0;
-		strcpy_s(model, LenModel, "C603");
+		_height = 480;
+		_topMargin = _filters = 0;
+		strcpy_s(_model, LenModel, "C603");
 	}
-	if (!strcmp(make, "Sony") && raw_width > 3888)
-		black = 128 << (tiff_bps - 12);
-	if (is_foveon)
+	if (!strcmp(_make, "Sony") && _rawWidth > 3888)
+		_black = 128 << (_tiffBps - 12);
+	if (_isFoveon)
 	{
-		if (height * 2 < width) pixel_aspect = 0.5;
-		if (height   > width) pixel_aspect = 2;
-		filters = 0;
-		simple_coeff(0);
+		if (_height * 2 < _width) _pixelAspect = 0.5;
+		if (_height   > _width) _pixelAspect = 2;
+		_filters = 0;
+		SimpleCoeff(0);
 	}
-	else if (!strcmp(make, "Canon") && tiff_bps == 15)
+	else if (!strcmp(_make, "Canon") && _tiffBps == 15)
 	{
-		switch (width)
+		switch (_width)
 		{
-		case 3344: width -= 66;
-		case 3872: width -= 6;
+		case 3344: _width -= 66;
+		case 3872: _width -= 6;
 		}
-		if (height > width)
+		if (_height > _width)
 		{
-			SWAP(height, width);
-			SWAP(raw_height, raw_width);
+			SWAP(_height, _width);
+			SWAP(_rawHeight, _rawWidth);
 		}
-		if (width == 7200 && height == 3888)
+		if (_width == 7200 && _height == 3888)
 		{
-			raw_width = width = 6480;
-			raw_height = height = 4320;
+			_rawWidth = _width = 6480;
+			_rawHeight = _height = 4320;
 		}
-		filters = 0;
-		tiff_samples = colors = 3;
-		load_raw = LoadRawType::canon_sraw_load_raw;
+		_filters = 0;
+		_tiffSamples = _colors = 3;
+		_loadRaw = LoadRawType::CanonSrawLoadRaw;
 	}
-	else if (!strcmp(model, "PowerShot 600"))
+	else if (!strcmp(_model, "PowerShot 600"))
 	{
-		height = 613;
-		width = 854;
-		raw_width = 896;
-		colors = 4;
-		filters = 0xe1e4e1e4;
-		load_raw = LoadRawType::canon_600_load_raw;
+		_height = 613;
+		_width = 854;
+		_rawWidth = 896;
+		_colors = 4;
+		_filters = 0xe1e4e1e4;
+		_loadRaw = LoadRawType::Canon600LoadRaw;
 	}
-	else if (!strcmp(model, "PowerShot A5") ||
-		!strcmp(model, "PowerShot A5 Zoom"))
+	else if (!strcmp(_model, "PowerShot A5") ||
+		!strcmp(_model, "PowerShot A5 Zoom"))
 	{
-		height = 773;
-		width = 960;
-		raw_width = 992;
-		pixel_aspect = 256 / 235.0;
-		filters = 0x1e4e1e4e;
+		_height = 773;
+		_width = 960;
+		_rawWidth = 992;
+		_pixelAspect = 256 / 235.0;
+		_filters = 0x1e4e1e4e;
 		goto canon_a5;
 	}
-	else if (!strcmp(model, "PowerShot A50"))
+	else if (!strcmp(_model, "PowerShot A50"))
 	{
-		height = 968;
-		width = 1290;
-		raw_width = 1320;
-		filters = 0x1b4e4b1e;
+		_height = 968;
+		_width = 1290;
+		_rawWidth = 1320;
+		_filters = 0x1b4e4b1e;
 		goto canon_a5;
 	}
-	else if (!strcmp(model, "PowerShot Pro70"))
+	else if (!strcmp(_model, "PowerShot Pro70"))
 	{
-		height = 1024;
-		width = 1552;
-		filters = 0x1e4b4e1b;
+		_height = 1024;
+		_width = 1552;
+		_filters = 0x1e4b4e1b;
 	canon_a5:
-		colors = 4;
-		tiff_bps = 10;
-		load_raw = LoadRawType::packed_load_raw;
-		load_flags = 40;
+		_colors = 4;
+		_tiffBps = 10;
+		_loadRaw = LoadRawType::PackedLoadRaw;
+		_loadFlags = 40;
 	}
-	else if (!strcmp(model, "PowerShot Pro90 IS") ||
-		!strcmp(model, "PowerShot G1"))
+	else if (!strcmp(_model, "PowerShot Pro90 IS") ||
+		!strcmp(_model, "PowerShot G1"))
 	{
-		colors = 4;
-		filters = 0xb4b4b4b4;
+		_colors = 4;
+		_filters = 0xb4b4b4b4;
 	}
-	else if (!strcmp(model, "PowerShot A610"))
+	else if (!strcmp(_model, "PowerShot A610"))
 	{
-		if (canon_s2is())
-			strcpy_s(model + 10, LenModel - 10, "S2 IS");
+		if (CanonS2is())
+			strcpy_s(_model + 10, LenModel - 10, "S2 IS");
 	}
-	else if (!strcmp(model, "PowerShot SX220 HS"))
+	else if (!strcmp(_model, "PowerShot SX220 HS"))
 	{
-		mask[1][3] = -4;
+		_mask[1][3] = -4;
 	}
-	else if (!strcmp(model, "EOS D2000C"))
+	else if (!strcmp(_model, "EOS D2000C"))
 	{
-		filters = 0x61616161;
-		black = curve[200];
+		_filters = 0x61616161;
+		_black = _curve[200];
 	}
-	else if (!strcmp(model, "D1"))
+	else if (!strcmp(_model, "D1"))
 	{
-		cam_mul[0] *= 256 / 527.0;
-		cam_mul[2] *= 256 / 317.0;
+		_camMul[0] *= 256 / 527.0;
+		_camMul[2] *= 256 / 317.0;
 	}
-	else if (!strcmp(model, "D1X"))
+	else if (!strcmp(_model, "D1X"))
 	{
-		width -= 4;
-		pixel_aspect = 0.5;
+		_width -= 4;
+		_pixelAspect = 0.5;
 	}
-	else if (!strcmp(model, "D40X") ||
-		!strcmp(model, "D60") ||
-		!strcmp(model, "D80") ||
-		!strcmp(model, "D3000"))
+	else if (!strcmp(_model, "D40X") ||
+		!strcmp(_model, "D60") ||
+		!strcmp(_model, "D80") ||
+		!strcmp(_model, "D3000"))
 	{
-		height -= 3;
-		width -= 4;
+		_height -= 3;
+		_width -= 4;
 	}
-	else if (!strcmp(model, "D3") ||
-		!strcmp(model, "D3S") ||
-		!strcmp(model, "D700"))
+	else if (!strcmp(_model, "D3") ||
+		!strcmp(_model, "D3S") ||
+		!strcmp(_model, "D700"))
 	{
-		width -= 4;
-		left_margin = 2;
+		_width -= 4;
+		_leftMargin = 2;
 	}
-	else if (!strcmp(model, "D3100"))
+	else if (!strcmp(_model, "D3100"))
 	{
-		width -= 28;
-		left_margin = 6;
+		_width -= 28;
+		_leftMargin = 6;
 	}
-	else if (!strcmp(model, "D5000") ||
-		!strcmp(model, "D90"))
+	else if (!strcmp(_model, "D5000") ||
+		!strcmp(_model, "D90"))
 	{
-		width -= 42;
+		_width -= 42;
 	}
-	else if (!strcmp(model, "D5100") ||
-		!strcmp(model, "D7000") ||
-		!strcmp(model, "COOLPIX A"))
+	else if (!strcmp(_model, "D5100") ||
+		!strcmp(_model, "D7000") ||
+		!strcmp(_model, "COOLPIX A"))
 	{
-		width -= 44;
+		_width -= 44;
 	}
-	else if (!strcmp(model, "D3200") ||
-		!strncmp(model, "D6", 2) ||
-		!strncmp(model, "D800", 4))
+	else if (!strcmp(_model, "D3200") ||
+		!strncmp(_model, "D6", 2) ||
+		!strncmp(_model, "D800", 4))
 	{
-		width -= 46;
+		_width -= 46;
 	}
-	else if (!strcmp(model, "D4") ||
-		!strcmp(model, "Df"))
+	else if (!strcmp(_model, "D4") ||
+		!strcmp(_model, "Df"))
 	{
-		width -= 52;
-		left_margin = 2;
+		_width -= 52;
+		_leftMargin = 2;
 	}
-	else if (!strncmp(model, "D40", 3) ||
-		!strncmp(model, "D50", 3) ||
-		!strncmp(model, "D70", 3))
+	else if (!strncmp(_model, "D40", 3) ||
+		!strncmp(_model, "D50", 3) ||
+		!strncmp(_model, "D70", 3))
 	{
-		width--;
+		_width--;
 	}
-	else if (!strcmp(model, "D100"))
+	else if (!strcmp(_model, "D100"))
 	{
-		if (load_flags)
-			raw_width = (width += 3) + 3;
+		if (_loadFlags)
+			_rawWidth = (_width += 3) + 3;
 	}
-	else if (!strcmp(model, "D200"))
+	else if (!strcmp(_model, "D200"))
 	{
-		left_margin = 1;
-		width -= 4;
-		filters = 0x94949494;
+		_leftMargin = 1;
+		_width -= 4;
+		_filters = 0x94949494;
 	}
-	else if (!strncmp(model, "D2H", 3))
+	else if (!strncmp(_model, "D2H", 3))
 	{
-		left_margin = 6;
-		width -= 14;
+		_leftMargin = 6;
+		_width -= 14;
 	}
-	else if (!strncmp(model, "D2X", 3))
+	else if (!strncmp(_model, "D2X", 3))
 	{
-		if (width == 3264) width -= 32;
-		else width -= 8;
+		if (_width == 3264) _width -= 32;
+		else _width -= 8;
 	}
-	else if (!strncmp(model, "D300", 4))
+	else if (!strncmp(_model, "D300", 4))
 	{
-		width -= 32;
+		_width -= 32;
 	}
-	else if (!strncmp(model, "COOLPIX P", 9) && raw_width != 4032)
+	else if (!strncmp(_model, "COOLPIX P", 9) && _rawWidth != 4032)
 	{
-		load_flags = 24;
-		filters = 0x94949494;
-		if (model[9] == '7' && iso_speed >= 400)
-			black = 255;
+		_loadFlags = 24;
+		_filters = 0x94949494;
+		if (_model[9] == '7' && _isoSpeed >= 400)
+			_black = 255;
 	}
-	else if (!strncmp(model, "1 ", 2))
+	else if (!strncmp(_model, "1 ", 2))
 	{
-		height -= 2;
+		_height -= 2;
 	}
 	else if (fsize == 1581060)
 	{
-		simple_coeff(3);
-		pre_mul[0] = 1.2085;
-		pre_mul[1] = 1.0943;
-		pre_mul[3] = 1.1103;
+		SimpleCoeff(3);
+		_preMul[0] = 1.2085;
+		_preMul[1] = 1.0943;
+		_preMul[3] = 1.1103;
 	}
 	else if (fsize == 3178560)
 	{
-		cam_mul[0] *= 4;
-		cam_mul[2] *= 4;
+		_camMul[0] *= 4;
+		_camMul[2] *= 4;
 	}
 	else if (fsize == 4771840)
 	{
-		if (!timestamp && nikon_e995())
-			strcpy_s(model, LenModel, "E995");
-		if (strcmp(model, "E995"))
+		if (!_timestamp && NikonE995())
+			strcpy_s(_model, LenModel, "E995");
+		if (strcmp(_model, "E995"))
 		{
-			filters = 0xb4b4b4b4;
-			simple_coeff(3);
-			pre_mul[0] = 1.196;
-			pre_mul[1] = 1.246;
-			pre_mul[2] = 1.018;
+			_filters = 0xb4b4b4b4;
+			SimpleCoeff(3);
+			_preMul[0] = 1.196;
+			_preMul[1] = 1.246;
+			_preMul[2] = 1.018;
 		}
 	}
 	else if (fsize == 2940928)
 	{
-		if (!timestamp && !nikon_e2100())
-			strcpy_s(model, LenModel, "E2500");
-		if (!strcmp(model, "E2500"))
+		if (!_timestamp && !NikonE2100())
+			strcpy_s(_model, LenModel, "E2500");
+		if (!strcmp(_model, "E2500"))
 		{
-			height -= 2;
-			load_flags = 6;
-			colors = 4;
-			filters = 0x4b4b4b4b;
+			_height -= 2;
+			_loadFlags = 6;
+			_colors = 4;
+			_filters = 0x4b4b4b4b;
 		}
 	}
 	else if (fsize == 4775936)
 	{
-		if (!timestamp)
-			nikon_3700();
-		if (model[0] == 'E' && atoi(model + 1) < 3700)
-			filters = 0x49494949;
-		if (!strcmp(model, "Optio 33WR"))
+		if (!_timestamp)
+			Nikon3700();
+		if (_model[0] == 'E' && atoi(_model + 1) < 3700)
+			_filters = 0x49494949;
+		if (!strcmp(_model, "Optio 33WR"))
 		{
-			flip = 1;
-			filters = 0x16161616;
+			_flip = 1;
+			_filters = 0x16161616;
 		}
-		if (make[0] == 'O')
+		if (_make[0] == 'O')
 		{
-			int i = find_green(12, 32, 1188864, 3576832);
-			int c = find_green(12, 32, 2383920, 2387016);
+			int i = FindGreen(12, 32, 1188864, 3576832);
+			int c = FindGreen(12, 32, 2383920, 2387016);
 			if (abs(i) < abs(c))
 			{
 				SWAP(i, c);
-				load_flags = 24;
+				_loadFlags = 24;
 			}
-			if (i < 0) filters = 0x61616161;
+			if (i < 0) _filters = 0x61616161;
 		}
 	}
 	else if (fsize == 5869568)
 	{
-		if (!timestamp && minolta_z2())
+		if (!_timestamp && MinoltaZ2())
 		{
-			strcpy_s(make, LenMake, "Minolta");
-			strcpy_s(model, LenModel, "DiMAGE Z2");
+			strcpy_s(_make, LenMake, "Minolta");
+			strcpy_s(_model, LenModel, "DiMAGE Z2");
 		}
-		load_flags = 6 + 24 * (make[0] == 'M');
+		_loadFlags = 6 + 24 * (_make[0] == 'M');
 	}
 	else if (fsize == 6291456)
 	{
 		_reader->Seek(0x300000, SEEK_SET);
-		_reader->SetOrder(guess_byte_order(0x10000));
+		_reader->SetOrder(GuessByteOrder(0x10000));
 		if (_reader->GetOrder() == 0x4d4d)
 		{
-			height -= (top_margin = 16);
-			width -= (left_margin = 28);
-			maximum = 0xf5c0;
-			strcpy_s(make, LenMake, "ISG");
-			model[0] = 0;
+			_height -= (_topMargin = 16);
+			_width -= (_leftMargin = 28);
+			_maximum = 0xf5c0;
+			strcpy_s(_make, LenMake, "ISG");
+			_model[0] = 0;
 		}
 	}
-	else if (!strcmp(make, "Fujifilm"))
+	else if (!strcmp(_make, "Fujifilm"))
 	{
-		if (!strcmp(model + 7, "S2Pro"))
+		if (!strcmp(_model + 7, "S2Pro"))
 		{
-			strcpy_s(model, LenModel, "S2Pro");
-			height = 2144;
-			width = 2880;
-			flip = 6;
+			strcpy_s(_model, LenModel, "S2Pro");
+			_height = 2144;
+			_width = 2880;
+			_flip = 6;
 		}
-		else if (load_raw != LoadRawType::packed_load_raw)
-			maximum = (is_raw == 2 && shot_select) ? 0x2f00 : 0x3e00;
-		top_margin = (raw_height - height) >> 2 << 1;
-		left_margin = (raw_width - width) >> 2 << 1;
-		if (width == 2848 || width == 3664) filters = 0x16161616;
-		if (width == 4032 || width == 4952 || width == 6032) left_margin = 0;
-		if (width == 3328 && (width -= 66)) left_margin = 34;
-		if (width == 4936) left_margin = 4;
-		if (!strcmp(model, "HS50EXR") ||
-			!strcmp(model, "F900EXR"))
+		else if (_loadRaw != LoadRawType::PackedLoadRaw)
+			_maximum = (_isRaw == 2 && _shotSelect) ? 0x2f00 : 0x3e00;
+		_topMargin = (_rawHeight - _height) >> 2 << 1;
+		_leftMargin = (_rawWidth - _width) >> 2 << 1;
+		if (_width == 2848 || _width == 3664) _filters = 0x16161616;
+		if (_width == 4032 || _width == 4952 || _width == 6032) _leftMargin = 0;
+		if (_width == 3328 && (_width -= 66)) _leftMargin = 34;
+		if (_width == 4936) _leftMargin = 4;
+		if (!strcmp(_model, "HS50EXR") ||
+			!strcmp(_model, "F900EXR"))
 		{
-			width += 2;
-			left_margin = 0;
-			filters = 0x16161616;
+			_width += 2;
+			_leftMargin = 0;
+			_filters = 0x16161616;
 		}
-		if (fuji_layout) raw_width *= is_raw;
-		if (filters == 9)
+		if (_fujiLayout) _rawWidth *= _isRaw;
+		if (_filters == 9)
 			for (size_t c = 0; c < 36; c++)
-				((char *)xtrans)[c] = xtrans_abs[(c / 6 + top_margin) % 6][(c + left_margin) % 6];
+				((char *)_xtrans)[c] = _xtransAbs[(c / 6 + _topMargin) % 6][(c + _leftMargin) % 6];
 	}
-	else if (!strcmp(model, "KD-400Z"))
+	else if (!strcmp(_model, "KD-400Z"))
 	{
-		height = 1712;
-		width = 2312;
-		raw_width = 2336;
+		_height = 1712;
+		_width = 2312;
+		_rawWidth = 2336;
 		goto konica_400z;
 	}
-	else if (!strcmp(model, "KD-510Z"))
+	else if (!strcmp(_model, "KD-510Z"))
 	{
 		goto konica_510z;
 	}
-	else if (!_stricmp(make, "Minolta"))
+	else if (!_stricmp(_make, "Minolta"))
 	{
-		if (!load_raw && (maximum = 0xfff))
-			load_raw = LoadRawType::unpacked_load_raw;
-		if (!strncmp(model, "DiMAGE A", 8))
+		if (!_loadRaw && (_maximum = 0xfff))
+			_loadRaw = LoadRawType::UnpackedLoadRaw;
+		if (!strncmp(_model, "DiMAGE A", 8))
 		{
-			if (!strcmp(model, "DiMAGE A200"))
-				filters = 0x49494949;
-			tiff_bps = 12;
-			load_raw = LoadRawType::packed_load_raw;
+			if (!strcmp(_model, "DiMAGE A200"))
+				_filters = 0x49494949;
+			_tiffBps = 12;
+			_loadRaw = LoadRawType::PackedLoadRaw;
 		}
-		else if (!strncmp(model, "ALPHA", 5) ||
-			!strncmp(model, "DYNAX", 5) ||
-			!strncmp(model, "MAXXUM", 6))
+		else if (!strncmp(_model, "ALPHA", 5) ||
+			!strncmp(_model, "DYNAX", 5) ||
+			!strncmp(_model, "MAXXUM", 6))
 		{
-			sprintf_s(model + 20, LenModel - 20, "DYNAX %-10s", model + 6 + (model[0] == 'M'));
-			adobe_coeff(make, model + 20);
-			load_raw = LoadRawType::packed_load_raw;
+			sprintf_s(_model + 20, LenModel - 20, "DYNAX %-10s", _model + 6 + (_model[0] == 'M'));
+			AdobeCoeff(_make, _model + 20);
+			_loadRaw = LoadRawType::PackedLoadRaw;
 		}
-		else if (!strncmp(model, "DiMAGE G", 8))
+		else if (!strncmp(_model, "DiMAGE G", 8))
 		{
-			if (model[8] == '4')
+			if (_model[8] == '4')
 			{
-				height = 1716;
-				width = 2304;
+				_height = 1716;
+				_width = 2304;
 			}
-			else if (model[8] == '5')
+			else if (_model[8] == '5')
 			{
 			konica_510z:
-				height = 1956;
-				width = 2607;
-				raw_width = 2624;
+				_height = 1956;
+				_width = 2607;
+				_rawWidth = 2624;
 			}
-			else if (model[8] == '6')
+			else if (_model[8] == '6')
 			{
-				height = 2136;
-				width = 2848;
+				_height = 2136;
+				_width = 2848;
 			}
-			data_offset += 14;
-			filters = 0x61616161;
+			_dataOffset += 14;
+			_filters = 0x61616161;
 		konica_400z:
-			load_raw = LoadRawType::unpacked_load_raw;
-			maximum = 0x3df;
+			_loadRaw = LoadRawType::UnpackedLoadRaw;
+			_maximum = 0x3df;
 			_reader->SetOrder(0x4d4d);
 		}
 	}
-	else if (!strcmp(model, "*ist D"))
+	else if (!strcmp(_model, "*ist D"))
 	{
-		load_raw = LoadRawType::unpacked_load_raw;
-		data_error = -1;	// TODO: ignore first file error
+		_loadRaw = LoadRawType::UnpackedLoadRaw;
+		_dataError = -1;	// TODO: ignore first file error
 	}
-	else if (!strcmp(model, "*ist DS"))
+	else if (!strcmp(_model, "*ist DS"))
 	{
-		height -= 2;
+		_height -= 2;
 	}
-	else if (!strcmp(make, "Samsung") && raw_width == 4704)
+	else if (!strcmp(_make, "Samsung") && _rawWidth == 4704)
 	{
-		height -= top_margin = 8;
-		width -= 2 * (left_margin = 8);
-		load_flags = 32;
+		_height -= _topMargin = 8;
+		_width -= 2 * (_leftMargin = 8);
+		_loadFlags = 32;
 	}
-	else if (!strcmp(make, "Samsung") && raw_height == 3714)
+	else if (!strcmp(_make, "Samsung") && _rawHeight == 3714)
 	{
-		height -= top_margin = 18;
-		left_margin = raw_width - (width = 5536);
-		if (raw_width != 5600)
-			left_margin = top_margin = 0;
-		filters = 0x61616161;
-		colors = 3;
+		_height -= _topMargin = 18;
+		_leftMargin = _rawWidth - (_width = 5536);
+		if (_rawWidth != 5600)
+			_leftMargin = _topMargin = 0;
+		_filters = 0x61616161;
+		_colors = 3;
 	}
-	else if (!strcmp(make, "Samsung") && raw_width == 5632)
+	else if (!strcmp(_make, "Samsung") && _rawWidth == 5632)
 	{
 		_reader->SetOrder(0x4949);
-		height = 3694;
-		top_margin = 2;
-		width = 5574 - (left_margin = 32 + tiff_bps);
-		if (tiff_bps == 12) load_flags = 80;
+		_height = 3694;
+		_topMargin = 2;
+		_width = 5574 - (_leftMargin = 32 + _tiffBps);
+		if (_tiffBps == 12) _loadFlags = 80;
 	}
-	else if (!strcmp(make, "Samsung") && raw_width == 5664)
+	else if (!strcmp(_make, "Samsung") && _rawWidth == 5664)
 	{
-		height -= top_margin = 17;
-		left_margin = 96;
-		width = 5544;
-		filters = 0x49494949;
+		_height -= _topMargin = 17;
+		_leftMargin = 96;
+		_width = 5544;
+		_filters = 0x49494949;
 	}
-	else if (!strcmp(make, "Samsung") && raw_width == 6496)
+	else if (!strcmp(_make, "Samsung") && _rawWidth == 6496)
 	{
-		filters = 0x61616161;
-		black = 1 << (tiff_bps - 7);
+		_filters = 0x61616161;
+		_black = 1 << (_tiffBps - 7);
 	}
-	else if (!strcmp(model, "EX1"))
-	{
-		_reader->SetOrder(0x4949);
-		height -= 20;
-		top_margin = 2;
-		if ((width -= 6) > 3682)
-		{
-			height -= 10;
-			width -= 46;
-			top_margin = 8;
-		}
-	}
-	else if (!strcmp(model, "WB2000"))
+	else if (!strcmp(_model, "EX1"))
 	{
 		_reader->SetOrder(0x4949);
-		height -= 3;
-		top_margin = 2;
-		if ((width -= 10) > 3718)
+		_height -= 20;
+		_topMargin = 2;
+		if ((_width -= 6) > 3682)
 		{
-			height -= 28;
-			width -= 56;
-			top_margin = 8;
+			_height -= 10;
+			_width -= 46;
+			_topMargin = 8;
 		}
 	}
-	else if (strstr(model, "WB550"))
+	else if (!strcmp(_model, "WB2000"))
 	{
-		strcpy_s(model, LenModel, "WB550");
-	}
-	else if (!strcmp(model, "EX2F"))
-	{
-		height = 3045;
-		width = 4070;
-		top_margin = 3;
 		_reader->SetOrder(0x4949);
-		filters = 0x49494949;
-		load_raw = LoadRawType::unpacked_load_raw;
-	}
-	else if (!strcmp(model, "STV680 VGA"))
-	{
-		black = 16;
-	}
-	else if (!strcmp(model, "N95"))
-	{
-		height = raw_height - (top_margin = 2);
-	}
-	else if (!strcmp(model, "640x480"))
-	{
-		gamma_curve(0.45, 4.5, 1, 255);
-	}
-	else if (!strcmp(make, "Hasselblad"))
-	{
-		if (load_raw == LoadRawType::lossless_jpeg_load_raw)
-			load_raw = LoadRawType::hasselblad_load_raw;
-		if (raw_width == 7262)
+		_height -= 3;
+		_topMargin = 2;
+		if ((_width -= 10) > 3718)
 		{
-			height = 5444;
-			width = 7248;
-			top_margin = 4;
-			left_margin = 7;
-			filters = 0x61616161;
-		}
-		else if (raw_width == 7410 || raw_width == 8282)
-		{
-			height -= 84;
-			width -= 82;
-			top_margin = 4;
-			left_margin = 41;
-			filters = 0x61616161;
-		}
-		else if (raw_width == 9044)
-		{
-			height = 6716;
-			width = 8964;
-			top_margin = 8;
-			left_margin = 40;
-			black += load_flags = 256;
-			maximum = 0x8101;
-		}
-		else if (raw_width == 4090)
-		{
-			strcpy_s(model, LenModel, "V96C");
-			height -= (top_margin = 6);
-			width -= (left_margin = 3) + 7;
-			filters = 0x61616161;
-		}
-		if (tiff_samples > 1)
-		{
-			is_raw = tiff_samples + 1;
-			if (!shot_select && !half_size) filters = 0;
+			_height -= 28;
+			_width -= 56;
+			_topMargin = 8;
 		}
 	}
-	else if (!strcmp(make, "Sinar"))
+	else if (strstr(_model, "WB550"))
 	{
-		if (!load_raw) load_raw = LoadRawType::unpacked_load_raw;
-		if (is_raw > 1 && !shot_select && !half_size) filters = 0;
-		maximum = 0x3fff;
+		strcpy_s(_model, LenModel, "WB550");
 	}
-	else if (!strcmp(make, "Leaf"))
+	else if (!strcmp(_model, "EX2F"))
 	{
-		maximum = 0x3fff;
-		_reader->Seek(data_offset, SEEK_SET);
-		jhead jh(*_reader, *this, true);
-		if (jh._success && jh.jdata.bits == 15)
-			maximum = 0x1fff;
-		if (tiff_samples > 1) filters = 0;
-		if (tiff_samples > 1 || tile_length < raw_height)
+		_height = 3045;
+		_width = 4070;
+		_topMargin = 3;
+		_reader->SetOrder(0x4949);
+		_filters = 0x49494949;
+		_loadRaw = LoadRawType::UnpackedLoadRaw;
+	}
+	else if (!strcmp(_model, "STV680 VGA"))
+	{
+		_black = 16;
+	}
+	else if (!strcmp(_model, "N95"))
+	{
+		_height = _rawHeight - (_topMargin = 2);
+	}
+	else if (!strcmp(_model, "640x480"))
+	{
+		GammaCurve(0.45, 4.5, 1, 255);
+	}
+	else if (!strcmp(_make, "Hasselblad"))
+	{
+		if (_loadRaw == LoadRawType::LosslessJpegLoadRaw)
+			_loadRaw = LoadRawType::HasselbladLoadRaw;
+		if (_rawWidth == 7262)
 		{
-			load_raw = LoadRawType::leaf_hdr_load_raw;
-			raw_width = tile_width;
+			_height = 5444;
+			_width = 7248;
+			_topMargin = 4;
+			_leftMargin = 7;
+			_filters = 0x61616161;
 		}
-		if ((width | height) == 2048)
+		else if (_rawWidth == 7410 || _rawWidth == 8282)
 		{
-			if (tiff_samples == 1)
+			_height -= 84;
+			_width -= 82;
+			_topMargin = 4;
+			_leftMargin = 41;
+			_filters = 0x61616161;
+		}
+		else if (_rawWidth == 9044)
+		{
+			_height = 6716;
+			_width = 8964;
+			_topMargin = 8;
+			_leftMargin = 40;
+			_black += _loadFlags = 256;
+			_maximum = 0x8101;
+		}
+		else if (_rawWidth == 4090)
+		{
+			strcpy_s(_model, LenModel, "V96C");
+			_height -= (_topMargin = 6);
+			_width -= (_leftMargin = 3) + 7;
+			_filters = 0x61616161;
+		}
+		if (_tiffSamples > 1)
+		{
+			_isRaw = _tiffSamples + 1;
+			if (!_shotSelect && !_halfSize)
+				_filters = 0;
+		}
+	}
+	else if (!strcmp(_make, "Sinar"))
+	{
+		if (!_loadRaw) _loadRaw = LoadRawType::UnpackedLoadRaw;
+		if (_isRaw > 1 && !_shotSelect && !_halfSize)
+			_filters = 0;
+		_maximum = 0x3fff;
+	}
+	else if (!strcmp(_make, "Leaf"))
+	{
+		_maximum = 0x3fff;
+		_reader->Seek(_dataOffset, SEEK_SET);
+		JHead jh(*_reader, *this, true);
+		if (jh._success && jh._jdata.bits == 15)
+			_maximum = 0x1fff;
+		if (_tiffSamples > 1) _filters = 0;
+		if (_tiffSamples > 1 || _tileLength < _rawHeight)
+		{
+			_loadRaw = LoadRawType::LeafHdrLoadRaw;
+			_rawWidth = _tileWidth;
+		}
+		if ((_width | _height) == 2048)
+		{
+			if (_tiffSamples == 1)
 			{
-				filters = 1;
-				strcpy_s(cdesc, LenCDesc, "RBTG");
-				strcpy_s(model, LenModel, "CatchLight");
-				top_margin = 8; left_margin = 18; height = 2032; width = 2016;
+				_filters = 1;
+				strcpy_s(_cdesc, LenCDesc, "RBTG");
+				strcpy_s(_model, LenModel, "CatchLight");
+				_topMargin = 8; _leftMargin = 18; _height = 2032; _width = 2016;
 			}
 			else
 			{
-				strcpy_s(model, LenModel, "DCB2");
-				top_margin = 10; left_margin = 16; height = 2028; width = 2022;
+				strcpy_s(_model, LenModel, "DCB2");
+				_topMargin = 10; _leftMargin = 16; _height = 2028; _width = 2022;
 			}
 		}
-		else if (width + height == 3144 + 2060)
+		else if (_width + _height == 3144 + 2060)
 		{
-			if (!model[0])
-				strcpy_s(model, LenModel, "Cantare");
-			if (width > height)
+			if (!_model[0])
+				strcpy_s(_model, LenModel, "Cantare");
+			if (_width > _height)
 			{
-				top_margin = 6; left_margin = 32; height = 2048;  width = 3072;
-				filters = 0x61616161;
+				_topMargin = 6; _leftMargin = 32; _height = 2048;  _width = 3072;
+				_filters = 0x61616161;
 			}
 			else
 			{
-				left_margin = 6;  top_margin = 32;  width = 2048; height = 3072;
-				filters = 0x16161616;
+				_leftMargin = 6;  _topMargin = 32;  _width = 2048; _height = 3072;
+				_filters = 0x16161616;
 			}
-			if (!cam_mul[0] || model[0] == 'V') filters = 0;
-			else is_raw = tiff_samples;
+			if (!_camMul[0] || _model[0] == 'V') _filters = 0;
+			else _isRaw = _tiffSamples;
 		}
-		else if (width == 2116)
+		else if (_width == 2116)
 		{
-			strcpy_s(model, LenModel, "Valeo 6");
-			height -= 2 * (top_margin = 30);
-			width -= 2 * (left_margin = 55);
-			filters = 0x49494949;
+			strcpy_s(_model, LenModel, "Valeo 6");
+			_height -= 2 * (_topMargin = 30);
+			_width -= 2 * (_leftMargin = 55);
+			_filters = 0x49494949;
 		}
-		else if (width == 3171)
+		else if (_width == 3171)
 		{
-			strcpy_s(model, LenModel, "Valeo 6");
-			height -= 2 * (top_margin = 24);
-			width -= 2 * (left_margin = 24);
-			filters = 0x16161616;
+			strcpy_s(_model, LenModel, "Valeo 6");
+			_height -= 2 * (_topMargin = 24);
+			_width -= 2 * (_leftMargin = 24);
+			_filters = 0x16161616;
 		}
 	}
-	else if (!strcmp(make, "Leica") || !strcmp(make, "Panasonic"))
+	else if (!strcmp(_make, "Leica") || !strcmp(_make, "Panasonic"))
 	{
-		if ((flen - data_offset) / (raw_width * 8 / 7) == raw_height)
-			load_raw = LoadRawType::panasonic_load_raw;
-		if (!load_raw)
+		if ((flen - _dataOffset) / (_rawWidth * 8 / 7) == _rawHeight)
+			_loadRaw = LoadRawType::PanasonicLoadRaw;
+		if (!_loadRaw)
 		{
-			load_raw = LoadRawType::unpacked_load_raw;
-			load_flags = 4;
+			_loadRaw = LoadRawType::UnpackedLoadRaw;
+			_loadFlags = 4;
 		}
-		zero_is_bad = 1;
-		if ((height += 12) > raw_height) height = raw_height;
+		_zeroIsBad = 1;
+		if ((_height += 12) > _rawHeight) _height = _rawHeight;
 		for (size_t i = 0; i < sizeof pana / sizeof *pana; i++)
-			if (raw_width == pana[i][0] && raw_height == pana[i][1])
+			if (_rawWidth == pana[i][0] && _rawHeight == pana[i][1])
 			{
-				left_margin = pana[i][2];
-				top_margin = pana[i][3];
-				width += pana[i][4];
-				height += pana[i][5];
+				_leftMargin = pana[i][2];
+				_topMargin = pana[i][3];
+				_width += pana[i][4];
+				_height += pana[i][5];
 			}
-		filters = 0x01010101 * (unsigned char) "\x94\x61\x49\x16"
-			[((filters - 1) ^ (left_margin & 1) ^ (top_margin << 1)) & 3];
+		_filters = 0x01010101 * (unsigned char) "\x94\x61\x49\x16"
+			[((_filters - 1) ^ (_leftMargin & 1) ^ (_topMargin << 1)) & 3];
 	}
-	else if (!strcmp(model, "C770UZ"))
+	else if (!strcmp(_model, "C770UZ"))
 	{
-		height = 1718;
-		width = 2304;
-		filters = 0x16161616;
-		load_raw = LoadRawType::packed_load_raw;
-		load_flags = 30;
+		_height = 1718;
+		_width = 2304;
+		_filters = 0x16161616;
+		_loadRaw = LoadRawType::PackedLoadRaw;
+		_loadFlags = 30;
 	}
-	else if (!strcmp(make, "Olympus"))
+	else if (!strcmp(_make, "Olympus"))
 	{
-		height += height & 1;
-		if (exif_cfa) filters = exif_cfa;
-		if (width == 4100) width -= 4;
-		if (width == 4080) width -= 24;
-		if (width == 9280)
+		_height += _height & 1;
+		if (_exifCfa) _filters = _exifCfa;
+		if (_width == 4100) _width -= 4;
+		if (_width == 4080) _width -= 24;
+		if (_width == 9280)
 		{
-			width -= 6; height -= 6;
+			_width -= 6; _height -= 6;
 		}
-		if (load_raw == LoadRawType::unpacked_load_raw)
-			load_flags = 4;
-		tiff_bps = 12;
-		if (!strcmp(model, "E-300") ||
-			!strcmp(model, "E-500"))
+		if (_loadRaw == LoadRawType::UnpackedLoadRaw)
+			_loadFlags = 4;
+		_tiffBps = 12;
+		if (!strcmp(_model, "E-300") ||
+			!strcmp(_model, "E-500"))
 		{
-			width -= 20;
-			if (load_raw == LoadRawType::unpacked_load_raw)
+			_width -= 20;
+			if (_loadRaw == LoadRawType::UnpackedLoadRaw)
 			{
-				maximum = 0xfc3;
-				memset(cblack, 0, sizeof cblack);
+				_maximum = 0xfc3;
+				memset(_cBlack, 0, sizeof _cBlack);
 			}
 		}
-		else if (!strcmp(model, "E-330"))
+		else if (!strcmp(_model, "E-330"))
 		{
-			width -= 30;
-			if (load_raw == LoadRawType::unpacked_load_raw)
-				maximum = 0xf79;
+			_width -= 30;
+			if (_loadRaw == LoadRawType::UnpackedLoadRaw)
+				_maximum = 0xf79;
 		}
-		else if (!strcmp(model, "SP550UZ"))
+		else if (!strcmp(_model, "SP550UZ"))
 		{
-			thumb_length = flen - (thumb_offset = 0xa39800);
-			thumb_height = 480;
-			thumb_width = 640;
+			_thumbLength = flen - (_thumbOffset = 0xa39800);
+			_thumbHeight = 480;
+			_thumbWidth = 640;
 		}
-		else if (!strcmp(model, "TG-4"))
+		else if (!strcmp(_model, "TG-4"))
 		{
-			width -= 16;
+			_width -= 16;
 		}
 	}
-	else if (!strcmp(model, "N Digital"))
+	else if (!strcmp(_model, "N Digital"))
 	{
-		height = 2047;
-		width = 3072;
-		filters = 0x61616161;
-		data_offset = 0x1a00;
-		load_raw = LoadRawType::packed_load_raw;
+		_height = 2047;
+		_width = 3072;
+		_filters = 0x61616161;
+		_dataOffset = 0x1a00;
+		_loadRaw = LoadRawType::PackedLoadRaw;
 	}
-	else if (!strcmp(model, "DSC-F828"))
+	else if (!strcmp(_model, "DSC-F828"))
 	{
-		width = 3288;
-		left_margin = 5;
-		mask[1][3] = -17;
-		data_offset = 862144;
-		load_raw = LoadRawType::sony_load_raw;
-		filters = 0x9c9c9c9c;
-		colors = 4;
-		strcpy_s(cdesc, LenCDesc, "RGBE");
+		_width = 3288;
+		_leftMargin = 5;
+		_mask[1][3] = -17;
+		_dataOffset = 862144;
+		_loadRaw = LoadRawType::SonyLoadRaw;
+		_filters = 0x9c9c9c9c;
+		_colors = 4;
+		strcpy_s(_cdesc, LenCDesc, "RGBE");
 	}
-	else if (!strcmp(model, "DSC-V3"))
+	else if (!strcmp(_model, "DSC-V3"))
 	{
-		width = 3109;
-		left_margin = 59;
-		mask[0][1] = 9;
-		data_offset = 787392;
-		load_raw = LoadRawType::sony_load_raw;
+		_width = 3109;
+		_leftMargin = 59;
+		_mask[0][1] = 9;
+		_dataOffset = 787392;
+		_loadRaw = LoadRawType::SonyLoadRaw;
 	}
-	else if (!strcmp(make, "Sony") && raw_width == 3984)
+	else if (!strcmp(_make, "Sony") && _rawWidth == 3984)
 	{
-		width = 3925;
+		_width = 3925;
 		_reader->SetOrder(0x4d4d);
 	}
-	else if (!strcmp(make, "Sony") && raw_width == 4288)
+	else if (!strcmp(_make, "Sony") && _rawWidth == 4288)
 	{
-		width -= 32;
+		_width -= 32;
 	}
-	else if (!strcmp(make, "Sony") && raw_width == 4600)
+	else if (!strcmp(_make, "Sony") && _rawWidth == 4600)
 	{
-		if (!strcmp(model, "DSLR-A350"))
-			height -= 4;
-		black = 0;
+		if (!strcmp(_model, "DSLR-A350"))
+			_height -= 4;
+		_black = 0;
 	}
-	else if (!strcmp(make, "Sony") && raw_width == 4928)
+	else if (!strcmp(_make, "Sony") && _rawWidth == 4928)
 	{
-		if (height < 3280) width -= 8;
+		if (_height < 3280) _width -= 8;
 	}
-	else if (!strcmp(make, "Sony") && raw_width == 5504)
+	else if (!strcmp(_make, "Sony") && _rawWidth == 5504)
 	{
-		width -= height > 3664 ? 8 : 32;
-		if (!strncmp(model, "DSC", 3))
-			black = 200 << (tiff_bps - 12);
+		_width -= _height > 3664 ? 8 : 32;
+		if (!strncmp(_model, "DSC", 3))
+			_black = 200 << (_tiffBps - 12);
 	}
-	else if (!strcmp(make, "Sony") && raw_width == 6048)
+	else if (!strcmp(_make, "Sony") && _rawWidth == 6048)
 	{
-		width -= 24;
-		if (strstr(model, "RX1") || strstr(model, "A99"))
-			width -= 6;
+		_width -= 24;
+		if (strstr(_model, "RX1") || strstr(_model, "A99"))
+			_width -= 6;
 	}
-	else if (!strcmp(make, "Sony") && raw_width == 7392)
+	else if (!strcmp(_make, "Sony") && _rawWidth == 7392)
 	{
-		width -= 30;
+		_width -= 30;
 	}
-	else if (!strcmp(make, "Sony") && raw_width == 8000)
+	else if (!strcmp(_make, "Sony") && _rawWidth == 8000)
 	{
-		width -= 32;
-		if (!strncmp(model, "DSC", 3))
+		_width -= 32;
+		if (!strncmp(_model, "DSC", 3))
 		{
-			tiff_bps = 14;
-			load_raw = LoadRawType::unpacked_load_raw;
-			black = 512;
+			_tiffBps = 14;
+			_loadRaw = LoadRawType::UnpackedLoadRaw;
+			_black = 512;
 		}
 	}
-	else if (!strcmp(model, "DSLR-A100"))
+	else if (!strcmp(_model, "DSLR-A100"))
 	{
-		if (width == 3880)
+		if (_width == 3880)
 		{
-			height--;
-			width = ++raw_width;
+			_height--;
+			_width = ++_rawWidth;
 		}
 		else
 		{
-			height -= 4;
-			width -= 4;
+			_height -= 4;
+			_width -= 4;
 			_reader->SetOrder(0x4d4d);
-			load_flags = 2;
+			_loadFlags = 2;
 		}
-		filters = 0x61616161;
+		_filters = 0x61616161;
 	}
-	else if (!strcmp(model, "PIXL"))
+	else if (!strcmp(_model, "PIXL"))
 	{
-		height -= top_margin = 4;
-		width -= left_margin = 32;
-		gamma_curve(0, 7, 1, 255);
+		_height -= _topMargin = 4;
+		_width -= _leftMargin = 32;
+		GammaCurve(0, 7, 1, 255);
 	}
-	else if (!strcmp(model, "C603") || !strcmp(model, "C330")
-		|| !strcmp(model, "12MP"))
+	else if (!strcmp(_model, "C603") || !strcmp(_model, "C330")
+		|| !strcmp(_model, "12MP"))
 	{
 		_reader->SetOrder(0x4949);
-		if (filters && data_offset)
+		if (_filters && _dataOffset)
 		{
-			_reader->Seek(data_offset < 4096 ? 168 : 5252, SEEK_SET);
-			_reader->read_shorts(curve, 256);
+			_reader->Seek(_dataOffset < 4096 ? 168 : 5252, SEEK_SET);
+			_reader->ReadShorts(_curve, 256);
 		}
-		else gamma_curve(0, 3.875, 1, 255);
-		load_raw = filters ? LoadRawType::eight_bit_load_raw :
-			strcmp(model, "C330") ? LoadRawType::kodak_c603_load_raw :
-			LoadRawType::kodak_c330_load_raw;
-		load_flags = tiff_bps > 16;
-		tiff_bps = 8;
+		else GammaCurve(0, 3.875, 1, 255);
+		_loadRaw = _filters ? LoadRawType::EightBitLoadRaw :
+			strcmp(_model, "C330") ? LoadRawType::KodakC603LoadRaw :
+			LoadRawType::KodakC330LoadRaw;
+		_loadFlags = _tiffBps > 16;
+		_tiffBps = 8;
 	}
-	else if (!_strnicmp(model, "EasyShare", 9))
+	else if (!_strnicmp(_model, "EasyShare", 9))
 	{
-		data_offset = data_offset < 0x15000 ? 0x15000 : 0x17000;
-		load_raw = LoadRawType::packed_load_raw;
+		_dataOffset = _dataOffset < 0x15000 ? 0x15000 : 0x17000;
+		_loadRaw = LoadRawType::PackedLoadRaw;
 	}
-	else if (!_stricmp(make, "Kodak"))
+	else if (!_stricmp(_make, "Kodak"))
 	{
-		if (filters == UINT_MAX) filters = 0x61616161;
-		if (!strncmp(model, "NC2000", 6) ||
-			!strncmp(model, "EOSDCS", 6) ||
-			!strncmp(model, "DCS4", 4))
+		if (_filters == UINT_MAX) _filters = 0x61616161;
+		if (!strncmp(_model, "NC2000", 6) ||
+			!strncmp(_model, "EOSDCS", 6) ||
+			!strncmp(_model, "DCS4", 4))
 		{
-			width -= 4;
-			left_margin = 2;
-			if (model[6] == ' ') model[6] = 0;
-			if (!strcmp(model, "DCS460A")) goto bw;
+			_width -= 4;
+			_leftMargin = 2;
+			if (_model[6] == ' ') _model[6] = 0;
+			if (!strcmp(_model, "DCS460A")) goto bw;
 		}
-		else if (!strcmp(model, "DCS660M"))
+		else if (!strcmp(_model, "DCS660M"))
 		{
-			black = 214;
+			_black = 214;
 			goto bw;
 		}
-		else if (!strcmp(model, "DCS760M"))
+		else if (!strcmp(_model, "DCS760M"))
 		{
-		bw:   colors = 1;
-			filters = 0;
+		bw:   _colors = 1;
+			_filters = 0;
 		}
-		if (!strcmp(model + 4, "20X"))
-			strcpy_s(cdesc, LenCDesc, "MYCY");
-		if (strstr(model, "DC25"))
+		if (!strcmp(_model + 4, "20X"))
+			strcpy_s(_cdesc, LenCDesc, "MYCY");
+		if (strstr(_model, "DC25"))
 		{
-			strcpy_s(model, LenModel, "DC25");
-			data_offset = 15424;
+			strcpy_s(_model, LenModel, "DC25");
+			_dataOffset = 15424;
 		}
-		if (!strncmp(model, "DC2", 3))
+		if (!strncmp(_model, "DC2", 3))
 		{
-			raw_height = 2 + (height = 242);
+			_rawHeight = 2 + (_height = 242);
 			if (flen < 100000)
 			{
-				raw_width = 256; width = 249;
-				pixel_aspect = (4.0*height) / (3.0*width);
+				_rawWidth = 256; _width = 249;
+				_pixelAspect = (4.0*_height) / (3.0*_width);
 			}
 			else
 			{
-				raw_width = 512; width = 501;
-				pixel_aspect = (493.0*height) / (373.0*width);
+				_rawWidth = 512; _width = 501;
+				_pixelAspect = (493.0*_height) / (373.0*_width);
 			}
-			top_margin = left_margin = 1;
-			colors = 4;
-			filters = 0x8d8d8d8d;
-			simple_coeff(1);
-			pre_mul[1] = 1.179;
-			pre_mul[2] = 1.209;
-			pre_mul[3] = 1.036;
-			load_raw = LoadRawType::eight_bit_load_raw;
+			_topMargin = _leftMargin = 1;
+			_colors = 4;
+			_filters = 0x8d8d8d8d;
+			SimpleCoeff(1);
+			_preMul[1] = 1.179;
+			_preMul[2] = 1.209;
+			_preMul[3] = 1.036;
+			_loadRaw = LoadRawType::EightBitLoadRaw;
 		}
-		else if (!strcmp(model, "40"))
+		else if (!strcmp(_model, "40"))
 		{
-			strcpy_s(model, LenModel, "DC40");
-			height = 512;
-			width = 768;
-			data_offset = 1152;
-			load_raw = LoadRawType::kodak_radc_load_raw;
-			tiff_bps = 12;
+			strcpy_s(_model, LenModel, "DC40");
+			_height = 512;
+			_width = 768;
+			_dataOffset = 1152;
+			_loadRaw = LoadRawType::KodakRadcLoadRaw;
+			_tiffBps = 12;
 		}
-		else if (strstr(model, "DC50"))
+		else if (strstr(_model, "DC50"))
 		{
-			strcpy_s(model, LenModel, "DC50");
-			height = 512;
-			width = 768;
-			data_offset = 19712;
-			load_raw = LoadRawType::kodak_radc_load_raw;
+			strcpy_s(_model, LenModel, "DC50");
+			_height = 512;
+			_width = 768;
+			_dataOffset = 19712;
+			_loadRaw = LoadRawType::KodakRadcLoadRaw;
 		}
-		else if (strstr(model, "DC120"))
+		else if (strstr(_model, "DC120"))
 		{
-			strcpy_s(model, LenModel, "DC120");
-			height = 976;
-			width = 848;
-			pixel_aspect = height / 0.75 / width;
-			load_raw = tiff_compress == 7 ? LoadRawType::kodak_jpeg_load_raw : LoadRawType::kodak_dc120_load_raw;
+			strcpy_s(_model, LenModel, "DC120");
+			_height = 976;
+			_width = 848;
+			_pixelAspect = _height / 0.75 / _width;
+			_loadRaw = _tiffCompress == 7 ? LoadRawType::KodakJpegLoadRaw : LoadRawType::KodakDC120LoadRaw;
 		}
-		else if (!strcmp(model, "DCS200"))
+		else if (!strcmp(_model, "DCS200"))
 		{
-			thumb_height = 128;
-			thumb_width = 192;
-			thumb_offset = 6144;
-			thumb_misc = 360;
-			write_thumb = WriteThumbType::layer_thumb;
-			black = 17;
+			_thumbHeight = 128;
+			_thumbWidth = 192;
+			_thumbOffset = 6144;
+			_thumbMisc = 360;
+			_writeThumb = WriteThumbType::LayerThumb;
+			_black = 17;
 		}
 	}
-	else if (!strcmp(model, "Fotoman Pixtura"))
+	else if (!strcmp(_model, "Fotoman Pixtura"))
 	{
-		height = 512;
-		width = 768;
-		data_offset = 3632;
-		load_raw = LoadRawType::kodak_radc_load_raw;
-		filters = 0x61616161;
-		simple_coeff(2);
+		_height = 512;
+		_width = 768;
+		_dataOffset = 3632;
+		_loadRaw = LoadRawType::KodakRadcLoadRaw;
+		_filters = 0x61616161;
+		SimpleCoeff(2);
 	}
-	else if (!strncmp(model, "QuickTake", 9))
+	else if (!strncmp(_model, "QuickTake", 9))
 	{
 		if (head[5])
-			strcpy_s(model + 10, LenModel - 10, "200");
+			strcpy_s(_model + 10, LenModel - 10, "200");
 		_reader->Seek(544, SEEK_SET);
-		height = _reader->get2();
-		width = _reader->get2();
-		data_offset = (_reader->get4(), _reader->get2()) == 30 ? 738 : 736;
-		if (height > width)
+		_height = _reader->GetUShort();
+		_width = _reader->GetUShort();
+		_dataOffset = (_reader->GetUInt(), _reader->GetUShort()) == 30 ? 738 : 736;
+		if (_height > _width)
 		{
-			SWAP(height, width);
-			_reader->Seek(data_offset - 6, SEEK_SET);
-			flip = ~_reader->get2() & 3 ? 5 : 6;
+			SWAP(_height, _width);
+			_reader->Seek(_dataOffset - 6, SEEK_SET);
+			_flip = ~_reader->GetUShort() & 3 ? 5 : 6;
 		}
-		filters = 0x61616161;
+		_filters = 0x61616161;
 	}
-	else if (!strcmp(make, "Rollei") && !load_raw)
+	else if (!strcmp(_make, "Rollei") && !_loadRaw)
 	{
-		switch (raw_width)
+		switch (_rawWidth)
 		{
 		case 1316:
-			height = 1030;
-			width = 1300;
-			top_margin = 1;
-			left_margin = 6;
+			_height = 1030;
+			_width = 1300;
+			_topMargin = 1;
+			_leftMargin = 6;
 			break;
 		case 2568:
-			height = 1960;
-			width = 2560;
-			top_margin = 2;
-			left_margin = 8;
+			_height = 1960;
+			_width = 2560;
+			_topMargin = 2;
+			_leftMargin = 8;
 		}
-		filters = 0x16161616;
-		load_raw = LoadRawType::rollei_load_raw;
+		_filters = 0x16161616;
+		_loadRaw = LoadRawType::RolleiLoadRaw;
 	}
-	if (!model[0])
-		sprintf_s(model, LenModel, "%dx%d", width, height);
-	if (filters == UINT_MAX) filters = 0x94949494;
-	if (thumb_offset && !thumb_height)
+	if (!_model[0])
+		sprintf_s(_model, LenModel, "%dx%d", _width, _height);
+	if (_filters == UINT_MAX) _filters = 0x94949494;
+	if (_thumbOffset && !_thumbHeight)
 	{
-		_reader->Seek(thumb_offset, SEEK_SET);
-		jhead jh(*_reader, *this, true);
+		_reader->Seek(_thumbOffset, SEEK_SET);
+		JHead jh(*_reader, *this, true);
 		if (jh._success)
 		{
-			thumb_width = jh.jdata.wide;
-			thumb_height = jh.jdata.high;
+			_thumbWidth = jh._jdata.wide;
+			_thumbHeight = jh._jdata.high;
 		}
 	}
 dng_skip:
-	if ((use_camera_matrix & (use_camera_wb || dng_version))
-		&& cmatrix[0][0] > 0.125)
+	if ((_useCameraMatrix & (_useCameraWB || _dngVersion))
+		&& _cMatrix[0][0] > 0.125)
 	{
-		memcpy(rgb_cam, cmatrix, sizeof cmatrix);
-		raw_color = 0;
+		memcpy(_rgbCam, _cMatrix, sizeof _cMatrix);
+		_rawColor = 0;
 	}
-	if (raw_color) adobe_coeff(make, model);
-	if (load_raw == LoadRawType::kodak_radc_load_raw)
-		if (raw_color) adobe_coeff("Apple", "Quicktake");
-	if (fuji_width)
+	if (_rawColor) AdobeCoeff(_make, _model);
+	if (_loadRaw == LoadRawType::KodakRadcLoadRaw)
+		if (_rawColor) AdobeCoeff("Apple", "Quicktake");
+	if (_fujiWidth)
 	{
-		fuji_width = width >> !fuji_layout;
-		filters = fuji_width & 1 ? 0x94949494 : 0x49494949;
-		width = (height >> fuji_layout) + fuji_width;
-		height = width - 1;
-		pixel_aspect = 1;
+		_fujiWidth = _width >> !_fujiLayout;
+		_filters = _fujiWidth & 1 ? 0x94949494 : 0x49494949;
+		_width = (_height >> _fujiLayout) + _fujiWidth;
+		_height = _width - 1;
+		_pixelAspect = 1;
 	}
 	else
 	{
-		if (raw_height < height) raw_height = height;
-		if (raw_width  < width) raw_width = width;
+		if (_rawHeight < _height) _rawHeight = _height;
+		if (_rawWidth  < _width) _rawWidth = _width;
 	}
-	if (!tiff_bps) tiff_bps = 12;
-	if (!maximum) maximum = (1 << tiff_bps) - 1;
-	if (!load_raw || height < 22 || width < 22 ||
-		tiff_bps > 16 || tiff_samples > 6 || colors > 4)
-		is_raw = 0;
-	if (!cdesc[0])
-		strcpy_s(cdesc, LenCDesc, colors == 3 ? "RGBG" : "GMCY");
-	if (!raw_height) raw_height = height;
-	if (!raw_width) raw_width = width;
-	if (filters > 999 && colors == 3)
-		filters |= ((filters >> 2 & 0x22222222) |
-		(filters << 2 & 0x88888888)) & filters << 1;
+	if (!_tiffBps) _tiffBps = 12;
+	if (!_maximum) _maximum = (1 << _tiffBps) - 1;
+	if (!_loadRaw || _height < 22 || _width < 22 ||
+		_tiffBps > 16 || _tiffSamples > 6 || _colors > 4)
+		_isRaw = 0;
+	if (!_cdesc[0])
+		strcpy_s(_cdesc, LenCDesc, _colors == 3 ? "RGBG" : "GMCY");
+	if (!_rawHeight) _rawHeight = _height;
+	if (!_rawWidth) _rawWidth = _width;
+	if (_filters > 999 && _colors == 3)
+		_filters |= ((_filters >> 2 & 0x22222222) |
+		(_filters << 2 & 0x88888888)) & _filters << 1;
 
 notraw:
-	if (flip == UINT_MAX)
-		flip = tiff_flip;
-	if (flip == UINT_MAX)
-		flip = 0;
+	if (_flip == UINT_MAX)
+		_flip = _tiffFlip;
+	if (_flip == UINT_MAX)
+		_flip = 0;
 }
 #pragma endregion
 
 #pragma region Private methods
-int CSimpleInfo::parse_tiff(int base)
+int CSimpleInfo::ParseTiff(int base)
 {
 	_reader->Seek(base, SEEK_SET);
-	_reader->SetOrder(_reader->get2());
+	_reader->SetOrder(_reader->GetUShort());
 	if (_reader->GetOrder() != 0x4949 && _reader->GetOrder() != 0x4d4d)
 		return 0;
-	_reader->get2();
+	_reader->GetUShort();
 	int doff;
-	while ((doff = _reader->get4()))
+	while ((doff = _reader->GetUInt()))
 	{
 		_reader->Seek(doff + base, SEEK_SET);
-		if (parse_tiff_ifd(base)) break;
+		if (ParseTiffIFD(base)) break;
 	}
 	return 1;
 }
 
 
-int CSimpleInfo::parse_tiff_ifd(int base)
+int CSimpleInfo::ParseTiffIFD(int base)
 {
 	unsigned tag, type, len, plen = 16, save;
 	int cfa, i, j, c;
@@ -1698,13 +1700,13 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 	unsigned sony_curve[] = { 0,0,0,0,0,4095 };
 	unsigned sony_offset = 0, sony_length = 0, sony_key = 0;
 
-	if (tiff_nifds >= sizeof tiff_ifd / sizeof tiff_ifd[0])
+	if (_tiffNifds >= sizeof _tiffIfd / sizeof _tiffIfd[0])
 		return 1;
-	int ifd = tiff_nifds++;
+	int ifd = _tiffNifds++;
 	for (j = 0; j < 4; j++)
 		for (i = 0; i < 4; i++)
 			cc[j][i] = i == j;
-	unsigned entries = _reader->get2();
+	unsigned entries = _reader->GetUShort();
 	if (entries > 512)
 		return 1;
 
@@ -1712,135 +1714,135 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 
 	while (entries--)
 	{
-		tiff_get(base, &tag, &type, &len, &save);
+		TiffGet(base, &tag, &type, &len, &save);
 		switch (tag)
 		{
 		case 5:
-			width = _reader->get2();
+			_width = _reader->GetUShort();
 			break;
 		case 6:
-			height = _reader->get2();
+			_height = _reader->GetUShort();
 			break;
 		case 7:
-			width += _reader->get2();
+			_width += _reader->GetUShort();
 			break;
 		case 9:
-			if ((i = _reader->get2()))
-				filters = i;
+			if ((i = _reader->GetUShort()))
+				_filters = i;
 			break;
 		case 17:
 		case 18:
 			if (type == 3 && len == 1)
-				cam_mul[(tag - 17) * 2] = _reader->get2() / 256.0;
+				_camMul[(tag - 17) * 2] = _reader->GetUShort() / 256.0;
 			break;
 		case 23:
 			if (type == 3)
-				iso_speed = _reader->get2();
+				_isoSpeed = _reader->GetUShort();
 			break;
 		case 28: case 29: case 30:
-			cblack[tag - 28] = _reader->get2();
-			cblack[3] = cblack[1];
+			_cBlack[tag - 28] = _reader->GetUShort();
+			_cBlack[3] = _cBlack[1];
 			break;
 		case 36: case 37: case 38:
-			cam_mul[tag - 36] = _reader->get2();
+			_camMul[tag - 36] = _reader->GetUShort();
 			break;
 		case 39:
-			if (len < 50 || cam_mul[0])
+			if (len < 50 || _camMul[0])
 				break;
 			_reader->Seek(12, SEEK_CUR);
 			for (size_t c = 0; c < 3; c++)
-				cam_mul[c] = _reader->get2();
+				_camMul[c] = _reader->GetUShort();
 			break;
 		case 46:
 			if (type != 7 || _reader->GetChar() != 0xff || _reader->GetChar() != 0xd8) break;
-			thumb_offset = _reader->GetPosition() - 2;
-			thumb_length = len;
+			_thumbOffset = _reader->GetPosition() - 2;
+			_thumbLength = len;
 			break;
 		case 61440:			/* Fuji HS10 table */
-			_reader->Seek(_reader->get4() + base, SEEK_SET);
-			parse_tiff_ifd(base);
+			_reader->Seek(_reader->GetUInt() + base, SEEK_SET);
+			ParseTiffIFD(base);
 			break;
 		case 2: case 256: case 61441:	/* ImageWidth */
-			tiff_ifd[ifd].width = _reader->getint(type);
+			_tiffIfd[ifd].width = _reader->GetUInt(type);
 			break;
 		case 3: case 257: case 61442:	/* ImageHeight */
-			tiff_ifd[ifd].height = _reader->getint(type);
+			_tiffIfd[ifd].height = _reader->GetUInt(type);
 			break;
 		case 258:				/* BitsPerSample */
 		case 61443:
-			tiff_ifd[ifd].samples = len & 7;
-			tiff_ifd[ifd].bps = _reader->getint(type);
-			if (tiff_bps < tiff_ifd[ifd].bps)
-				tiff_bps = tiff_ifd[ifd].bps;
+			_tiffIfd[ifd].samples = len & 7;
+			_tiffIfd[ifd].bps = _reader->GetUInt(type);
+			if (_tiffBps < _tiffIfd[ifd].bps)
+				_tiffBps = _tiffIfd[ifd].bps;
 			break;
 		case 61446:
-			raw_height = 0;
-			if (tiff_ifd[ifd].bps > 12)
+			_rawHeight = 0;
+			if (_tiffIfd[ifd].bps > 12)
 				break;
-			load_raw = LoadRawType::packed_load_raw;
-			load_flags = _reader->get4() ? 24 : 80;
+			_loadRaw = LoadRawType::PackedLoadRaw;
+			_loadFlags = _reader->GetUInt() ? 24 : 80;
 			break;
 		case 259:				/* Compression */
-			tiff_ifd[ifd].comp = _reader->getint(type);
+			_tiffIfd[ifd].comp = _reader->GetUInt(type);
 			break;
 		case 262:				/* PhotometricInterpretation */
-			tiff_ifd[ifd].phint = _reader->get2();
+			_tiffIfd[ifd].phint = _reader->GetUShort();
 			break;
 		case 270:				/* ImageDescription */
-			_reader->Read(desc, 512, 1);
+			_reader->Read(_desc, 512, 1);
 			break;
 		case 271:				/* Make */
-			_reader->GetString(make, LenMake);
+			_reader->GetString(_make, LenMake);
 			break;
 		case 272:				/* Model */
-			_reader->GetString(model, LenModel);
+			_reader->GetString(_model, LenModel);
 			break;
 		case 280:				/* Panasonic RW2 offset */
 			if (type != 4) break;
-			load_raw = LoadRawType::panasonic_load_raw;
-			load_flags = 0x2008;
+			_loadRaw = LoadRawType::PanasonicLoadRaw;
+			_loadFlags = 0x2008;
 		case 273:				/* StripOffset */
 		case 513:				/* JpegIFOffset */
 		case 61447:
-			tiff_ifd[ifd].offset = _reader->get4() + base;
-			if (!tiff_ifd[ifd].bps && tiff_ifd[ifd].offset > 0)
+			_tiffIfd[ifd].offset = _reader->GetUInt() + base;
+			if (!_tiffIfd[ifd].bps && _tiffIfd[ifd].offset > 0)
 			{
-				_reader->Seek(tiff_ifd[ifd].offset, SEEK_SET);
-				jhead jh(*_reader, *this, true);
+				_reader->Seek(_tiffIfd[ifd].offset, SEEK_SET);
+				JHead jh(*_reader, *this, true);
 				if (jh._success)
 				{
-					tiff_ifd[ifd].comp = 6;
-					tiff_ifd[ifd].width = jh.jdata.wide;
-					tiff_ifd[ifd].height = jh.jdata.high;
-					tiff_ifd[ifd].bps = jh.jdata.bits;
-					tiff_ifd[ifd].samples = jh.jdata.clrs;
-					if (!(jh.jdata.sraw || (jh.jdata.clrs & 1)))
-						tiff_ifd[ifd].width *= jh.jdata.clrs;
-					if ((tiff_ifd[ifd].width > 4 * tiff_ifd[ifd].height) & ~jh.jdata.clrs)
+					_tiffIfd[ifd].comp = 6;
+					_tiffIfd[ifd].width = jh._jdata.wide;
+					_tiffIfd[ifd].height = jh._jdata.high;
+					_tiffIfd[ifd].bps = jh._jdata.bits;
+					_tiffIfd[ifd].samples = jh._jdata.clrs;
+					if (!(jh._jdata.sraw || (jh._jdata.clrs & 1)))
+						_tiffIfd[ifd].width *= jh._jdata.clrs;
+					if ((_tiffIfd[ifd].width > 4 * _tiffIfd[ifd].height) & ~jh._jdata.clrs)
 					{
-						tiff_ifd[ifd].width /= 2;
-						tiff_ifd[ifd].height *= 2;
+						_tiffIfd[ifd].width /= 2;
+						_tiffIfd[ifd].height *= 2;
 					}
 					i = _reader->GetOrder();
-					parse_tiff(tiff_ifd[ifd].offset + 12);
+					ParseTiff(_tiffIfd[ifd].offset + 12);
 					_reader->SetOrder(i);
 				}
 			}
 			break;
 		case 274:				/* Orientation */
-			tiff_ifd[ifd].flip = "50132467"[_reader->get2() & 7] - '0';
+			_tiffIfd[ifd].flip = "50132467"[_reader->GetUShort() & 7] - '0';
 			break;
 		case 277:				/* SamplesPerPixel */
-			tiff_ifd[ifd].samples = _reader->getint(type) & 7;
+			_tiffIfd[ifd].samples = _reader->GetUInt(type) & 7;
 			break;
 		case 279:				/* StripByteCounts */
 		case 514:
 		case 61448:
-			tiff_ifd[ifd].bytes = _reader->get4();
+			_tiffIfd[ifd].bytes = _reader->GetUInt();
 			break;
 		case 61454:
 			for (size_t c = 0; c < 3; c++)
-				cam_mul[(4 - c) % 3] = _reader->getint(type);
+				_camMul[(4 - c) % 3] = _reader->GetUInt(type);
 			break;
 		case 305:  case 11:		/* Software */
 			_reader->GetString(software, 64);
@@ -1850,102 +1852,102 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 				!strncmp(software, "Bibble", 6) ||
 				!strncmp(software, "Nikon Scan", 10) ||
 				!strcmp(software, "Digital Photo Professional"))
-				is_raw = 0;
+				_isRaw = 0;
 			break;
 		case 306:				/* DateTime */
-			get_timestamp(0);
+			GetTimestamp(0);
 			break;
 		case 315:				/* Artist */
-			_reader->Read(artist, LenArtist, 1);
+			_reader->Read(_artist, LenArtist, 1);
 			break;
 		case 322:				/* TileWidth */
-			tiff_ifd[ifd].tile_width = _reader->getint(type);
+			_tiffIfd[ifd].tile_width = _reader->GetUInt(type);
 			break;
 		case 323:				/* TileLength */
-			tiff_ifd[ifd].tile_length = _reader->getint(type);
+			_tiffIfd[ifd].tile_length = _reader->GetUInt(type);
 			break;
 		case 324:				/* TileOffsets */
-			tiff_ifd[ifd].offset = len > 1 ? _reader->GetPosition() : _reader->get4();
+			_tiffIfd[ifd].offset = len > 1 ? _reader->GetPosition() : _reader->GetUInt();
 			if (len == 1)
-				tiff_ifd[ifd].tile_width = tiff_ifd[ifd].tile_length = 0;
+				_tiffIfd[ifd].tile_width = _tiffIfd[ifd].tile_length = 0;
 			if (len == 4)
 			{
-				load_raw = LoadRawType::sinar_4shot_load_raw;
-				is_raw = 5;
+				_loadRaw = LoadRawType::Sinar4ShotLoadRaw;
+				_isRaw = 5;
 			}
 			break;
 		case 330:				/* SubIFDs */
-			if (!strcmp(model, "DSLR-A100") && tiff_ifd[ifd].width == 3872)
+			if (!strcmp(_model, "DSLR-A100") && _tiffIfd[ifd].width == 3872)
 			{
-				load_raw = LoadRawType::sony_arw_load_raw;
-				data_offset = _reader->get4() + base;
+				_loadRaw = LoadRawType::SonyArwLoadRaw;
+				_dataOffset = _reader->GetUInt() + base;
 				ifd++;  break;
 			}
 			while (len--)
 			{
 				i = _reader->GetPosition();
-				_reader->Seek(_reader->get4() + base, SEEK_SET);
-				if (parse_tiff_ifd(base))
+				_reader->Seek(_reader->GetUInt() + base, SEEK_SET);
+				if (ParseTiffIFD(base))
 					break;
 				_reader->Seek(i + 4, SEEK_SET);
 			}
 			break;
 		case 400:
-			strcpy_s(make, LenMake, "Sarnoff");
-			maximum = 0xfff;
+			strcpy_s(_make, LenMake, "Sarnoff");
+			_maximum = 0xfff;
 			break;
 		case 28688:
 			for (size_t c = 0; c < 4; c++)
-				sony_curve[c + 1] = _reader->get2() >> 2 & 0xfff;
+				sony_curve[c + 1] = _reader->GetUShort() >> 2 & 0xfff;
 			for (i = 0; i < 5; i++)
 				for (j = sony_curve[i] + 1; j <= sony_curve[i + 1]; j++)
-					curve[j] = curve[j - 1] + (1 << i);
+					_curve[j] = _curve[j - 1] + (1 << i);
 			break;
 		case 29184:
-			sony_offset = _reader->get4();
+			sony_offset = _reader->GetUInt();
 			break;
 		case 29185:
-			sony_length = _reader->get4();
+			sony_length = _reader->GetUInt();
 			break;
 		case 29217:
-			sony_key = _reader->get4();
+			sony_key = _reader->GetUInt();
 			break;
 		case 29264:
-			parse_minolta(_reader->GetPosition());
-			raw_width = 0;
+			ParseMinolta(_reader->GetPosition());
+			_rawWidth = 0;
 			break;
 		case 29443:
 			for (size_t c = 0; c < 4; c++)
-				cam_mul[c ^ (c < 2)] = _reader->get2();
+				_camMul[c ^ (c < 2)] = _reader->GetUShort();
 			break;
 		case 29459:
 			for (size_t c = 0; c < 4; c++)
-				cam_mul[c] = _reader->get2();
-			i = (cam_mul[1] == 1024 && cam_mul[2] == 1024) << 1;
-			SWAP(cam_mul[i], cam_mul[i + 1])
+				_camMul[c] = _reader->GetUShort();
+			i = (_camMul[1] == 1024 && _camMul[2] == 1024) << 1;
+			SWAP(_camMul[i], _camMul[i + 1])
 				break;
 		case 33405:			/* Model2 */
-			_reader->GetString(model2, LenModel2);
+			_reader->GetString(_model2, LenModel2);
 			break;
 		case 33421:			/* CFARepeatPatternDim */
-			if (_reader->get2() == 6 && _reader->get2() == 6)
-				filters = 9;
+			if (_reader->GetUShort() == 6 && _reader->GetUShort() == 6)
+				_filters = 9;
 			break;
 		case 33422:			/* CFAPattern */
-			if (filters == 9)
+			if (_filters == 9)
 			{
 				for (size_t c = 0; c < 36; c++)
-					((char *)xtrans)[c] = _reader->GetChar() & 3;
+					((char *)_xtrans)[c] = _reader->GetChar() & 3;
 				break;
 			}
 		case 64777:			/* Kodak P-series */
 			if ((plen = len) > 16)
 				plen = 16;
 			_reader->Read(cfa_pat, 1, plen);
-			colors = cfa = 0;
-			for (i = 0; i < plen && colors < 4; i++)
+			_colors = cfa = 0;
+			for (i = 0; i < plen && _colors < 4; i++)
 			{
-				colors += !(cfa & (1 << cfa_pat[i]));
+				_colors += !(cfa & (1 << cfa_pat[i]));
 				cfa |= 1 << cfa_pat[i];
 			}
 			if (cfa == 070)
@@ -1955,90 +1957,90 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 			goto guess_cfa_pc;
 		case 33424:
 		case 65024:
-			_reader->Seek(_reader->get4() + base, SEEK_SET);
-			parse_kodak_ifd(base);
+			_reader->Seek(_reader->GetUInt() + base, SEEK_SET);
+			ParseKodakIFD(base);
 			break;
 		case 33434:			/* ExposureTime */
-			tiff_ifd[ifd].shutter = shutter = _reader->getreal(type);
+			_tiffIfd[ifd].shutter = _shutter = _reader->GetReal(type);
 			break;
 		case 33437:			/* FNumber */
-			aperture = _reader->getreal(type);
+			_aperture = _reader->GetReal(type);
 			break;
-		case 34306:			/* Leaf white balance */
+		case 34306:			/* Leaf _white balance */
 			for (size_t c = 0; c < 4; c++)
-				cam_mul[c ^ 1] = 4096.0 / _reader->get2();
+				_camMul[c ^ 1] = 4096.0 / _reader->GetUShort();
 			break;
 		case 34307:			/* Leaf CatchLight color matrix */
 			_reader->Read(software, 1, 7);
 			if (strncmp(software, "MATRIX", 6))
 				break;
-			colors = 4;
-			for (raw_color = i = 0; i < 3; i++)
+			_colors = 4;
+			for (_rawColor = i = 0; i < 3; i++)
 			{
 				for (size_t c = 0; c < 4; c++)
-					_reader->scanf("%f", &rgb_cam[i][c ^ 1]);
-				if (!use_camera_wb)
+					_reader->GetScanf("%f", &_rgbCam[i][c ^ 1]);
+				if (!_useCameraWB)
 					continue;
 				num = 0;
 				for (size_t c = 0; c < 4; c++)
-					num += rgb_cam[i][c];
+					num += _rgbCam[i][c];
 				for (size_t c = 0; c < 4; c++)
-					rgb_cam[i][c] /= num;
+					_rgbCam[i][c] /= num;
 			}
 			break;
 		case 34310:			/* Leaf metadata */
-			parse_mos(_reader->GetPosition());
+			ParseMos(_reader->GetPosition());
 		case 34303:
-			strcpy_s(make, LenMake, "Leaf");
+			strcpy_s(_make, LenMake, "Leaf");
 			break;
 		case 34665:			/* EXIF tag */
-			_reader->Seek(_reader->get4() + base, SEEK_SET);
-			parse_exif(base);
+			_reader->Seek(_reader->GetUInt() + base, SEEK_SET);
+			ParseExif(base);
 			break;
 		case 34853:			/* GPSInfo tag */
-			_reader->Seek(_reader->get4() + base, SEEK_SET);
-			parse_gps(base);
+			_reader->Seek(_reader->GetUInt() + base, SEEK_SET);
+			ParseGps(base);
 			break;
 		case 34675:			/* InterColorProfile */
 		case 50831:			/* AsShotICCProfile */
-			profile_offset = _reader->GetPosition();
-			profile_length = len;
+			_profileOffset = _reader->GetPosition();
+			_profileLength = len;
 			break;
 		case 37122:			/* CompressedBitsPerPixel */
-			kodak_cbpp = _reader->get4();
+			_kodakCbpp = _reader->GetUInt();
 			break;
 		case 37386:			/* FocalLength */
-			focal_len = _reader->getreal(type);
+			_focalLen = _reader->GetReal(type);
 			break;
 		case 37393:			/* ImageNumber */
-			shot_order = _reader->getint(type);
+			_shotOrder = _reader->GetUInt(type);
 			break;
 		case 37400:			/* old Kodak KDC tag */
-			for (raw_color = i = 0; i < 3; i++)
+			for (_rawColor = i = 0; i < 3; i++)
 			{
-				_reader->getreal(type);
+				_reader->GetReal(type);
 				for (size_t c = 0; c < 3; c++)
-					rgb_cam[i][c] = _reader->getreal(type);
+					_rgbCam[i][c] = _reader->GetReal(type);
 			}
 			break;
 		case 40976:
-			strip_offset = _reader->get4();
-			switch (tiff_ifd[ifd].comp)
+			_stripOffset = _reader->GetUInt();
+			switch (_tiffIfd[ifd].comp)
 			{
 			case 32770:
-				load_raw = LoadRawType::samsung_load_raw;
+				_loadRaw = LoadRawType::SamsungLoadRaw;
 				break;
 			case 32772:
-				load_raw = LoadRawType::samsung2_load_raw;
+				_loadRaw = LoadRawType::Samsung2LoadRaw;
 				break;
 			case 32773:
-				load_raw = LoadRawType::samsung3_load_raw;
+				_loadRaw = LoadRawType::Samsung3LoadRaw;
 				break;
 			}
 			break;
 		case 46275:			/* Imacon tags */
-			strcpy_s(make, LenMake, "Imacon");
-			data_offset = _reader->GetPosition();
+			strcpy_s(_make, LenMake, "Imacon");
+			_dataOffset = _reader->GetPosition();
 			ima_len = len;
 			break;
 		case 46279:
@@ -2047,39 +2049,39 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 			_reader->Seek(38, SEEK_CUR);
 		case 46274:
 			_reader->Seek(40, SEEK_CUR);
-			raw_width = _reader->get4();
-			raw_height = _reader->get4();
-			left_margin = _reader->get4() & 7;
-			width = raw_width - left_margin - (_reader->get4() & 7);
-			top_margin = _reader->get4() & 7;
-			height = raw_height - top_margin - (_reader->get4() & 7);
-			if (raw_width == 7262)
+			_rawWidth = _reader->GetUInt();
+			_rawHeight = _reader->GetUInt();
+			_leftMargin = _reader->GetUInt() & 7;
+			_width = _rawWidth - _leftMargin - (_reader->GetUInt() & 7);
+			_topMargin = _reader->GetUInt() & 7;
+			_height = _rawHeight - _topMargin - (_reader->GetUInt() & 7);
+			if (_rawWidth == 7262)
 			{
-				height = 5444;
-				width = 7244;
-				left_margin = 7;
+				_height = 5444;
+				_width = 7244;
+				_leftMargin = 7;
 			}
 			_reader->Seek(52, SEEK_CUR);
 			for (size_t c = 0; c < 3; c++)
-				cam_mul[c] = _reader->getreal(11);
+				_camMul[c] = _reader->GetReal(11);
 			_reader->Seek(114, SEEK_CUR);
-			flip = (_reader->get2() >> 7) * 90;
-			if (width * height * 6 == ima_len)
+			_flip = (_reader->GetUShort() >> 7) * 90;
+			if (_width * _height * 6 == ima_len)
 			{
-				if (flip % 180 == 90)
-					SWAP(width, height);
-				raw_width = width;
-				raw_height = height;
-				left_margin = top_margin = filters = flip = 0;
+				if (_flip % 180 == 90)
+					SWAP(_width, _height);
+				_rawWidth = _width;
+				_rawHeight = _height;
+				_leftMargin = _topMargin = _filters = _flip = 0;
 			}
-			sprintf_s(model, LenModel, "Ixpress %d-Mp", height*width / 1000000);
-			load_raw = LoadRawType::imacon_full_load_raw;
-			if (filters)
+			sprintf_s(_model, LenModel, "Ixpress %d-Mp", _height*_width / 1000000);
+			_loadRaw = LoadRawType::ImaconFullLoadRaw;
+			if (_filters)
 			{
-				if (left_margin & 1) filters = 0x61616161;
-				load_raw = LoadRawType::unpacked_load_raw;
+				if (_leftMargin & 1) _filters = 0x61616161;
+				_loadRaw = LoadRawType::UnpackedLoadRaw;
 			}
-			maximum = 0xffff;
+			_maximum = 0xffff;
 			break;
 		case 50454:			/* Sinar tag */
 		case 50455:
@@ -2093,154 +2095,154 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 				_reader->Read(cbuf, 1, len);
 				for (cp = cbuf - 1; cp && cp < cbuf + len; cp = strchr(cp, '\n'))
 					if (!strncmp(++cp, "Neutral ", 8))
-						sscanf_s(cp + 8, "%f %f %f", cam_mul, cam_mul + 1, cam_mul + 2);
+						sscanf_s(cp + 8, "%f %f %f", _camMul, _camMul + 1, _camMul + 2);
 			}
 			break;
 		case 50458:
-			if (!make[0])
-				strcpy_s(make, LenMake, "Hasselblad");
+			if (!_make[0])
+				strcpy_s(_make, LenMake, "Hasselblad");
 			break;
 		case 50459:			/* Hasselblad tag */
 			i = _reader->GetOrder();
 			j = _reader->GetPosition();
-			c = tiff_nifds;
-			_reader->SetOrder(_reader->get2());
-			_reader->Seek(j + (_reader->get2(), _reader->get4()), SEEK_SET);
-			parse_tiff_ifd(j);
-			maximum = 0xffff;
-			tiff_nifds = c;
+			c = _tiffNifds;
+			_reader->SetOrder(_reader->GetUShort());
+			_reader->Seek(j + (_reader->GetUShort(), _reader->GetUInt()), SEEK_SET);
+			ParseTiffIFD(j);
+			_maximum = 0xffff;
+			_tiffNifds = c;
 			_reader->SetOrder(i);
 			break;
 		case 50706:			/* DNGVersion */
 			for (size_t c = 0; c < 4; c++)
-				dng_version = (dng_version << 8) + _reader->GetChar();
-			if (!make[0])
-				strcpy_s(make, LenMake, "DNG");
-			is_raw = 1;
+				_dngVersion = (_dngVersion << 8) + _reader->GetChar();
+			if (!_make[0])
+				strcpy_s(_make, LenMake, "DNG");
+			_isRaw = 1;
 			break;
 		case 50708:			/* UniqueCameraModel */
-			if (model[0])
+			if (_model[0])
 				break;
-			_reader->GetString(make, LenMake);
-			if ((cp = strchr(make, ' ')))
+			_reader->GetString(_make, LenMake);
+			if ((cp = strchr(_make, ' ')))
 			{
-				strcpy_s(model, LenModel, cp + 1);
+				strcpy_s(_model, LenModel, cp + 1);
 				*cp = 0;
 			}
 			break;
 		case 50710:			/* CFAPlaneColor */
-			if (filters == 9)
+			if (_filters == 9)
 				break;
 			if (len > 4)
 				len = 4;
-			colors = len;
-			_reader->Read(cfa_pc, 1, colors);
+			_colors = len;
+			_reader->Read(cfa_pc, 1, _colors);
 		guess_cfa_pc:
-			for (size_t c = 0; c < colors; c++)
+			for (size_t c = 0; c < _colors; c++)
 				tab[cfa_pc[c]] = c;
-			cdesc[colors] = 0;
+			_cdesc[_colors] = 0;
 			for (i = 16; i--; )
-				filters = filters << 2 | tab[cfa_pat[i % plen]];
-			filters -= !filters;
+				_filters = _filters << 2 | tab[cfa_pat[i % plen]];
+			_filters -= !_filters;
 			break;
 		case 50711:			/* CFALayout */
-			if (_reader->get2() == 2)
-				fuji_width = 1;
+			if (_reader->GetUShort() == 2)
+				_fujiWidth = 1;
 			break;
 		case 291:
 		case 50712:			/* LinearizationTable */
-			linear_table(len);
+			LinearTable(len);
 			break;
 		case 50713:			/* BlackLevelRepeatDim */
-			cblack[4] = _reader->get2();
-			cblack[5] = _reader->get2();
-			if (cblack[4] * cblack[5] > sizeof cblack / sizeof *cblack - 6)
-				cblack[4] = cblack[5] = 1;
+			_cBlack[4] = _reader->GetUShort();
+			_cBlack[5] = _reader->GetUShort();
+			if (_cBlack[4] * _cBlack[5] > sizeof _cBlack / sizeof *_cBlack - 6)
+				_cBlack[4] = _cBlack[5] = 1;
 			break;
 		case 61450:
-			cblack[4] = cblack[5] = MIN(sqrt(len), 64);
+			_cBlack[4] = _cBlack[5] = MIN(sqrt(len), 64);
 		case 50714:			/* BlackLevel */
-			if (!(cblack[4] * cblack[5]))
-				cblack[4] = cblack[5] = 1;
-			for (size_t c = 0; c < (cblack[4] * cblack[5]); c++)
-				cblack[6 + c] = _reader->getreal(type);
-			black = 0;
+			if (!(_cBlack[4] * _cBlack[5]))
+				_cBlack[4] = _cBlack[5] = 1;
+			for (size_t c = 0; c < (_cBlack[4] * _cBlack[5]); c++)
+				_cBlack[6 + c] = _reader->GetReal(type);
+			_black = 0;
 			break;
 		case 50715:			/* BlackLevelDeltaH */
 		case 50716:			/* BlackLevelDeltaV */
 			for (num = i = 0; i < (len & 0xffff); i++)
-				num += _reader->getreal(type);
-			black += num / len + 0.5;
+				num += _reader->GetReal(type);
+			_black += num / len + 0.5;
 			break;
 		case 50717:			/* WhiteLevel */
-			maximum = _reader->getint(type);
+			_maximum = _reader->GetUInt(type);
 			break;
 		case 50718:			/* DefaultScale */
-			pixel_aspect = _reader->getreal(type);
-			pixel_aspect /= _reader->getreal(type);
+			_pixelAspect = _reader->GetReal(type);
+			_pixelAspect /= _reader->GetReal(type);
 			break;
 		case 50721:			/* ColorMatrix1 */
 		case 50722:			/* ColorMatrix2 */
-			for (size_t c = 0; c < colors; c++)
+			for (size_t c = 0; c < _colors; c++)
 				for (j = 0; j < 3; j++)
-					cm[c][j] = _reader->getreal(type);
+					cm[c][j] = _reader->GetReal(type);
 			use_cm = true;
 			break;
 		case 50723:			/* CameraCalibration1 */
 		case 50724:			/* CameraCalibration2 */
-			for (i = 0; i < colors; i++)
-				for (size_t c = 0; c < colors; c++)
-					cc[i][c] = _reader->getreal(type);
+			for (i = 0; i < _colors; i++)
+				for (size_t c = 0; c < _colors; c++)
+					cc[i][c] = _reader->GetReal(type);
 			break;
 		case 50727:			/* AnalogBalance */
-			for (size_t c = 0; c < colors; c++)
-				ab[c] = _reader->getreal(type);
+			for (size_t c = 0; c < _colors; c++)
+				ab[c] = _reader->GetReal(type);
 			break;
 		case 50728:			/* AsShotNeutral */
-			for (size_t c = 0; c < colors; c++)
-				asn[c] = _reader->getreal(type);
+			for (size_t c = 0; c < _colors; c++)
+				asn[c] = _reader->GetReal(type);
 			break;
 		case 50729:			/* AsShotWhiteXY */
-			xyz[0] = _reader->getreal(type);
-			xyz[1] = _reader->getreal(type);
+			xyz[0] = _reader->GetReal(type);
+			xyz[1] = _reader->GetReal(type);
 			xyz[2] = 1 - xyz[0] - xyz[1];
 			for (size_t c = 0; c < 3; c++)
-				xyz[c] /= d65_white[c];
+				xyz[c] /= d65White[c];
 			break;
 		case 50740:			/* DNGPrivateData */
-			if (dng_version)
+			if (_dngVersion)
 				break;
-			parse_minolta(j = _reader->get4() + base);
+			ParseMinolta(j = _reader->GetUInt() + base);
 			_reader->Seek(j, SEEK_SET);
-			parse_tiff_ifd(base);
+			ParseTiffIFD(base);
 			break;
 		case 50752:
-			_reader->read_shorts(cr2_slice, 3);
+			_reader->ReadShorts(_cr2Slice, 3);
 			break;
 		case 50829:			/* ActiveArea */
-			top_margin = _reader->getint(type);
-			left_margin = _reader->getint(type);
-			height = _reader->getint(type) - top_margin;
-			width = _reader->getint(type) - left_margin;
+			_topMargin = _reader->GetUInt(type);
+			_leftMargin = _reader->GetUInt(type);
+			_height = _reader->GetUInt(type) - _topMargin;
+			_width = _reader->GetUInt(type) - _leftMargin;
 			break;
 		case 50830:			/* MaskedAreas */
 			for (i = 0; i < len && i < 32; i++)
-				((int *)mask)[i] = _reader->getint(type);
-			black = 0;
+				((int *)_mask)[i] = _reader->GetUInt(type);
+			_black = 0;
 			break;
 		case 51009:			/* OpcodeList2 */
-			meta_offset = _reader->GetPosition();
+			_metaOffset = _reader->GetPosition();
 			break;
 		case 64772:			/* Kodak P-series */
 			if (len < 13) break;
 			_reader->Seek(16, SEEK_CUR);
-			data_offset = _reader->get4();
+			_dataOffset = _reader->GetUInt();
 			_reader->Seek(28, SEEK_CUR);
-			data_offset += _reader->get4();
-			load_raw = LoadRawType::packed_load_raw;
+			_dataOffset += _reader->GetUInt();
+			_loadRaw = LoadRawType::PackedLoadRaw;
 			break;
 		case 65026:
-			if (type == 2) _reader->GetString(model2, LenModel2);
+			if (type == 2) _reader->GetString(_model2, LenModel2);
 		}
 		_reader->Seek(save, SEEK_SET);
 	}
@@ -2252,122 +2254,122 @@ int CSimpleInfo::parse_tiff_ifd(int base)
 			CAutoFreeMemory(buf, false);
 			_reader->Seek(sony_offset, SEEK_SET);
 			_reader->Read(buf, sony_length, 1);
-			sony_decrypt(buf, sony_length / 4, 1, sony_key);
+			SonyDecrypt(buf, sony_length / 4, 1, sony_key);
 
 			CWriter* sfp = CWriter::CreateTempFile();
 			sfp->Write(buf, sony_length, 1);
 			sfp->Seek(0, SEEK_SET);
-			parse_tiff_ifd(-sony_offset);
+			ParseTiffIFD(-sony_offset);
 			delete sfp;
 		}
 	}
-	for (i = 0; i < colors; i++)
-		for (size_t c = 0; c < colors; c++)
+	for (i = 0; i < _colors; i++)
+		for (size_t c = 0; c < _colors; c++)
 			cc[i][c] *= ab[i];
 	if (use_cm)
 	{
-		for (size_t c = 0; c < colors; c++)
+		for (size_t c = 0; c < _colors; c++)
 			for (i = 0; i < 3; i++)
-				for (cam_xyz[c][i] = j = 0; j < colors; j++)
+				for (cam_xyz[c][i] = j = 0; j < _colors; j++)
 					cam_xyz[c][i] += cc[c][j] * cm[j][i] * xyz[i];
-		cam_xyz_coeff(cmatrix, cam_xyz);
+		CamXyzCoeff(_cMatrix, cam_xyz);
 	}
 	if (asn[0])
 	{
-		cam_mul[3] = 0;
-		for (size_t c = 0; c < colors; c++)
-			cam_mul[c] = 1 / asn[c];
+		_camMul[3] = 0;
+		for (size_t c = 0; c < _colors; c++)
+			_camMul[c] = 1 / asn[c];
 	}
 	if (!use_cm)
-		for (size_t c = 0; c < colors; c++)
-			pre_mul[c] /= cc[c][c];
+		for (size_t c = 0; c < _colors; c++)
+			_preMul[c] /= cc[c][c];
 	return 0;
 }
 
-void CSimpleInfo::parse_exif(int base)
+void CSimpleInfo::ParseExif(int base)
 {
 	unsigned tag, type, len, save;
 	double expo;
 
-	unsigned kodak = !strncmp(make, "EASTMAN", 7) && tiff_nifds < 3;
-	unsigned entries = _reader->get2();
+	unsigned kodak = !strncmp(_make, "EASTMAN", 7) && _tiffNifds < 3;
+	unsigned entries = _reader->GetUShort();
 	while (entries--)
 	{
-		tiff_get(base, &tag, &type, &len, &save);
+		TiffGet(base, &tag, &type, &len, &save);
 		switch (tag)
 		{
 		case 33434:
-			tiff_ifd[tiff_nifds - 1].shutter = shutter = _reader->getreal(type);
+			_tiffIfd[_tiffNifds - 1].shutter = _shutter = _reader->GetReal(type);
 			break;
 		case 33437:
-			aperture = _reader->getreal(type);
+			_aperture = _reader->GetReal(type);
 			break;
 		case 34855:
-			iso_speed = _reader->get2();
+			_isoSpeed = _reader->GetUShort();
 			break;
 		case 36867:
 		case 36868:
-			get_timestamp(0);
+			GetTimestamp(0);
 			break;
 		case 37377:
-			if ((expo = -_reader->getreal(type)) < 128)
-				tiff_ifd[tiff_nifds - 1].shutter = shutter = pow(2, expo);
+			if ((expo = -_reader->GetReal(type)) < 128)
+				_tiffIfd[_tiffNifds - 1].shutter = _shutter = pow(2, expo);
 			break;
 		case 37378:
-			aperture = pow(2, _reader->getreal(type) / 2);
+			_aperture = pow(2, _reader->GetReal(type) / 2);
 			break;
 		case 37386:
-			focal_len = _reader->getreal(type);
+			_focalLen = _reader->GetReal(type);
 			break;
 		case 37500:
-			parse_makernote(base, 0);
+			ParseMakernote(base, 0);
 			break;
 		case 40962:
-			if (kodak) raw_width = _reader->get4();
+			if (kodak) _rawWidth = _reader->GetUInt();
 			break;
 		case 40963:
-			if (kodak) raw_height = _reader->get4();
+			if (kodak) _rawHeight = _reader->GetUInt();
 			break;
 		case 41730:
-			if (_reader->get4() == 0x20002)
+			if (_reader->GetUInt() == 0x20002)
 			{
-				exif_cfa = 0;
+				_exifCfa = 0;
 				for (size_t c = 0; c < 8; c += 2)
-					exif_cfa |= _reader->GetChar() * 0x01010101 << c;
+					_exifCfa |= _reader->GetChar() * 0x01010101 << c;
 			}
 		}
 		_reader->Seek(save, SEEK_SET);
 	}
 }
 
-void CSimpleInfo::parse_gps(int base)
+void CSimpleInfo::ParseGps(int base)
 {
 	unsigned tag, type, len, save;
 
-	unsigned entries = _reader->get2();
+	unsigned entries = _reader->GetUShort();
 	while (entries--)
 	{
-		tiff_get(base, &tag, &type, &len, &save);
+		TiffGet(base, &tag, &type, &len, &save);
 		switch (tag)
 		{
 		case 1: case 3: case 5:
-			gpsdata[29 + tag / 2] = _reader->GetChar();
+			_gpsData[29 + tag / 2] = _reader->GetChar();
 			break;
 		case 2: case 4: case 7:
 			for (size_t c = 0; c < 6; c++)
-				gpsdata[tag / 3 * 6 + c] = _reader->get4();
+				_gpsData[tag / 3 * 6 + c] = _reader->GetUInt();
 			break;
 		case 6:
 			for (size_t c = 0; c < 6; c++)
-				gpsdata[18 + c] = _reader->get4();
+				_gpsData[18 + c] = _reader->GetUInt();
 			break;
 		case 18: case 29:
-			_reader->GetString((char *)(gpsdata + 14 + tag / 3), MIN(len, 12));
+			_reader->GetString((char *)(_gpsData + 14 + tag / 3), MIN(len, 12));
 		}
 		_reader->Seek(save, SEEK_SET);
 	}
 }
-void CSimpleInfo::parse_makernote(int base, int uptag)
+void CSimpleInfo::ParseMakernote(int base, int uptag)
 {
 	static const unsigned char xlat[2][256] = {
 		{ 0xc1,0xbf,0x6d,0x0d,0x59,0xc5,0x13,0x9d,0x83,0x61,0x6b,0x4f,0xc7,0x7f,0x3d,0x3d,
@@ -2415,7 +2417,7 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 	The MakerNote might have its own TIFF header (possibly with
 	its own byte-order!), or it might just be a table.
 	*/
-	if (!strcmp(make, "Nokia")) return;
+	if (!strcmp(_make, "Nokia")) return;
 	_reader->Read(buf, 1, 10);
 	if (!strncmp(buf, "KDK", 3) ||	/* these aren't TIFF tables */
 		!strncmp(buf, "VER", 3) ||
@@ -2425,33 +2427,33 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 		!strncmp(buf, "MLY", 3))
 	{	/* Minolta DiMAGE G series */
 		_reader->SetOrder(0x4d4d);
-		while ((i = _reader->GetPosition()) < data_offset && i < 16384)
+		while ((i = _reader->GetPosition()) < _dataOffset && i < 16384)
 		{
 			wb[0] = wb[2];  wb[2] = wb[1];  wb[1] = wb[3];
-			wb[3] = _reader->get2();
+			wb[3] = _reader->GetUShort();
 			if (wb[1] == 256 && wb[3] == 256 &&
 				wb[0] > 256 && wb[0] < 640 && wb[2] > 256 && wb[2] < 640)
 				for (size_t c = 0; c < 4; c++)
-					cam_mul[c] = wb[c];
+					_camMul[c] = wb[c];
 		}
 		goto quit;
 	}
 	if (!strcmp(buf, "Nikon"))
 	{
 		base = _reader->GetPosition();
-		_reader->SetOrder(_reader->get2());
-		if (_reader->get2() != 42)
+		_reader->SetOrder(_reader->GetUShort());
+		if (_reader->GetUShort() != 42)
 			goto quit;
-		unsigned offset = _reader->get4();
+		unsigned offset = _reader->GetUInt();
 		_reader->Seek(offset - 8, SEEK_CUR);
 	}
 	else if (!strcmp(buf, "OLYMPUS") || !strcmp(buf, "PENTAX "))
 	{
 		base = _reader->GetPosition() - 10;
 		_reader->Seek(-2, SEEK_CUR);
-		_reader->SetOrder(_reader->get2());
+		_reader->SetOrder(_reader->GetUShort());
 		if (buf[0] == 'O')
-			_reader->get2();
+			_reader->GetUShort();
 	}
 	else if (!strncmp(buf, "SONY", 4) || !strcmp(buf, "Panasonic"))
 	{
@@ -2470,65 +2472,65 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 	else
 	{
 		_reader->Seek(-10, SEEK_CUR);
-		if (!strncmp(make, "SAMSUNG", 7))
+		if (!strncmp(_make, "SAMSUNG", 7))
 			base = _reader->GetPosition();
 	}
-	unsigned entries = _reader->get2();
+	unsigned entries = _reader->GetUShort();
 	if (entries > 1000)
 		return;
 	short morder = _reader->GetOrder();
 	while (entries--)
 	{
 		_reader->SetOrder(morder);
-		tiff_get(base, &tag, &type, &len, &save);
+		TiffGet(base, &tag, &type, &len, &save);
 		tag |= uptag << 16;
-		if (tag == 2 && strstr(make, "NIKON") && !iso_speed)
-			iso_speed = (_reader->get2(), _reader->get2());
+		if (tag == 2 && strstr(_make, "NIKON") && !_isoSpeed)
+			_isoSpeed = (_reader->GetUShort(), _reader->GetUShort());
 		if (tag == 4 && len > 26 && len < 35)
 		{
-			if ((i = (_reader->get4(), _reader->get2())) != 0x7fff && !iso_speed)
-				iso_speed = 50 * pow(2, i / 32.0 - 4);
-			if ((i = (_reader->get2(), _reader->get2())) != 0x7fff && !aperture)
-				aperture = pow(2, i / 64.0);
-			if ((i = _reader->get2()) != 0xffff && !shutter)
-				shutter = pow(2, (short)i / -32.0);
-			wbi = (_reader->get2(), _reader->get2());
-			shot_order = (_reader->get2(), _reader->get2());
+			if ((i = (_reader->GetUInt(), _reader->GetUShort())) != 0x7fff && !_isoSpeed)
+				_isoSpeed = 50 * pow(2, i / 32.0 - 4);
+			if ((i = (_reader->GetUShort(), _reader->GetUShort())) != 0x7fff && !_aperture)
+				_aperture = pow(2, i / 64.0);
+			if ((i = _reader->GetUShort()) != 0xffff && !_shutter)
+				_shutter = pow(2, (short)i / -32.0);
+			wbi = (_reader->GetUShort(), _reader->GetUShort());
+			_shotOrder = (_reader->GetUShort(), _reader->GetUShort());
 		}
-		if ((tag == 4 || tag == 0x114) && !strncmp(make, "KONICA", 6))
+		if ((tag == 4 || tag == 0x114) && !strncmp(_make, "KONICA", 6))
 		{
 			_reader->Seek(tag == 4 ? 140 : 160, SEEK_CUR);
-			switch (_reader->get2())
+			switch (_reader->GetUShort())
 			{
-			case 72:  flip = 0;  break;
-			case 76:  flip = 6;  break;
-			case 82:  flip = 5;  break;
+			case 72:  _flip = 0;  break;
+			case 76:  _flip = 6;  break;
+			case 82:  _flip = 5;  break;
 			}
 		}
 		if (tag == 7 && type == 2 && len > 20)
-			_reader->GetString(model2, LenModel2);
+			_reader->GetString(_model2, LenModel2);
 		if (tag == 8 && type == 4)
-			shot_order = _reader->get4();
-		if (tag == 9 && !strcmp(make, "Canon"))
-			_reader->Read(artist, LenArtist, 1);
+			_shotOrder = _reader->GetUInt();
+		if (tag == 9 && !strcmp(_make, "Canon"))
+			_reader->Read(_artist, LenArtist, 1);
 		if (tag == 0xc && len == 4)
 			for (size_t c = 0; c < 3; c++)
-				cam_mul[(c << 1 | c >> 1) & 3] = _reader->getreal(type);
-		if (tag == 0xd && type == 7 && _reader->get2() == 0xaaaa)
+				_camMul[(c << 1 | c >> 1) & 3] = _reader->GetReal(type);
+		if (tag == 0xd && type == 7 && _reader->GetUShort() == 0xaaaa)
 		{
 			unsigned c = 2;
 			for (i = 2; (unsigned short)c != 0xbbbb && i < len; i++)
 				c = c << 8 | _reader->GetChar();
 			while ((i += 4) < len - 5)
-				if (_reader->get4() == 257 && (i = len) && (c = (_reader->get4(), _reader->GetChar())) < 3)
-					flip = "065"[c] - '0';
+				if (_reader->GetUInt() == 257 && (i = len) && (c = (_reader->GetUInt(), _reader->GetChar())) < 3)
+					_flip = "065"[c] - '0';
 		}
 		if (tag == 0x10 && type == 4)
-			unique_id = _reader->get4();
-		if (tag == 0x11 && is_raw && !strncmp(make, "NIKON", 5))
+			_uniqueId = _reader->GetUInt();
+		if (tag == 0x11 && _isRaw && !strncmp(_make, "NIKON", 5))
 		{
-			_reader->Seek(_reader->get4() + base, SEEK_SET);
-			parse_tiff_ifd(base);
+			_reader->Seek(_reader->GetUInt() + base, SEEK_SET);
+			ParseTiffIFD(base);
 		}
 		if (tag == 0x14 && type == 7)
 		{
@@ -2541,14 +2543,14 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 			if (!strncmp(buf, "NRW ", 4))
 			{
 				_reader->Seek(strcmp(buf + 4, "0100") ? 46 : 1546, SEEK_CUR);
-				cam_mul[0] = _reader->get4() << 2;
-				cam_mul[1] = _reader->get4() + _reader->get4();
-				cam_mul[2] = _reader->get4() << 2;
+				_camMul[0] = _reader->GetUInt() << 2;
+				_camMul[1] = _reader->GetUInt() + _reader->GetUInt();
+				_camMul[2] = _reader->GetUInt() << 2;
 			}
 		}
-		if (tag == 0x15 && type == 2 && is_raw)
-			_reader->Read(model, LenModel, 1);
-		if (strstr(make, "PENTAX"))
+		if (tag == 0x15 && type == 2 && _isRaw)
+			_reader->Read(_model, LenModel, 1);
+		if (strstr(_make, "PENTAX"))
 		{
 			if (tag == 0x1b) tag = 0x1018;
 			if (tag == 0x1c) tag = 0x1017;
@@ -2564,32 +2566,32 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 			unsigned y = wbi < 18 ? "012347800000005896"[wbi] - '0' : 0;
 			_reader->Seek(8 + y * 32, SEEK_CUR);
 			for (size_t c = 0; c < 4; c++)
-				cam_mul[c ^ (c >> 1) ^ 1] = _reader->get4();
+				_camMul[c ^ (c >> 1) ^ 1] = _reader->GetUInt();
 		}
 		if (tag == 0x3d && type == 3 && len == 4)
 			for (size_t c = 0; c < 4; c++)
-				cblack[c ^ c >> 1] = _reader->get2() >> (14 - tiff_bps);
+				_cBlack[c ^ c >> 1] = _reader->GetUShort() >> (14 - _tiffBps);
 		if (tag == 0x81 && type == 4)
 		{
-			data_offset = _reader->get4();
-			_reader->Seek(data_offset + 41, SEEK_SET);
-			raw_height = _reader->get2() * 2;
-			raw_width = _reader->get2();
-			filters = 0x61616161;
+			_dataOffset = _reader->GetUInt();
+			_reader->Seek(_dataOffset + 41, SEEK_SET);
+			_rawHeight = _reader->GetUShort() * 2;
+			_rawWidth = _reader->GetUShort();
+			_filters = 0x61616161;
 		}
 		if ((tag == 0x81 && type == 7) ||
 			(tag == 0x100 && type == 7) ||
 			(tag == 0x280 && type == 1))
 		{
-			thumb_offset = _reader->GetPosition();
-			thumb_length = len;
+			_thumbOffset = _reader->GetPosition();
+			_thumbLength = len;
 		}
-		if (tag == 0x88 && type == 4 && (thumb_offset = _reader->get4()))
-			thumb_offset += base;
+		if (tag == 0x88 && type == 4 && (_thumbOffset = _reader->GetUInt()))
+			_thumbOffset += base;
 		if (tag == 0x89 && type == 4)
-			thumb_length = _reader->get4();
+			_thumbLength = _reader->GetUInt();
 		if (tag == 0x8c || tag == 0x96)
-			meta_offset = _reader->GetPosition();
+			_metaOffset = _reader->GetPosition();
 		if (tag == 0x97)
 		{
 			for (i = 0; i < 4; i++)
@@ -2599,17 +2601,17 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 			case 100:
 				_reader->Seek(68, SEEK_CUR);
 				for (size_t c = 0; c < 4; c++)
-					cam_mul[(c >> 1) | ((c & 1) << 1)] = _reader->get2();
+					_camMul[(c >> 1) | ((c & 1) << 1)] = _reader->GetUShort();
 				break;
 			case 102:
 				_reader->Seek(6, SEEK_CUR);
 				for (size_t c = 0; c < 4; c++)
-					cam_mul[c ^ (c >> 1)] = _reader->get2();
+					_camMul[c ^ (c >> 1)] = _reader->GetUShort();
 				break;
 			case 103:
 				_reader->Seek(16, SEEK_CUR);
 				for (size_t c = 0; c < 4; c++)
-					cam_mul[c] = _reader->get2();
+					_camMul[c] = _reader->GetUShort();
 			}
 			if (ver97 >= 200)
 			{
@@ -2622,13 +2624,13 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 			_reader->SetOrder(0x4949);
 			_reader->Seek(140, SEEK_CUR);
 			for (size_t c = 0; c < 3; c++)
-				cam_mul[c] = _reader->get4();
+				_camMul[c] = _reader->GetUInt();
 		}
 		if (tag == 0xa4 && type == 3)
 		{
 			_reader->Seek(wbi * 48, SEEK_CUR);
 			for (size_t c = 0; c < 3; c++)
-				cam_mul[c] = _reader->get2();
+				_camMul[c] = _reader->GetUShort();
 		}
 		if (tag == 0xa7 && (unsigned)(ver97 - 200) < 17)
 		{
@@ -2639,39 +2641,39 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 				buf97[i] ^= (cj += ci * ck++);
 			i = "66666>666;6A;:;55"[ver97 - 200] - '0';
 			for (size_t c = 0; c < 4; c++)
-				cam_mul[c ^ (c >> 1) ^ (i & 1)] = _reader->sget2(buf97 + (i & -2) + c * 2);
+				_camMul[c ^ (c >> 1) ^ (i & 1)] = _reader->GetUShort(buf97 + (i & -2) + c * 2);
 		}
 		if (tag == 0x200 && len == 3)
-			shot_order = (_reader->get4(), _reader->get4());
+			_shotOrder = (_reader->GetUInt(), _reader->GetUInt());
 		if (tag == 0x200 && len == 4)
 			for (size_t c = 0; c < 4; c++)
-				cblack[c ^ c >> 1] = _reader->get2();
+				_cBlack[c ^ c >> 1] = _reader->GetUShort();
 		if (tag == 0x201 && len == 4)
 			for (size_t c = 0; c < 4; c++)
-				cam_mul[c ^ (c >> 1)] = _reader->get2();
+				_camMul[c ^ (c >> 1)] = _reader->GetUShort();
 		if (tag == 0x220 && type == 7)
-			meta_offset = _reader->GetPosition();
+			_metaOffset = _reader->GetPosition();
 		if (tag == 0x401 && type == 4 && len == 4)
 			for (size_t c = 0; c < 4; c++)
-				cblack[c ^ c >> 1] = _reader->get4();
+				_cBlack[c ^ c >> 1] = _reader->GetUInt();
 		if (tag == 0xe01)
 		{		/* Nikon Capture Note */
 			_reader->SetOrder(0x4949);
 			_reader->Seek(22, SEEK_CUR);
 			for (unsigned offset = 22; offset + 22 < len; offset += 22 + i)
 			{
-				tag = _reader->get4();
+				tag = _reader->GetUInt();
 				_reader->Seek(14, SEEK_CUR);
-				i = _reader->get4() - 4;
-				if (tag == 0x76a43207) flip = _reader->get2();
+				i = _reader->GetUInt() - 4;
+				if (tag == 0x76a43207) _flip = _reader->GetUShort();
 				else _reader->Seek(i, SEEK_CUR);
 			}
 		}
 		if (tag == 0xe80 && len == 256 && type == 7)
 		{
 			_reader->Seek(48, SEEK_CUR);
-			cam_mul[0] = _reader->get2() * 508 * 1.078 / 0x10000;
-			cam_mul[2] = _reader->get2() * 382 * 1.173 / 0x10000;
+			_camMul[0] = _reader->GetUShort() * 508 * 1.078 / 0x10000;
+			_camMul[2] = _reader->GetUShort() * 382 * 1.173 / 0x10000;
 		}
 		if (tag == 0xf00 && type == 7)
 		{
@@ -2685,57 +2687,57 @@ void CSimpleInfo::parse_makernote(int base, int uptag)
 		if ((tag == 0x1011 && len == 9) || tag == 0x20400200)
 			for (i = 0; i < 3; i++)
 				for (size_t c = 0; c < 3; c++)
-					cmatrix[i][c] = ((short)_reader->get2()) / 256.0;
+					_cMatrix[i][c] = ((short)_reader->GetUShort()) / 256.0;
 		if ((tag == 0x1012 || tag == 0x20400600) && len == 4)
 			for (size_t c = 0; c < 4; c++)
-				cblack[c ^ c >> 1] = _reader->get2();
+				_cBlack[c ^ c >> 1] = _reader->GetUShort();
 		if (tag == 0x1017 || tag == 0x20400100)
-			cam_mul[0] = _reader->get2() / 256.0;
+			_camMul[0] = _reader->GetUShort() / 256.0;
 		if (tag == 0x1018 || tag == 0x20400100)
-			cam_mul[2] = _reader->get2() / 256.0;
+			_camMul[2] = _reader->GetUShort() / 256.0;
 		if (tag == 0x2011 && len == 2)
 		{
 		get2_256:
 			_reader->SetOrder(0x4d4d);
-			cam_mul[0] = _reader->get2() / 256.0;
-			cam_mul[2] = _reader->get2() / 256.0;
+			_camMul[0] = _reader->GetUShort() / 256.0;
+			_camMul[2] = _reader->GetUShort() / 256.0;
 		}
 		if ((tag | 0x70) == 0x2070 && (type == 4 || type == 13))
-			_reader->Seek(_reader->get4() + base, SEEK_SET);
+			_reader->Seek(_reader->GetUInt() + base, SEEK_SET);
 		if (tag == 0x2020 && !strncmp(buf, "OLYMP", 5))
-			parse_thumb_note(base, 257, 258);
+			ParseThumbNote(base, 257, 258);
 		if (tag == 0x2040)
-			parse_makernote(base, 0x2040);
+			ParseMakernote(base, 0x2040);
 		if (tag == 0xb028)
 		{
-			_reader->Seek(_reader->get4() + base, SEEK_SET);
-			parse_thumb_note(base, 136, 137);
+			_reader->Seek(_reader->GetUInt() + base, SEEK_SET);
+			ParseThumbNote(base, 136, 137);
 		}
 		if (tag == 0x4001 && len > 500)
 		{
 			i = len == 582 ? 50 : len == 653 ? 68 : len == 5120 ? 142 : 126;
 			_reader->Seek(i, SEEK_CUR);
 			for (size_t c = 0; c < 4; c++)
-				cam_mul[c ^ (c >> 1)] = _reader->get2();
+				_camMul[c ^ (c >> 1)] = _reader->GetUShort();
 			for (i += 18; i <= len; i += 10)
 			{
-				_reader->get2();
+				_reader->GetUShort();
 				for (size_t c = 0; c < 4; c++)
-					sraw_mul[c ^ (c >> 1)] = _reader->get2();
-				if (sraw_mul[1] == 1170) break;
+					_srawMul[c ^ (c >> 1)] = _reader->GetUShort();
+				if (_srawMul[1] == 1170) break;
 			}
 		}
-		if (tag == 0x4021 && _reader->get4() && _reader->get4())
+		if (tag == 0x4021 && _reader->GetUInt() && _reader->GetUInt())
 			for (size_t c = 0; c < 4; c++)
-				cam_mul[c] = 1024;
+				_camMul[c] = 1024;
 		if (tag == 0xa021)
 			for (size_t c = 0; c < 4; c++)
-				cam_mul[c ^ (c >> 1)] = _reader->get4();
+				_camMul[c ^ (c >> 1)] = _reader->GetUInt();
 		if (tag == 0xa028)
 			for (size_t c = 0; c < 4; c++)
-				cam_mul[c ^ (c >> 1)] -= _reader->get4();
+				_camMul[c ^ (c >> 1)] -= _reader->GetUInt();
 		if (tag == 0xb001)
-			unique_id = _reader->get2();
+			_uniqueId = _reader->GetUShort();
 	next:
 		_reader->Seek(save, SEEK_SET);
 	}
@@ -2743,21 +2745,21 @@ quit:
 	_reader->SetOrder(sorder);
 }
 
-void CSimpleInfo::parse_thumb_note(int base, unsigned toff, unsigned tlen)
+void CSimpleInfo::ParseThumbNote(int base, unsigned toff, unsigned tlen)
 {
 	unsigned tag, type, len, save;
 
-	unsigned entries = _reader->get2();
+	unsigned entries = _reader->GetUShort();
 	while (entries--)
 	{
-		tiff_get(base, &tag, &type, &len, &save);
-		if (tag == toff) thumb_offset = _reader->get4() + base;
-		if (tag == tlen) thumb_length = _reader->get4();
+		TiffGet(base, &tag, &type, &len, &save);
+		if (tag == toff) _thumbOffset = _reader->GetUInt() + base;
+		if (tag == tlen) _thumbLength = _reader->GetUInt();
 		_reader->Seek(save, SEEK_SET);
 	}
 }
 
-void CSimpleInfo::get_timestamp(int reversed)
+void CSimpleInfo::GetTimestamp(int reversed)
 {
 	char str[20];
 	str[19] = 0;
@@ -2776,227 +2778,227 @@ void CSimpleInfo::get_timestamp(int reversed)
 	t.tm_mon -= 1;
 	t.tm_isdst = -1;
 	if (mktime(&t) > 0)
-		timestamp = mktime(&t);
+		_timestamp = mktime(&t);
 }
 
-void CSimpleInfo::tiff_get(unsigned base, unsigned *tag, unsigned *type, unsigned *len, unsigned *save)
+void CSimpleInfo::TiffGet(unsigned base, unsigned *tag, unsigned *type, unsigned *len, unsigned *save)
 {
-	*tag = _reader->get2();
-	*type = _reader->get2();
-	*len = _reader->get4();
+	*tag = _reader->GetUShort();
+	*type = _reader->GetUShort();
+	*len = _reader->GetUInt();
 	*save = _reader->GetPosition() + 4;
 	if (*len * ("11124811248484"[*type < 14 ? *type : 0] - '0') > 4)
-		_reader->Seek(_reader->get4() + base, SEEK_SET);
+		_reader->Seek(_reader->GetUInt() + base, SEEK_SET);
 }
 
-void CSimpleInfo::apply_tiff()
+void CSimpleInfo::ApplyTiff()
 {
 	int max_samp = 0, ties = 0, raw = -1, thm = -1;
 
-	thumb_misc = 16;
-	if (thumb_offset)
+	_thumbMisc = 16;
+	if (_thumbOffset)
 	{
-		_reader->Seek(thumb_offset, SEEK_SET);
-		jhead jh(*_reader, *this, true);
+		_reader->Seek(_thumbOffset, SEEK_SET);
+		JHead jh(*_reader, *this, true);
 		if (jh._success)
 		{
-			thumb_misc = jh.jdata.bits;
-			thumb_width = jh.jdata.wide;
-			thumb_height = jh.jdata.high;
+			_thumbMisc = jh._jdata.bits;
+			_thumbWidth = jh._jdata.wide;
+			_thumbHeight = jh._jdata.high;
 		}
 	}
-	for (size_t i = tiff_nifds; i--; )
+	for (size_t i = _tiffNifds; i--; )
 	{
-		if (tiff_ifd[i].shutter)
-			shutter = tiff_ifd[i].shutter;
-		tiff_ifd[i].shutter = shutter;
+		if (_tiffIfd[i].shutter)
+			_shutter = _tiffIfd[i].shutter;
+		_tiffIfd[i].shutter = _shutter;
 	}
-	for (size_t i = 0; i < tiff_nifds; i++)
+	for (size_t i = 0; i < _tiffNifds; i++)
 	{
-		if (max_samp < tiff_ifd[i].samples)
-			max_samp = tiff_ifd[i].samples;
+		if (max_samp < _tiffIfd[i].samples)
+			max_samp = _tiffIfd[i].samples;
 		if (max_samp > 3) max_samp = 3;
-		int os = raw_width*raw_height;
-		int ns = tiff_ifd[i].width*tiff_ifd[i].height;
-		if (tiff_bps)
+		int os = _rawWidth*_rawHeight;
+		int ns = _tiffIfd[i].width*_tiffIfd[i].height;
+		if (_tiffBps)
 		{
-			os *= tiff_bps;
-			ns *= tiff_ifd[i].bps;
+			os *= _tiffBps;
+			ns *= _tiffIfd[i].bps;
 		}
-		if ((tiff_ifd[i].comp != 6 || tiff_ifd[i].samples != 3) &&
-			(tiff_ifd[i].width | tiff_ifd[i].height) < 0x10000 &&
+		if ((_tiffIfd[i].comp != 6 || _tiffIfd[i].samples != 3) &&
+			(_tiffIfd[i].width | _tiffIfd[i].height) < 0x10000 &&
 			ns && ((ns > os && (ties = 1)) ||
-			(ns == os && shot_select == ties++)))
+			(ns == os && _shotSelect == ties++)))
 		{
-			raw_width = tiff_ifd[i].width;
-			raw_height = tiff_ifd[i].height;
-			tiff_bps = tiff_ifd[i].bps;
-			tiff_compress = tiff_ifd[i].comp;
-			data_offset = tiff_ifd[i].offset;
-			tiff_flip = tiff_ifd[i].flip;
-			tiff_samples = tiff_ifd[i].samples;
-			tile_width = tiff_ifd[i].tile_width;
-			tile_length = tiff_ifd[i].tile_length;
-			shutter = tiff_ifd[i].shutter;
+			_rawWidth = _tiffIfd[i].width;
+			_rawHeight = _tiffIfd[i].height;
+			_tiffBps = _tiffIfd[i].bps;
+			_tiffCompress = _tiffIfd[i].comp;
+			_dataOffset = _tiffIfd[i].offset;
+			_tiffFlip = _tiffIfd[i].flip;
+			_tiffSamples = _tiffIfd[i].samples;
+			_tileWidth = _tiffIfd[i].tile_width;
+			_tileLength = _tiffIfd[i].tile_length;
+			_shutter = _tiffIfd[i].shutter;
 			raw = i;
 		}
 	}
-	if (is_raw == 1 && ties)
-		is_raw = ties;
-	if (!tile_width)
-		tile_width = INT_MAX;
-	if (!tile_length)
-		tile_length = INT_MAX;
-	for (size_t i = tiff_nifds; i--; )
-		if (tiff_ifd[i].flip)
-			tiff_flip = tiff_ifd[i].flip;
-	if (raw >= 0 && !load_raw)
+	if (_isRaw == 1 && ties)
+		_isRaw = ties;
+	if (!_tileWidth)
+		_tileWidth = INT_MAX;
+	if (!_tileLength)
+		_tileLength = INT_MAX;
+	for (size_t i = _tiffNifds; i--; )
+		if (_tiffIfd[i].flip)
+			_tiffFlip = _tiffIfd[i].flip;
+	if (raw >= 0 && !_loadRaw)
 	{
-		switch (tiff_compress)
+		switch (_tiffCompress)
 		{
 		case 32767:
-			if (tiff_ifd[raw].bytes == raw_width*raw_height)
+			if (_tiffIfd[raw].bytes == _rawWidth*_rawHeight)
 			{
-				tiff_bps = 12;
-				load_raw = LoadRawType::sony_arw2_load_raw;
+				_tiffBps = 12;
+				_loadRaw = LoadRawType::SonyArw2LoadRaw;
 				break;
 			}
-			if (tiff_ifd[raw].bytes * 8 != raw_width*raw_height*tiff_bps)
+			if (_tiffIfd[raw].bytes * 8 != _rawWidth*_rawHeight*_tiffBps)
 			{
-				raw_height += 8;
-				load_raw = LoadRawType::sony_arw_load_raw;
+				_rawHeight += 8;
+				_loadRaw = LoadRawType::SonyArwLoadRaw;
 				break;
 			}
-			load_flags = 79;
+			_loadFlags = 79;
 		case 32769:
-			load_flags++;
+			_loadFlags++;
 		case 32770:
 		case 32773:
 			goto slr;
 		case 0:  case 1:
-			if (!strncmp(make, "OLYMPUS", 7) &&
-				tiff_ifd[raw].bytes * 2 == raw_width*raw_height * 3)
-				load_flags = 24;
-			if (tiff_ifd[raw].bytes * 5 == raw_width*raw_height * 8)
+			if (!strncmp(_make, "OLYMPUS", 7) &&
+				_tiffIfd[raw].bytes * 2 == _rawWidth*_rawHeight * 3)
+				_loadFlags = 24;
+			if (_tiffIfd[raw].bytes * 5 == _rawWidth*_rawHeight * 8)
 			{
-				load_flags = 81;
-				tiff_bps = 12;
+				_loadFlags = 81;
+				_tiffBps = 12;
 			} slr:
-			switch (tiff_bps)
+			switch (_tiffBps)
 			{
 			case  8:
-				load_raw = LoadRawType::eight_bit_load_raw;
+				_loadRaw = LoadRawType::EightBitLoadRaw;
 				break;
 			case 12:
-				if (tiff_ifd[raw].phint == 2)
-					load_flags = 6;
-				load_raw = LoadRawType::packed_load_raw;
+				if (_tiffIfd[raw].phint == 2)
+					_loadFlags = 6;
+				_loadRaw = LoadRawType::PackedLoadRaw;
 				break;
 			case 14:
-				load_flags = 0;
+				_loadFlags = 0;
 			case 16:
-				load_raw = LoadRawType::unpacked_load_raw;
-				if (!strncmp(make, "OLYMPUS", 7) && tiff_ifd[raw].bytes * 7 > raw_width*raw_height)
-					load_raw = LoadRawType::olympus_load_raw;
+				_loadRaw = LoadRawType::UnpackedLoadRaw;
+				if (!strncmp(_make, "OLYMPUS", 7) && _tiffIfd[raw].bytes * 7 > _rawWidth*_rawHeight)
+					_loadRaw = LoadRawType::OlympusLoadRaw;
 			}
 			break;
 		case 6:  case 7:  case 99:
-			load_raw = LoadRawType::lossless_jpeg_load_raw;
+			_loadRaw = LoadRawType::LosslessJpegLoadRaw;
 			break;
 		case 262:
-			load_raw = LoadRawType::kodak_262_load_raw;
+			_loadRaw = LoadRawType::Kodak262LoadRaw;
 			break;
 		case 34713:
-			if ((raw_width + 9) / 10 * 16 * raw_height == tiff_ifd[raw].bytes)
+			if ((_rawWidth + 9) / 10 * 16 * _rawHeight == _tiffIfd[raw].bytes)
 			{
-				load_raw = LoadRawType::packed_load_raw;
-				load_flags = 1;
+				_loadRaw = LoadRawType::PackedLoadRaw;
+				_loadFlags = 1;
 			}
-			else if (raw_width*raw_height * 3 == tiff_ifd[raw].bytes * 2)
+			else if (_rawWidth*_rawHeight * 3 == _tiffIfd[raw].bytes * 2)
 			{
-				load_raw = LoadRawType::packed_load_raw;
-				if (model[0] == 'N') load_flags = 80;
+				_loadRaw = LoadRawType::PackedLoadRaw;
+				if (_model[0] == 'N') _loadFlags = 80;
 			}
-			else if (raw_width*raw_height * 3 == tiff_ifd[raw].bytes)
+			else if (_rawWidth*_rawHeight * 3 == _tiffIfd[raw].bytes)
 			{
-				load_raw = LoadRawType::nikon_yuv_load_raw;
-				gamma_curve(1 / 2.4, 12.92, 1, 4095);
-				memset(cblack, 0, sizeof cblack);
-				filters = 0;
+				_loadRaw = LoadRawType::NikonYuvLoadRaw;
+				GammaCurve(1 / 2.4, 12.92, 1, 4095);
+				memset(_cBlack, 0, sizeof _cBlack);
+				_filters = 0;
 			}
-			else if (raw_width*raw_height * 2 == tiff_ifd[raw].bytes)
+			else if (_rawWidth*_rawHeight * 2 == _tiffIfd[raw].bytes)
 			{
-				load_raw = LoadRawType::unpacked_load_raw;
-				load_flags = 4;
+				_loadRaw = LoadRawType::UnpackedLoadRaw;
+				_loadFlags = 4;
 				_reader->SetOrder(0x4d4d);
 			}
 			else
-				load_raw = LoadRawType::nikon_load_raw;
+				_loadRaw = LoadRawType::NikonLoadRaw;
 			break;
 		case 65535:
-			load_raw = LoadRawType::pentax_load_raw;
+			_loadRaw = LoadRawType::PentaxLoadRaw;
 			break;
 		case 65000:
-			switch (tiff_ifd[raw].phint)
+			switch (_tiffIfd[raw].phint)
 			{
 			case 2:
-				load_raw = LoadRawType::kodak_rgb_load_raw;   filters = 0;
+				_loadRaw = LoadRawType::KodakRgbLoadRaw;   _filters = 0;
 				break;
 			case 6:
-				load_raw = LoadRawType::kodak_ycbcr_load_raw; filters = 0;
+				_loadRaw = LoadRawType::KodakYcbcrLoadRaw; _filters = 0;
 				break;
 			case 32803:
-				load_raw = LoadRawType::kodak_65000_load_raw;
+				_loadRaw = LoadRawType::Kodak65000LoadRaw;
 			}
 		case 32867: case 34892:
 			break;
-		default: is_raw = 0;
+		default: _isRaw = 0;
 		}
 	}
-	if (!dng_version)
+	if (!_dngVersion)
 	{
-		if ((tiff_samples == 3 && tiff_ifd[raw].bytes && tiff_bps != 14 &&
-			(tiff_compress & -16) != 32768)
-			|| (tiff_bps == 8 && strncmp(make, "Phase", 5) &&
-				!strcasestr(make, "Kodak") && !strstr(model2, "DEBUG RAW")))
+		if ((_tiffSamples == 3 && _tiffIfd[raw].bytes && _tiffBps != 14 &&
+			(_tiffCompress & -16) != 32768)
+			|| (_tiffBps == 8 && strncmp(_make, "Phase", 5) &&
+				!strcasestr(_make, "Kodak") && !strstr(_model2, "DEBUG RAW")))
 		{
-			is_raw = 0;
+			_isRaw = 0;
 		}
 	}
-	for (size_t i = 0; i < tiff_nifds; i++)
+	for (size_t i = 0; i < _tiffNifds; i++)
 	{
-		if (i != raw && tiff_ifd[i].samples == max_samp &&
-			tiff_ifd[i].width * tiff_ifd[i].height / (SQR(tiff_ifd[i].bps) + 1) >
-			thumb_width *       thumb_height / (SQR(thumb_misc) + 1)
-			&& tiff_ifd[i].comp != 34892)
+		if (i != raw && _tiffIfd[i].samples == max_samp &&
+			_tiffIfd[i].width * _tiffIfd[i].height / (SQR(_tiffIfd[i].bps) + 1) >
+			_thumbWidth *       _thumbHeight / (SQR(_thumbMisc) + 1)
+			&& _tiffIfd[i].comp != 34892)
 		{
-			thumb_width = tiff_ifd[i].width;
-			thumb_height = tiff_ifd[i].height;
-			thumb_offset = tiff_ifd[i].offset;
-			thumb_length = tiff_ifd[i].bytes;
-			thumb_misc = tiff_ifd[i].bps;
+			_thumbWidth = _tiffIfd[i].width;
+			_thumbHeight = _tiffIfd[i].height;
+			_thumbOffset = _tiffIfd[i].offset;
+			_thumbLength = _tiffIfd[i].bytes;
+			_thumbMisc = _tiffIfd[i].bps;
 			thm = i;
 		}
 	}
 	if (thm >= 0)
 	{
-		thumb_misc |= tiff_ifd[thm].samples << 5;
-		switch (tiff_ifd[thm].comp)
+		_thumbMisc |= _tiffIfd[thm].samples << 5;
+		switch (_tiffIfd[thm].comp)
 		{
 		case 0:
-			write_thumb = WriteThumbType::layer_thumb;
+			_writeThumb = WriteThumbType::LayerThumb;
 			break;
 		case 1:
-			if (tiff_ifd[thm].bps <= 8)
-				write_thumb = WriteThumbType::ppm_thumb;
-			else if (!strcmp(make, "Imacon"))
-				write_thumb = WriteThumbType::ppm16_thumb;
+			if (_tiffIfd[thm].bps <= 8)
+				_writeThumb = WriteThumbType::PpmThumb;
+			else if (!strcmp(_make, "Imacon"))
+				_writeThumb = WriteThumbType::Ppm16Thumb;
 			else
-				thumb_load_raw = LoadRawType::kodak_thumb_load_raw;
+				_thumbLoadRaw = LoadRawType::LodakThumbLoadRaw;
 			break;
 		case 65000:
-			thumb_load_raw = tiff_ifd[thm].phint == 6 ?
-				LoadRawType::kodak_ycbcr_load_raw : LoadRawType::kodak_rgb_load_raw;
+			_thumbLoadRaw = _tiffIfd[thm].phint == 6 ?
+				LoadRawType::KodakYcbcrLoadRaw : LoadRawType::KodakRgbLoadRaw;
 		}
 	}
 }
@@ -3006,7 +3008,7 @@ Many cameras have a "debug mode" that writes JPEG and raw
 at the same time.  The raw file has no header, so try to
 to open the matching JPEG file and read its metadata.
 */
-void CSimpleInfo::parse_external_jpeg()
+void CSimpleInfo::ParseExternalJpeg()
 {
 	const char* ext = strrchr(_reader->GetFileName(), '.');
 	const char* file = strrchr(_reader->GetFileName(), '/');
@@ -3057,21 +3059,21 @@ void CSimpleInfo::parse_external_jpeg()
 			throw;
 		}
 
-		parse_tiff(12);
-		thumb_offset = 0;
-		is_raw = 1;
+		ParseTiff(12);
+		_thumbOffset = 0;
+		_isRaw = 1;
 		delete _reader;
 
 		_reader = save;
 	}
-	if (!timestamp)
+	if (!_timestamp)
 		fprintf(stderr, ("Failed to read metadata from %s\n"), jname);
 }
 
 /*
 All matrices are from Adobe DNG Converter unless otherwise noted.
 */
-void CSimpleInfo::adobe_coeff(const char *make, const char *model)
+void CSimpleInfo::AdobeCoeff(const char *make, const char *model)
 {
 	static const struct
 	{
@@ -3582,7 +3584,7 @@ void CSimpleInfo::adobe_coeff(const char *make, const char *model)
 		{ -3746,10611,1665,9621,-1734,2114,-2389,7082,3064,3406,6116,-244 } },
 		{ "Nikon E995", 0, 0,	/* copied from E5000 */
 		{ -5547,11762,2189,5814,-558,3342,-4924,9840,5949,688,9083,96 } },
-		{ "Nikon E2100", 0, 0,	/* copied from Z2, new white balance */
+		{ "Nikon E2100", 0, 0,	/* copied from Z2, new _white balance */
 		{ 13142,-4152,-1596,-4655,12374,2282,-1769,2696,6711 } },
 		{ "Nikon E2500", 0, 0,
 		{ -5547,11762,2189,5814,-558,3342,-4924,9840,5949,688,9083,96 } },
@@ -4123,53 +4125,53 @@ void CSimpleInfo::adobe_coeff(const char *make, const char *model)
 	{
 		if (!strncmp(name, table[i].prefix, strlen(table[i].prefix)))
 		{
-			if (table[i].black)   black = (unsigned short)table[i].black;
-			if (table[i].maximum) maximum = (unsigned short)table[i].maximum;
+			if (table[i].black)   _black = (unsigned short)table[i].black;
+			if (table[i].maximum) _maximum = (unsigned short)table[i].maximum;
 			if (table[i].trans[0])
 			{
-				raw_color = 0;
+				_rawColor = 0;
 				for (size_t j = 0; j < 12; j++)
 					((double *)cam_xyz)[j] = table[i].trans[j] / 10000.0;
-				cam_xyz_coeff(rgb_cam, cam_xyz);
+				CamXyzCoeff(_rgbCam, cam_xyz);
 			}
 			break;
 		}
 	}
 }
 
-void CSimpleInfo::cam_xyz_coeff(float rgb_cam[3][4], double cam_xyz[4][3])
+void CSimpleInfo::CamXyzCoeff(float _rgbCam[3][4], double cam_xyz[4][3])
 {
 	double cam_rgb[4][3];
 
-	for (size_t i = 0; i < colors; i++)		/* Multiply out XYZ colorspace */
+	for (size_t i = 0; i < _colors; i++)		/* Multiply out XYZ colorspace */
 	{
 		for (size_t j = 0; j < 3; j++)
 		{
 			cam_rgb[i][j] = 0;
 			for (size_t k = 0; k < 3; k++)
 			{
-				cam_rgb[i][j] += cam_xyz[i][k] * xyz_rgb[k][j];
+				cam_rgb[i][j] += cam_xyz[i][k] * xyzRGB[k][j];
 			}
 		}
 	}
 
-	for (size_t i = 0; i < colors; i++)
+	for (size_t i = 0; i < _colors; i++)
 	{		/* Normalize cam_rgb so that */
 		double num = 0;
 		for (size_t j = 0; j < 3; j++)		/* cam_rgb * (1,1,1) is (1,1,1,1) */
 			num += cam_rgb[i][j];
 		for (size_t j = 0; j < 3; j++)
 			cam_rgb[i][j] /= num;
-		pre_mul[i] = 1 / num;
+		_preMul[i] = 1 / num;
 	}
 	double inverse[4][3];
-	pseudoinverse(cam_rgb, inverse, colors);
+	PseudoInverse(cam_rgb, inverse, _colors);
 	for (size_t i = 0; i < 3; i++)
-		for (size_t j = 0; j < colors; j++)
-			rgb_cam[i][j] = inverse[j][i];
+		for (size_t j = 0; j < _colors; j++)
+			_rgbCam[i][j] = inverse[j][i];
 }
 
-void CSimpleInfo::pseudoinverse(double(*in)[3], double(*out)[3], int size)
+void CSimpleInfo::PseudoInverse(double(*in)[3], double(*out)[3], int size)
 {
 	double work[3][6];
 
@@ -4207,7 +4209,7 @@ void CSimpleInfo::pseudoinverse(double(*in)[3], double(*out)[3], int size)
 	}
 }
 
-float CSimpleInfo::find_green(int bps, int bite, int off0, int off1)
+float CSimpleInfo::FindGreen(int bps, int bite, int off0, int off1)
 {
 	UINT64 bitbuf = 0;
 	unsigned short img[2][2064];
@@ -4216,7 +4218,7 @@ float CSimpleInfo::find_green(int bps, int bite, int off0, int off1)
 	{
 		_reader->Seek(c ? off1 : off0, SEEK_SET);
 		int vbits = 0;
-		for (int col = 0; col < width; col++)
+		for (int col = 0; col < _width; col++)
 		{
 			for (vbits -= bps; vbits < 0; vbits += bite)
 			{
@@ -4228,7 +4230,7 @@ float CSimpleInfo::find_green(int bps, int bite, int off0, int off1)
 		}
 	}
 	double sum[] = { 0, 0 };
-	for (size_t c = 0; c < (width - 1); c++)
+	for (size_t c = 0; c < (_width - 1); c++)
 	{
 		sum[c & 1] += ABS(img[0][c] - img[1][c + 1]);
 		sum[~c & 1] += ABS(img[1][c] - img[0][c + 1]);
@@ -4236,7 +4238,7 @@ float CSimpleInfo::find_green(int bps, int bite, int off0, int off1)
 	return 100 * log(sum[0] / sum[1]);
 }
 
-void CSimpleInfo::simple_coeff(int index)
+void CSimpleInfo::SimpleCoeff(int index)
 {
 	static const float table[][12] = {
 		/* index 0 -- all Foveon cameras */
@@ -4251,13 +4253,13 @@ void CSimpleInfo::simple_coeff(int index)
 		-1.204965,  1.082304,  2.941367, -1.818705 }
 	};
 
-	raw_color = 0;
+	_rawColor = 0;
 	for (size_t i = 0; i < 3; i++)
-		for (size_t c = 0; c < colors; c++)
-			rgb_cam[i][c] = table[index][i*colors + c];
+		for (size_t c = 0; c < _colors; c++)
+			_rgbCam[i][c] = table[index][i*_colors + c];
 }
 
-void CSimpleInfo::gamma_curve(double pwr, double ts, int mode, int imax)
+void CSimpleInfo::GammaCurve(double pwr, double ts, int mode, int imax)
 {
 	double g[6], bnd[2] = { 0,0 };
 
@@ -4282,21 +4284,21 @@ void CSimpleInfo::gamma_curve(double pwr, double ts, int mode, int imax)
 		- g[2] - g[3] - g[2] * g[3] * (log(g[3]) - 1)) - 1;
 	if (!mode--)
 	{
-		memcpy(gamm, g, sizeof gamm);
+		memcpy(_gamma, g, sizeof _gamma);
 		return;
 	}
 	for (size_t i = 0; i < 0x10000; i++)
 	{
-		curve[i] = 0xffff;
+		_curve[i] = 0xffff;
 		double r;
 		if ((r = (double)i / imax) < 1)
-			curve[i] = 0x10000 * (mode
+			_curve[i] = 0x10000 * (mode
 				? (r < g[3] ? r*g[1] : (g[0] ? pow(r, g[0])*(1 + g[4]) - g[4] : log(r)*g[2] + 1))
 				: (r < g[2] ? r / g[1] : (g[0] ? pow((r + g[4]) / (1 + g[4]), 1 / g[0]) : exp((r - 1) / g[2]))));
 	}
 }
 
-short CSimpleInfo::guess_byte_order(int words)
+short CSimpleInfo::GuessByteOrder(int words)
 {
 	unsigned char test[4][2];
 	int t = 2;
@@ -4316,7 +4318,7 @@ short CSimpleInfo::guess_byte_order(int words)
 	return sum[0] < sum[1] ? 0x4d4d : 0x4949;
 }
 
-int CSimpleInfo::canon_s2is()
+int CSimpleInfo::CanonS2is()
 {
 	for (size_t row = 0; row < 100; row++)
 	{
@@ -4330,7 +4332,7 @@ int CSimpleInfo::canon_s2is()
 /*
 Returns 1 for a Coolpix 995, 0 for anything else.
 */
-int CSimpleInfo::nikon_e995()
+int CSimpleInfo::NikonE995()
 {
 	const unsigned char often[] = { 0x00, 0x55, 0xaa, 0xff };
 
@@ -4348,7 +4350,7 @@ int CSimpleInfo::nikon_e995()
 /*
 Returns 1 for a Coolpix 2100, 0 for anything else.
 */
-int CSimpleInfo::nikon_e2100()
+int CSimpleInfo::NikonE2100()
 {
 	unsigned char t[12];
 
@@ -4363,7 +4365,7 @@ int CSimpleInfo::nikon_e2100()
 	return 1;
 }
 
-void CSimpleInfo::nikon_3700()
+void CSimpleInfo::Nikon3700()
 {
 	static const struct
 	{
@@ -4383,15 +4385,15 @@ void CSimpleInfo::nikon_3700()
 	for (size_t i = 0; i < sizeof table / sizeof *table; i++)
 		if (bits == table[i].bits)
 		{
-			strcpy_s(make, LenMake, table[i].make);
-			strcpy_s(model, LenModel, table[i].model);
+			strcpy_s(_make, LenMake, table[i].make);
+			strcpy_s(_model, LenModel, table[i].model);
 		}
 }
 
 /*
 Separates a Minolta DiMAGE Z2 from a Nikon E4300.
 */
-int CSimpleInfo::minolta_z2()
+int CSimpleInfo::MinoltaZ2()
 {
 	char tail[424];
 
@@ -4403,120 +4405,120 @@ int CSimpleInfo::minolta_z2()
 	return nz > 20;
 }
 
-void CSimpleInfo::parse_phase_one(int base)
+void CSimpleInfo::ParsePhaseOne(int base)
 {
 	float romm_cam[3][3];
 	char *cp;
 
-	memset(&ph1, 0, sizeof ph1);
+	memset(&_ph1, 0, sizeof _ph1);
 	_reader->Seek(base, SEEK_SET);
-	_reader->SetOrder(_reader->get4() & 0xffff);
-	if (_reader->get4() >> 8 != 0x526177)
+	_reader->SetOrder(_reader->GetUInt() & 0xffff);
+	if (_reader->GetUInt() >> 8 != 0x526177)
 		return;		/* "Raw" */
-	_reader->Seek(_reader->get4() + base, SEEK_SET);
-	unsigned entries = _reader->get4();
-	_reader->get4();
+	_reader->Seek(_reader->GetUInt() + base, SEEK_SET);
+	unsigned entries = _reader->GetUInt();
+	_reader->GetUInt();
 	while (entries--)
 	{
-		unsigned tag = _reader->get4();
-		unsigned type = _reader->get4();
-		unsigned len = _reader->get4();
-		unsigned data = _reader->get4();
+		unsigned tag = _reader->GetUInt();
+		unsigned type = _reader->GetUInt();
+		unsigned len = _reader->GetUInt();
+		unsigned data = _reader->GetUInt();
 		unsigned save = _reader->GetPosition();
 		_reader->Seek(base + data, SEEK_SET);
 		switch (tag)
 		{
 		case 0x100:
-			flip = "0653"[data & 3] - '0';
+			_flip = "0653"[data & 3] - '0';
 			break;
 		case 0x106:
 			for (size_t i = 0; i < 9; i++)
-				((float *)romm_cam)[i] = _reader->getreal(11);
-			romm_coeff(romm_cam);
+				((float *)romm_cam)[i] = _reader->GetReal(11);
+			RommCoeff(romm_cam);
 			break;
 		case 0x107:
 			for (size_t c = 0; c < 3; c++)
-				cam_mul[c] = _reader->getreal(11);
+				_camMul[c] = _reader->GetReal(11);
 			break;
 		case 0x108:
-			raw_width = data;
+			_rawWidth = data;
 			break;
 		case 0x109:
-			raw_height = data;
+			_rawHeight = data;
 			break;
 		case 0x10a:
-			left_margin = data;
+			_leftMargin = data;
 			break;
 		case 0x10b:
-			top_margin = data;
+			_topMargin = data;
 			break;
 		case 0x10c:
-			width = data;
+			_width = data;
 			break;
 		case 0x10d:
-			height = data;
+			_height = data;
 			break;
 		case 0x10e:
-			ph1.format = data;
+			_ph1.format = data;
 			break;
 		case 0x10f:
-			data_offset = data + base;
+			_dataOffset = data + base;
 			break;
 		case 0x110:
-			meta_offset = data + base;
-			meta_length = len;
+			_metaOffset = data + base;
+			_metaLength = len;
 			break;
 		case 0x112:
-			ph1.key_off = save - 4;
+			_ph1.key_off = save - 4;
 			break;
 		case 0x210:
-			ph1.tag_210 = _reader->int_to_float(data);
+			_ph1.tag_210 = _reader->IntToFloat(data);
 			break;
 		case 0x21a:
-			ph1.tag_21a = data;
+			_ph1.tag_21a = data;
 			break;
 		case 0x21c:
-			strip_offset = data + base;
+			_stripOffset = data + base;
 			break;
 		case 0x21d:
-			ph1.black = data;
+			_ph1.black = data;
 			break;
 		case 0x222:
-			ph1.split_col = data;
+			_ph1.split_col = data;
 			break;
 		case 0x223:
-			ph1.black_col = data + base;
+			_ph1.black_col = data + base;
 			break;
 		case 0x224:
-			ph1.split_row = data;
+			_ph1.split_row = data;
 			break;
 		case 0x225:
-			ph1.black_row = data + base;
+			_ph1.black_row = data + base;
 			break;
 		case 0x301:
-			model[63] = 0;
-			_reader->Read(model, 1, 63);
-			if ((cp = strstr(model, " camera"))) *cp = 0;
+			_model[63] = 0;
+			_reader->Read(_model, 1, 63);
+			if ((cp = strstr(_model, " camera"))) *cp = 0;
 		}
 		_reader->Seek(save, SEEK_SET);
 	}
-	load_raw = ph1.format < 3 ? LoadRawType::phase_one_load_raw : LoadRawType::phase_one_load_raw_c;
-	maximum = 0xffff;
-	strcpy_s(make, LenMake, "Phase One");
-	if (model[0]) return;
-	switch (raw_height)
+	_loadRaw = _ph1.format < 3 ? LoadRawType::PhaseOneLoadRaw : LoadRawType::PhaseOneLoadRawC;
+	_maximum = 0xffff;
+	strcpy_s(_make, LenMake, "Phase One");
+	if (_model[0]) return;
+	switch (_rawHeight)
 	{
 	case 2060:
-		strcpy_s(model, LenModel, "LightPhase");
+		strcpy_s(_model, LenModel, "LightPhase");
 		break;
 	case 2682:
-		strcpy_s(model, LenModel, "H 10");
+		strcpy_s(_model, LenModel, "H 10");
 		break;
 	case 4128:
-		strcpy_s(model, LenModel, "H 20");
+		strcpy_s(_model, LenModel, "H 20");
 		break;
 	case 5488:
-		strcpy_s(model, LenModel, "H 25");
+		strcpy_s(_model, LenModel, "H 25");
 		break;
 	}
 }
@@ -4524,76 +4526,76 @@ void CSimpleInfo::parse_phase_one(int base)
 /*
 Parse a CIFF file, better known as Canon CRW format.
 */
-void CSimpleInfo::parse_ciff(int offset, int length, int depth)
+void CSimpleInfo::ParseCiff(int offset, int length, int depth)
 {
 	int wbi = -1;
 	unsigned short key[] = { 0x410, 0x45f3 };
 
 	_reader->Seek(offset + length - 4, SEEK_SET);
-	int tboff = _reader->get4() + offset;
+	int tboff = _reader->GetUInt() + offset;
 	_reader->Seek(tboff, SEEK_SET);
-	int nrecs = _reader->get2();
+	int nrecs = _reader->GetUShort();
 	if ((nrecs | depth) > 127) return;
 	while (nrecs--)
 	{
-		int type = _reader->get2();
-		int len = _reader->get4();
+		int type = _reader->GetUShort();
+		int len = _reader->GetUInt();
 		int save = _reader->GetPosition() + 4;
-		_reader->Seek(offset + _reader->get4(), SEEK_SET);
+		_reader->Seek(offset + _reader->GetUInt(), SEEK_SET);
 		if ((((type >> 8) + 8) | 8) == 0x38)
-			parse_ciff(_reader->GetPosition(), len, depth + 1); /* Parse a sub-table */
+			ParseCiff(_reader->GetPosition(), len, depth + 1); /* Parse a sub-table */
 		if (type == 0x0810)
-			_reader->Read(artist, 64, 1);
+			_reader->Read(_artist, 64, 1);
 		if (type == 0x080a)
 		{
-			_reader->Read(make, 64, 1);
-			_reader->Seek(strlen(make) - 63, SEEK_CUR);
-			_reader->Read(model, 64, 1);
+			_reader->Read(_make, 64, 1);
+			_reader->Seek(strlen(_make) - 63, SEEK_CUR);
+			_reader->Read(_model, 64, 1);
 		}
 		if (type == 0x1810)
 		{
-			width = _reader->get4();
-			height = _reader->get4();
-			pixel_aspect = _reader->int_to_float(_reader->get4());
-			flip = _reader->get4();
+			_width = _reader->GetUInt();
+			_height = _reader->GetUInt();
+			_pixelAspect = _reader->IntToFloat(_reader->GetUInt());
+			_flip = _reader->GetUInt();
 		}
 		if (type == 0x1835)			/* Get the decoder table */
-			tiff_compress = _reader->get4();
+			_tiffCompress = _reader->GetUInt();
 		if (type == 0x2007)
 		{
-			thumb_offset = _reader->GetPosition();
-			thumb_length = len;
+			_thumbOffset = _reader->GetPosition();
+			_thumbLength = len;
 		}
 		if (type == 0x1818)
 		{
-			shutter = pow(2, -_reader->int_to_float((_reader->get4(), _reader->get4())));
-			aperture = pow(2, _reader->int_to_float(_reader->get4()) / 2);
+			_shutter = pow(2, -_reader->IntToFloat((_reader->GetUInt(), _reader->GetUInt())));
+			_aperture = pow(2, _reader->IntToFloat(_reader->GetUInt()) / 2);
 		}
 		if (type == 0x102a)
 		{
-			iso_speed = pow(2, (_reader->get4(), _reader->get2()) / 32.0 - 4) * 50;
-			aperture = pow(2, (_reader->get2(), (short)_reader->get2()) / 64.0);
-			shutter = pow(2, -((short)_reader->get2()) / 32.0);
-			wbi = (_reader->get2(), _reader->get2());
+			_isoSpeed = pow(2, (_reader->GetUInt(), _reader->GetUShort()) / 32.0 - 4) * 50;
+			_aperture = pow(2, (_reader->GetUShort(), (short)_reader->GetUShort()) / 64.0);
+			_shutter = pow(2, -((short)_reader->GetUShort()) / 32.0);
+			wbi = (_reader->GetUShort(), _reader->GetUShort());
 			if (wbi > 17)
 				wbi = 0;
 			_reader->Seek(32, SEEK_CUR);
-			if (shutter > 1e6)
-				shutter = _reader->get2() / 10.0;
+			if (_shutter > 1e6)
+				_shutter = _reader->GetUShort() / 10.0;
 		}
 		if (type == 0x102c)
 		{
-			if (_reader->get2() > 512)
+			if (_reader->GetUShort() > 512)
 			{		/* Pro90, G1 */
 				_reader->Seek(118, SEEK_CUR);
 				for (size_t c = 0; c < 4; c++)
-					cam_mul[c ^ 2] = _reader->get2();
+					_camMul[c ^ 2] = _reader->GetUShort();
 			}
 			else
 			{				/* G2, S30, S40 */
 				_reader->Seek(98, SEEK_CUR);
 				for (size_t c = 0; c < 4; c++)
-					cam_mul[c ^ (c >> 1) ^ 1] = _reader->get2();
+					_camMul[c ^ (c >> 1) ^ 1] = _reader->GetUShort();
 			}
 		}
 		if (type == 0x0032)
@@ -4602,15 +4604,15 @@ void CSimpleInfo::parse_ciff(int offset, int length, int depth)
 			{			/* EOS D30 */
 				_reader->Seek(72, SEEK_CUR);
 				for (size_t c = 0; c < 4; c++)
-					cam_mul[c ^ (c >> 1)] = 1024.0 / _reader->get2();
-				if (!wbi) cam_mul[0] = -1;	/* use my auto white balance */
+					_camMul[c ^ (c >> 1)] = 1024.0 / _reader->GetUShort();
+				if (!wbi) _camMul[0] = -1;	/* use my auto _white balance */
 			}
-			else if (!cam_mul[0])
+			else if (!_camMul[0])
 			{
 				int x;
-				if (_reader->get2() == key[0])		/* Pro1, G6, S60, S70 */
+				if (_reader->GetUShort() == key[0])		/* Pro1, G6, S60, S70 */
 				{
-					x = (strstr(model, "Pro1") ? "012346000000000000" : "01345:000000006008")[wbi] - '0' + 2;
+					x = (strstr(_model, "Pro1") ? "012346000000000000" : "01345:000000006008")[wbi] - '0' + 2;
 				}
 				else
 				{				/* G3, G5, S45, S50 */
@@ -4619,8 +4621,8 @@ void CSimpleInfo::parse_ciff(int offset, int length, int depth)
 				}
 				_reader->Seek(78 + x * 8, SEEK_CUR);
 				for (size_t c = 0; c < 4; c++)
-					cam_mul[c ^ (c >> 1) ^ 1] = _reader->get2() ^ key[c & 1];
-				if (!wbi) cam_mul[0] = -1;
+					_camMul[c ^ (c >> 1) ^ 1] = _reader->GetUShort() ^ key[c & 1];
+				if (!wbi) _camMul[0] = -1;
 			}
 		}
 		if (type == 0x10a9)
@@ -4628,45 +4630,51 @@ void CSimpleInfo::parse_ciff(int offset, int length, int depth)
 			if (len > 66) wbi = "0134567028"[wbi] - '0';
 			_reader->Seek(2 + wbi * 8, SEEK_CUR);
 			for (size_t c = 0; c < 4; c++)
-				cam_mul[c ^ (c >> 1)] = _reader->get2();
+				_camMul[c ^ (c >> 1)] = _reader->GetUShort();
 		}
 		if (type == 0x1030 && (0x18040 >> wbi & 1))
-			ciff_block_1030();		/* all that don't have 0x10a9 */
+			CiffBlock1030();		/* all that don't have 0x10a9 */
 		if (type == 0x1031)
 		{
-			raw_width = (_reader->get2(), _reader->get2());
-			raw_height = _reader->get2();
+			_rawWidth = (_reader->GetUShort(), _reader->GetUShort());
+			_rawHeight = _reader->GetUShort();
 		}
 		if (type == 0x5029)
 		{
-			focal_len = len >> 16;
-			if ((len & 0xffff) == 2) focal_len /= 32;
+			_focalLen = len >> 16;
+			if ((len & 0xffff) == 2) _focalLen /= 32;
 		}
-		if (type == 0x5813) flash_used = _reader->int_to_float(len);
-		if (type == 0x5814) canon_ev = _reader->int_to_float(len);
-		if (type == 0x5817) shot_order = len;
-		if (type == 0x5834) unique_id = len;
-		if (type == 0x580e) timestamp = len;
-		if (type == 0x180e) timestamp = _reader->get4();
+		if (type == 0x5813)
+			_flashUsed = _reader->IntToFloat(len);
+		if (type == 0x5814)
+			_canonEV = _reader->IntToFloat(len);
+		if (type == 0x5817)
+			_shotOrder = len;
+		if (type == 0x5834)
+			_uniqueId = len;
+		if (type == 0x580e)
+			_timestamp = len;
+		if (type == 0x180e)
+			_timestamp = _reader->GetUInt();
 #ifdef LOCALTIME
 		if ((type | 0x4000) == 0x580e)
-			timestamp = mktime(gmtime(&timestamp));
+			_timestamp = mktime(gmtime(&_timestamp));
 #endif
 		_reader->Seek(save, SEEK_SET);
 	}
 }
 
 /*
-CIFF block 0x1030 contains an 8x8 white sample.
-Load this into white[][] for use in scale_colors().
+CIFF block 0x1030 contains an 8x8 _white sample.
+Load this into _white[][] for use in ScaleColors().
 */
-void CSimpleInfo::ciff_block_1030()
+void CSimpleInfo::CiffBlock1030()
 {
 	static const unsigned short key[] = { 0x410, 0x45f3 };
 
-	if ((_reader->get2(), _reader->get4()) != 0x80008 || !_reader->get4())
+	if ((_reader->GetUShort(), _reader->GetUInt()) != 0x80008 || !_reader->GetUInt())
 		return;
-	int bpp = _reader->get2();
+	int bpp = _reader->GetUShort();
 	if (bpp != 10 && bpp != 12)
 		return;
 	int i = 0;
@@ -4678,68 +4686,68 @@ void CSimpleInfo::ciff_block_1030()
 		{
 			if (vbits < bpp)
 			{
-				bitbuf = bitbuf << 16 | (_reader->get2() ^ key[i++ & 1]);
+				bitbuf = bitbuf << 16 | (_reader->GetUShort() ^ key[i++ & 1]);
 				vbits += 16;
 			}
-			white[row][col] = bitbuf >> (vbits -= bpp) & ~(-1 << bpp);
+			_white[row][col] = bitbuf >> (vbits -= bpp) & ~(-1 << bpp);
 		}
 	}
 }
 
-void CSimpleInfo::parse_fuji(int offset)
+void CSimpleInfo::ParseFuji(int offset)
 {
 	_reader->Seek(offset, SEEK_SET);
-	unsigned entries = _reader->get4();
+	unsigned entries = _reader->GetUInt();
 	if (entries > 255)
 		return;
 	while (entries--)
 	{
-		unsigned tag = _reader->get2();
-		unsigned len = _reader->get2();
+		unsigned tag = _reader->GetUShort();
+		unsigned len = _reader->GetUShort();
 		unsigned save = _reader->GetPosition();
 		if (tag == 0x100)
 		{
-			raw_height = _reader->get2();
-			raw_width = _reader->get2();
+			_rawHeight = _reader->GetUShort();
+			_rawWidth = _reader->GetUShort();
 		}
 		else if (tag == 0x121)
 		{
-			height = _reader->get2();
-			if ((width = _reader->get2()) == 4284)
-				width += 3;
+			_height = _reader->GetUShort();
+			if ((_width = _reader->GetUShort()) == 4284)
+				_width += 3;
 		}
 		else if (tag == 0x130)
 		{
-			fuji_layout = _reader->GetChar() >> 7;
-			fuji_width = !(_reader->GetChar() & 8);
+			_fujiLayout = _reader->GetChar() >> 7;
+			_fujiWidth = !(_reader->GetChar() & 8);
 		}
 		else if (tag == 0x131)
 		{
-			filters = 9;
+			_filters = 9;
 			for (size_t c = 0; c < 36; c++)
-				xtrans_abs[0][35 - c] = _reader->GetChar() & 3;
+				_xtransAbs[0][35 - c] = _reader->GetChar() & 3;
 		}
 		else if (tag == 0x2ff0)
 		{
 			for (size_t c = 0; c < 4; c++)
-				cam_mul[c ^ 1] = _reader->get2();
+				_camMul[c ^ 1] = _reader->GetUShort();
 		}
 		else if (tag == 0xc000)
 		{
 			short c = _reader->GetOrder();
 			_reader->SetOrder(0x4949);
-			while ((tag = _reader->get4()) > raw_width);
-			width = tag;
-			height = _reader->get4();
+			while ((tag = _reader->GetUInt()) > _rawWidth);
+			_width = tag;
+			_height = _reader->GetUInt();
 			_reader->SetOrder(c);
 		}
 		_reader->Seek(save + len, SEEK_SET);
 	}
-	height <<= fuji_layout;
-	width >>= fuji_layout;
+	_height <<= _fujiLayout;
+	_width >>= _fujiLayout;
 }
 
-int CSimpleInfo::parse_jpeg(int offset)
+int CSimpleInfo::ParseJpeg(int offset)
 {
 	int len, save, hlen, mark;
 
@@ -4750,25 +4758,25 @@ int CSimpleInfo::parse_jpeg(int offset)
 	while (_reader->GetChar() == 0xff && (mark = _reader->GetChar()) != 0xda)
 	{
 		_reader->SetOrder(0x4d4d);
-		len = _reader->get2() - 2;
+		len = _reader->GetUShort() - 2;
 		save = _reader->GetPosition();
 		if (mark == 0xc0 || mark == 0xc3 || mark == 0xc9)
 		{
 			_reader->GetChar();
-			raw_height = _reader->get2();
-			raw_width = _reader->get2();
+			_rawHeight = _reader->GetUShort();
+			_rawWidth = _reader->GetUShort();
 		}
-		_reader->SetOrder(_reader->get2());
-		hlen = _reader->get4();
-		if (_reader->get4() == 0x48454150)		/* "HEAP" */
-			parse_ciff(save + hlen, len - hlen, 0);
-		if (parse_tiff(save + 6)) apply_tiff();
+		_reader->SetOrder(_reader->GetUShort());
+		hlen = _reader->GetUInt();
+		if (_reader->GetUInt() == 0x48454150)		/* "HEAP" */
+			ParseCiff(save + hlen, len - hlen, 0);
+		if (ParseTiff(save + 6)) ApplyTiff();
 		_reader->Seek(save + len, SEEK_SET);
 	}
 	return 1;
 }
 
-void CSimpleInfo::parse_riff()
+void CSimpleInfo::ParseRiff()
 {
 	char tag[4];
 	static const char mon[12][4] =
@@ -4776,22 +4784,22 @@ void CSimpleInfo::parse_riff()
 
 	_reader->SetOrder(0x4949);
 	_reader->Read(tag, 4, 1);
-	unsigned size = _reader->get4();
+	unsigned size = _reader->GetUInt();
 	unsigned end = _reader->GetPosition() + size;
 	if (!memcmp(tag, "RIFF", 4) || !memcmp(tag, "LIST", 4))
 	{
-		_reader->get4();
+		_reader->GetUInt();
 		while (_reader->GetPosition() + 7 < end && !_reader->Eof())
-			parse_riff();
+			ParseRiff();
 	}
 	else if (!memcmp(tag, "nctg", 4))
 	{
 		while (_reader->GetPosition() + 7 < end)
 		{
-			unsigned i = _reader->get2();
-			size = _reader->get2();
+			unsigned i = _reader->GetUShort();
+			size = _reader->GetUShort();
 			if ((i + 1) >> 1 == 10 && size == 20)
-				get_timestamp(0);
+				GetTimestamp(0);
 			else _reader->Seek(size, SEEK_CUR);
 		}
 	}
@@ -4811,14 +4819,14 @@ void CSimpleInfo::parse_riff()
 			t.tm_mon = i;
 			t.tm_year -= 1900;
 			if (mktime(&t) > 0)
-				timestamp = mktime(&t);
+				_timestamp = mktime(&t);
 		}
 	}
 	else
 		_reader->Seek(size, SEEK_CUR);
 }
 
-void CSimpleInfo::parse_qt(int end)
+void CSimpleInfo::ParseQt(int end)
 {
 	unsigned size;
 	char tag[4];
@@ -4827,140 +4835,140 @@ void CSimpleInfo::parse_qt(int end)
 	while (_reader->GetPosition() + 7 < end)
 	{
 		unsigned save = _reader->GetPosition();
-		if ((size = _reader->get4()) < 8)
+		if ((size = _reader->GetUInt()) < 8)
 			return;
 		_reader->Read(tag, 4, 1);
 		if (!memcmp(tag, "moov", 4) ||
 			!memcmp(tag, "udta", 4) ||
 			!memcmp(tag, "CNTH", 4))
-			parse_qt(save + size);
+			ParseQt(save + size);
 		if (!memcmp(tag, "CNDA", 4))
-			parse_jpeg(_reader->GetPosition());
+			ParseJpeg(_reader->GetPosition());
 		_reader->Seek(save + size, SEEK_SET);
 	}
 }
 
-void CSimpleInfo::parse_smal(int offset, int fsize)
+void CSimpleInfo::ParseSmal(int offset, int fsize)
 {
 	_reader->Seek(offset + 2, SEEK_SET);
 	_reader->SetOrder(0x4949);
 	int ver = _reader->GetChar();
 	if (ver == 6)
 		_reader->Seek(5, SEEK_CUR);
-	if (_reader->get4() != fsize)
+	if (_reader->GetUInt() != fsize)
 		return;
 	if (ver > 6)
-		data_offset = _reader->get4();
-	raw_height = height = _reader->get2();
-	raw_width = width = _reader->get2();
-	strcpy_s(make, LenMake, "SMaL");
-	sprintf_s(model, LenModel, "v%d %dx%d", ver, width, height);
+		_dataOffset = _reader->GetUInt();
+	_rawHeight = _height = _reader->GetUShort();
+	_rawWidth = _width = _reader->GetUShort();
+	strcpy_s(_make, LenMake, "SMaL");
+	sprintf_s(_model, LenModel, "v%d %dx%d", ver, _width, _height);
 	if (ver == 6)
-		load_raw = LoadRawType::smal_v6_load_raw;
+		_loadRaw = LoadRawType::SmalV6LoadRaw;
 	if (ver == 9)
-		load_raw = LoadRawType::smal_v9_load_raw;
+		_loadRaw = LoadRawType::SmalV9LoadRaw;
 }
 
-void CSimpleInfo::parse_cine()
+void CSimpleInfo::ParseCine()
 {
 	_reader->SetOrder(0x4949);
 	_reader->Seek(4, SEEK_SET);
-	is_raw = _reader->get2() == 2;
+	_isRaw = _reader->GetUShort() == 2;
 	_reader->Seek(14, SEEK_CUR);
-	is_raw *= _reader->get4();
-	unsigned off_head = _reader->get4();
-	unsigned off_setup = _reader->get4();
-	unsigned off_image = _reader->get4();
-	timestamp = _reader->get4();
-	unsigned i = _reader->get4();
+	_isRaw *= _reader->GetUInt();
+	unsigned off_head = _reader->GetUInt();
+	unsigned off_setup = _reader->GetUInt();
+	unsigned off_image = _reader->GetUInt();
+	_timestamp = _reader->GetUInt();
+	unsigned i = _reader->GetUInt();
 	if (i)
-		timestamp = i;
+		_timestamp = i;
 	_reader->Seek(off_head + 4, SEEK_SET);
-	raw_width = _reader->get4();
-	raw_height = _reader->get4();
-	switch (_reader->get2(), _reader->get2())
+	_rawWidth = _reader->GetUInt();
+	_rawHeight = _reader->GetUInt();
+	switch (_reader->GetUShort(), _reader->GetUShort())
 	{
 	case 8:
-		load_raw = LoadRawType::eight_bit_load_raw;
+		_loadRaw = LoadRawType::EightBitLoadRaw;
 		break;
 	case 16:
-		load_raw = LoadRawType::unpacked_load_raw;
+		_loadRaw = LoadRawType::UnpackedLoadRaw;
 	}
 	_reader->Seek(off_setup + 792, SEEK_SET);
-	strcpy_s(make, LenMake, "CINE");
-	sprintf_s(model, LenModel, "%d", _reader->get4());
+	strcpy_s(_make, LenMake, "CINE");
+	sprintf_s(_model, LenModel, "%d", _reader->GetUInt());
 	_reader->Seek(12, SEEK_CUR);
-	switch ((i = _reader->get4()) & 0xffffff)
+	switch ((i = _reader->GetUInt()) & 0xffffff)
 	{
 	case 3:
-		filters = 0x94949494;
+		_filters = 0x94949494;
 		break;
 	case 4:
-		filters = 0x49494949;
+		_filters = 0x49494949;
 		break;
-	default:  is_raw = 0;
+	default:  _isRaw = 0;
 	}
 	_reader->Seek(72, SEEK_CUR);
-	switch ((_reader->get4() + 3600) % 360)
+	switch ((_reader->GetUInt() + 3600) % 360)
 	{
 	case 270:
-		flip = 4;
+		_flip = 4;
 		break;
 	case 180:
-		flip = 1;
+		_flip = 1;
 		break;
 	case  90:
-		flip = 7;
+		_flip = 7;
 		break;
 	case   0:
-		flip = 2;
+		_flip = 2;
 	}
-	cam_mul[0] = _reader->getreal(11);
-	cam_mul[2] = _reader->getreal(11);
-	maximum = ~(-1 << _reader->get4());
+	_camMul[0] = _reader->GetReal(11);
+	_camMul[2] = _reader->GetReal(11);
+	_maximum = ~(-1 << _reader->GetUInt());
 	_reader->Seek(668, SEEK_CUR);
-	shutter = _reader->get4() / 1000000000.0;
+	_shutter = _reader->GetUInt() / 1000000000.0;
 	_reader->Seek(off_image, SEEK_SET);
-	if (shot_select < is_raw)
-		_reader->Seek(shot_select * 8, SEEK_CUR);
-	data_offset = (INT64)_reader->get4() + 8;
-	data_offset += (INT64)_reader->get4() << 32;
+	if (_shotSelect < _isRaw)
+		_reader->Seek(_shotSelect * 8, SEEK_CUR);
+	_dataOffset = (INT64)_reader->GetUInt() + 8;
+	_dataOffset += (INT64)_reader->GetUInt() << 32;
 }
 
-void CSimpleInfo::parse_redcine()
+void CSimpleInfo::ParseRedcine()
 {
 	_reader->SetOrder(0x4d4d);
-	is_raw = 0;
+	_isRaw = 0;
 	_reader->Seek(52, SEEK_SET);
-	width = _reader->get4();
-	height = _reader->get4();
+	_width = _reader->GetUInt();
+	_height = _reader->GetUInt();
 	_reader->Seek(0, SEEK_END);
 	unsigned i = _reader->GetPosition() & 511;
 	_reader->Seek(-(i), SEEK_CUR);
-	if (_reader->get4() != i || _reader->get4() != 0x52454f42)
+	if (_reader->GetUInt() != i || _reader->GetUInt() != 0x52454f42)
 	{
 		fprintf(stderr, ("%s: Tail is missing, parsing from head...\n"), _reader->GetFileName());
 		_reader->Seek(0, SEEK_SET);
 		unsigned len;
-		while ((len = _reader->get4()) != EOF)
+		while ((len = _reader->GetUInt()) != EOF)
 		{
-			if (_reader->get4() == 0x52454456)
-				if (is_raw++ == shot_select)
-					data_offset = _reader->GetPosition() - 8;
+			if (_reader->GetUInt() == 0x52454456)
+				if (_isRaw++ == _shotSelect)
+					_dataOffset = _reader->GetPosition() - 8;
 			_reader->Seek(len - 8, SEEK_CUR);
 		}
 	}
 	else
 	{
-		unsigned rdvo = _reader->get4();
+		unsigned rdvo = _reader->GetUInt();
 		_reader->Seek(12, SEEK_CUR);
-		is_raw = _reader->get4();
-		_reader->Seek(rdvo + 8 + shot_select * 4, SEEK_SET);
-		data_offset = _reader->get4();
+		_isRaw = _reader->GetUInt();
+		_reader->Seek(rdvo + 8 + _shotSelect * 4, SEEK_SET);
+		_dataOffset = _reader->GetUInt();
 	}
 }
 
-void CSimpleInfo::parse_rollei()
+void CSimpleInfo::ParseRollei()
 {
 	char line[128];
 	char* val;
@@ -4980,62 +4988,62 @@ void CSimpleInfo::parse_rollei()
 		if (!strcmp(line, "TIM"))
 			sscanf(val, "%d:%d:%d", &t.tm_hour, &t.tm_min, &t.tm_sec);
 		if (!strcmp(line, "HDR"))
-			thumb_offset = atoi(val);
+			_thumbOffset = atoi(val);
 		if (!strcmp(line, "X  "))
-			raw_width = atoi(val);
+			_rawWidth = atoi(val);
 		if (!strcmp(line, "Y  "))
-			raw_height = atoi(val);
+			_rawHeight = atoi(val);
 		if (!strcmp(line, "TX "))
-			thumb_width = atoi(val);
+			_thumbWidth = atoi(val);
 		if (!strcmp(line, "TY "))
-			thumb_height = atoi(val);
+			_thumbHeight = atoi(val);
 	} while (strncmp(line, "EOHD", 4));
-	data_offset = thumb_offset + thumb_width * thumb_height * 2;
+	_dataOffset = _thumbOffset + _thumbWidth * _thumbHeight * 2;
 	t.tm_year -= 1900;
 	t.tm_mon -= 1;
 	if (mktime(&t) > 0)
-		timestamp = mktime(&t);
-	strcpy_s(make, LenMake, "Rollei");
-	strcpy_s(model, LenModel, "d530flex");
-	write_thumb = WriteThumbType::rollei_thumb;
+		_timestamp = mktime(&t);
+	strcpy_s(_make, LenMake, "Rollei");
+	strcpy_s(_model, LenModel, "d530flex");
+	_writeThumb = WriteThumbType::RolleiThumb;
 }
 
-void CSimpleInfo::parse_sinar_ia()
+void CSimpleInfo::ParseSinarIA()
 {
 	_reader->SetOrder(0x4949);
 	_reader->Seek(4, SEEK_SET);
-	int entries = _reader->get4();
-	_reader->Seek(_reader->get4(), SEEK_SET);
+	int entries = _reader->GetUInt();
+	_reader->Seek(_reader->GetUInt(), SEEK_SET);
 	char str[8];
 	while (entries--)
 	{
-		int off = _reader->get4();
-		_reader->get4();
+		int off = _reader->GetUInt();
+		_reader->GetUInt();
 		_reader->Read(str, 8, 1);
-		if (!strcmp(str, "META"))   meta_offset = off;
-		if (!strcmp(str, "THUMB")) thumb_offset = off;
-		if (!strcmp(str, "RAW0"))   data_offset = off;
+		if (!strcmp(str, "META"))   _metaOffset = off;
+		if (!strcmp(str, "THUMB")) _thumbOffset = off;
+		if (!strcmp(str, "RAW0"))   _dataOffset = off;
 	}
-	_reader->Seek(meta_offset + 20, SEEK_SET);
-	_reader->Read(make, 64, 1);
-	make[63] = 0;
+	_reader->Seek(_metaOffset + 20, SEEK_SET);
+	_reader->Read(_make, 64, 1);
+	_make[63] = 0;
 
 	char* cp;
-	if ((cp = strchr(make, ' ')))
+	if ((cp = strchr(_make, ' ')))
 	{
-		strcpy_s(model, LenModel, cp + 1);
+		strcpy_s(_model, LenModel, cp + 1);
 		*cp = 0;
 	}
-	raw_width = _reader->get2();
-	raw_height = _reader->get2();
-	load_raw = LoadRawType::unpacked_load_raw;
-	thumb_width = (_reader->get4(), _reader->get2());
-	thumb_height = _reader->get2();
-	write_thumb = WriteThumbType::ppm_thumb;
-	maximum = 0x3fff;
+	_rawWidth = _reader->GetUShort();
+	_rawHeight = _reader->GetUShort();
+	_loadRaw = LoadRawType::UnpackedLoadRaw;
+	_thumbWidth = (_reader->GetUInt(), _reader->GetUShort());
+	_thumbHeight = _reader->GetUShort();
+	_writeThumb = WriteThumbType::PpmThumb;
+	_maximum = 0x3fff;
 }
 
-void CSimpleInfo::parse_minolta(int base)
+void CSimpleInfo::ParseMinolta(int base)
 {
 	int high = 0, wide = 0;
 	short sorder = _reader->GetOrder();
@@ -5044,215 +5052,215 @@ void CSimpleInfo::parse_minolta(int base)
 	if (_reader->GetChar() || _reader->GetChar() - 'M' || _reader->GetChar() - 'R')
 		return;
 	_reader->SetOrder(_reader->GetChar() * 0x101);
-	int offset = base + _reader->get4() + 8;
+	int offset = base + _reader->GetUInt() + 8;
 	int save;
 	while ((save = _reader->GetPosition()) < offset)
 	{
 		int tag = 0;
 		for (size_t i = 0; i < 4; i++)
 			tag = tag << 8 | _reader->GetChar();
-		int len = _reader->get4();
+		int len = _reader->GetUInt();
 		int i;
 		switch (tag)
 		{
 		case 0x505244:				/* PRD */
 			_reader->Seek(8, SEEK_CUR);
-			high = _reader->get2();
-			wide = _reader->get2();
+			high = _reader->GetUShort();
+			wide = _reader->GetUShort();
 			break;
 		case 0x574247:				/* WBG */
-			_reader->get4();
-			i = strcmp(model, "DiMAGE A200") ? 0 : 3;
+			_reader->GetUInt();
+			i = strcmp(_model, "DiMAGE A200") ? 0 : 3;
 			for (size_t c = 0; c < 4; c++)
-				cam_mul[c ^ (c >> 1) ^ i] = _reader->get2();
+				_camMul[c ^ (c >> 1) ^ i] = _reader->GetUShort();
 			break;
 		case 0x545457:				/* TTW */
-			parse_tiff(_reader->GetPosition());
-			data_offset = offset;
+			ParseTiff(_reader->GetPosition());
+			_dataOffset = offset;
 		}
 		_reader->Seek(save + len + 8, SEEK_SET);
 	}
-	raw_height = high;
-	raw_width = wide;
+	_rawHeight = high;
+	_rawWidth = wide;
 	_reader->SetOrder(sorder);
 }
 
-void CSimpleInfo::parse_foveon()
+void CSimpleInfo::ParseFoveon()
 {
 	int entries, img = 0, off, len, tag, save, i, wide, high, pent, poff[256][2];
 	char name[64], value[64];
 
 	_reader->SetOrder(0x4949);			/* Little-endian */
 	_reader->Seek(36, SEEK_SET);
-	flip = _reader->get4();
+	_flip = _reader->GetUInt();
 	_reader->Seek(-4, SEEK_END);
-	_reader->Seek(_reader->get4(), SEEK_SET);
-	if (_reader->get4() != 0x64434553)
+	_reader->Seek(_reader->GetUInt(), SEEK_SET);
+	if (_reader->GetUInt() != 0x64434553)
 		return;	/* SECd */
-	entries = (_reader->get4(), _reader->get4());
+	entries = (_reader->GetUInt(), _reader->GetUInt());
 	while (entries--)
 	{
-		off = _reader->get4();
-		len = _reader->get4();
-		tag = _reader->get4();
+		off = _reader->GetUInt();
+		len = _reader->GetUInt();
+		tag = _reader->GetUInt();
 		save = _reader->GetPosition();
 		_reader->Seek(off, SEEK_SET);
-		if (_reader->get4() != (0x20434553 | (tag << 24)))
+		if (_reader->GetUInt() != (0x20434553 | (tag << 24)))
 			return;
 		switch (tag)
 		{
 		case 0x47414d49:			/* IMAG */
 		case 0x32414d49:			/* IMA2 */
 			_reader->Seek(8, SEEK_CUR);
-			pent = _reader->get4();
-			wide = _reader->get4();
-			high = _reader->get4();
-			if (wide > raw_width && high > raw_height)
+			pent = _reader->GetUInt();
+			wide = _reader->GetUInt();
+			high = _reader->GetUInt();
+			if (wide > _rawWidth && high > _rawHeight)
 			{
 				switch (pent)
 				{
 				case  5:
-					load_flags = 1;
+					_loadFlags = 1;
 				case  6:
-					load_raw = LoadRawType::foveon_sd_load_raw;
+					_loadRaw = LoadRawType::FoveonSdLoadRaw;
 					break;
 				case 30:
-					load_raw = LoadRawType::foveon_dp_load_raw;
+					_loadRaw = LoadRawType::FoveonDpLoadRaw;
 					break;
 				default:
-					load_raw = LoadRawType::unknown_load_raw;
+					_loadRaw = LoadRawType::UnknownLoadRaw;
 				}
-				raw_width = wide;
-				raw_height = high;
-				data_offset = off + 28;
-				is_foveon = 1;
+				_rawWidth = wide;
+				_rawHeight = high;
+				_dataOffset = off + 28;
+				_isFoveon = 1;
 			}
 			_reader->Seek(off + 28, SEEK_SET);
 			if (_reader->GetChar() == 0xff && _reader->GetChar() == 0xd8
-				&& thumb_length < len - 28)
+				&& _thumbLength < len - 28)
 			{
-				thumb_offset = off + 28;
-				thumb_length = len - 28;
-				write_thumb = WriteThumbType::jpeg_thumb;
+				_thumbOffset = off + 28;
+				_thumbLength = len - 28;
+				_writeThumb = WriteThumbType::JpegThumb;
 			}
-			if (++img == 2 && !thumb_length)
+			if (++img == 2 && !_thumbLength)
 			{
-				thumb_offset = off + 24;
-				thumb_width = wide;
-				thumb_height = high;
-				write_thumb = WriteThumbType::foveon_thumb;
+				_thumbOffset = off + 24;
+				_thumbWidth = wide;
+				_thumbHeight = high;
+				_writeThumb = WriteThumbType::FoveonThumb;
 			}
 			break;
 		case 0x464d4143:			/* CAMF */
-			meta_offset = off + 8;
-			meta_length = len - 28;
+			_metaOffset = off + 8;
+			_metaLength = len - 28;
 			break;
 		case 0x504f5250:			/* PROP */
-			pent = (_reader->get4(), _reader->get4());
+			pent = (_reader->GetUInt(), _reader->GetUInt());
 			_reader->Seek(12, SEEK_CUR);
 			off += pent * 8 + 24;
 			if ((unsigned)pent > 256) pent = 256;
 			for (i = 0; i < pent * 2; i++)
-				((int *)poff)[i] = off + _reader->get4() * 2;
+				((int *)poff)[i] = off + _reader->GetUInt() * 2;
 			for (i = 0; i < pent; i++)
 			{
-				foveon_gets(poff[i][0], name, 64);
-				foveon_gets(poff[i][1], value, 64);
+				FoveonGets(poff[i][0], name, 64);
+				FoveonGets(poff[i][1], value, 64);
 				if (!strcmp(name, "ISO"))
-					iso_speed = atoi(value);
+					_isoSpeed = atoi(value);
 				if (!strcmp(name, "CAMMANUF"))
-					strcpy_s(make, LenMake, value);
+					strcpy_s(_make, LenMake, value);
 				if (!strcmp(name, "CAMMODEL"))
-					strcpy_s(model, LenModel, value);
+					strcpy_s(_model, LenModel, value);
 				if (!strcmp(name, "WB_DESC"))
-					strcpy_s(model2, LenModel2, value);
+					strcpy_s(_model2, LenModel2, value);
 				if (!strcmp(name, "TIME"))
-					timestamp = atoi(value);
+					_timestamp = atoi(value);
 				if (!strcmp(name, "EXPTIME"))
-					shutter = atoi(value) / 1000000.0;
+					_shutter = atoi(value) / 1000000.0;
 				if (!strcmp(name, "APERTURE"))
-					aperture = atof(value);
+					_aperture = atof(value);
 				if (!strcmp(name, "FLENGTH"))
-					focal_len = atof(value);
+					_focalLen = atof(value);
 			}
 #ifdef LOCALTIME
-			timestamp = mktime(gmtime(&timestamp));
+			_timestamp = mktime(gmtime(&_timestamp));
 #endif
 		}
 		_reader->Seek(save, SEEK_SET);
 	}
 }
 
-char* CSimpleInfo::foveon_gets(int offset, char* str, int len)
+char* CSimpleInfo::FoveonGets(int offset, char* str, int len)
 {
 	_reader->Seek(offset, SEEK_SET);
 	size_t i;
 	for (i = 0; i < len - 1; i++)
-		if ((str[i] = _reader->get2()) == 0)
+		if ((str[i] = _reader->GetUShort()) == 0)
 			break;
 	str[i] = 0;
 	return str;
 }
 
-void CSimpleInfo::parse_kodak_ifd(int base)
+void CSimpleInfo::ParseKodakIFD(int base)
 {
 	int wbi = -2, wbtemp = 6500;
 	float mul[3] = { 1,1,1 };
 	static const int wbtag[] = { 64037,64040,64039,64041,-1,-1,64042 };
 
-	unsigned entries = _reader->get2();
+	unsigned entries = _reader->GetUShort();
 	if (entries > 1024)
 		return;
 
 	unsigned tag, type, len, save;
 	while (entries--)
 	{
-		tiff_get(base, &tag, &type, &len, &save);
+		TiffGet(base, &tag, &type, &len, &save);
 		if (tag == 1020)
-			wbi = _reader->getint(type);
+			wbi = _reader->GetUInt(type);
 		if (tag == 1021 && len == 72)
 		{		/* WB set in software */
 			_reader->Seek(40, SEEK_CUR);
 			for (size_t c = 0; c < 3; c++)
-				cam_mul[c] = 2048.0 / _reader->get2();
+				_camMul[c] = 2048.0 / _reader->GetUShort();
 			wbi = -2;
 		}
 		if (tag == 2118)
-			wbtemp = _reader->getint(type);
+			wbtemp = _reader->GetUInt(type);
 		if (tag == 2120 + wbi && wbi >= 0)
 			for (size_t c = 0; c < 3; c++)
-				cam_mul[c] = 2048.0 / _reader->getreal(type);
+				_camMul[c] = 2048.0 / _reader->GetReal(type);
 		if (tag == 2130 + wbi)
 			for (size_t c = 0; c < 3; c++)
-				mul[c] = _reader->getreal(type);
+				mul[c] = _reader->GetReal(type);
 		if (tag == 2140 + wbi && wbi >= 0)
 		{
 			for (size_t c = 0; c < 3; c++)
 			{
 				float num = 0;
 				for (int i = 0; i < 4; i++)
-					num += _reader->getreal(type) * pow(wbtemp / 100.0, i);
-				cam_mul[c] = 2048 / (num * mul[c]);
+					num += _reader->GetReal(type) * pow(wbtemp / 100.0, i);
+				_camMul[c] = 2048 / (num * mul[c]);
 			}
 		}
 		if (tag == 2317)
-			linear_table(len);
+			LinearTable(len);
 		if (tag == 6020)
-			iso_speed = _reader->getint(type);
+			_isoSpeed = _reader->GetUInt(type);
 		if (tag == 64013)
 			wbi = _reader->GetChar();
 		if ((unsigned)wbi < 7 && tag == wbtag[wbi])
 			for (size_t c = 0; c < 3; c++)
-				cam_mul[c] = _reader->get4();
+				_camMul[c] = _reader->GetUInt();
 		if (tag == 64019)
-			width = _reader->getint(type);
+			_width = _reader->GetUInt(type);
 		if (tag == 64020)
-			height = (_reader->getint(type) + 1) & -2;
+			_height = (_reader->GetUInt(type) + 1) & -2;
 		_reader->Seek(save, SEEK_SET);
 	}
 }
 
-void CSimpleInfo::parse_mos(int offset)
+void CSimpleInfo::ParseMos(int offset)
 {
 	char data[40];
 	int i, neut[4], planes = 0, frot = 0;
@@ -5267,79 +5275,80 @@ void CSimpleInfo::parse_mos(int offset)
 	_reader->Seek(offset, SEEK_SET);
 	while (1)
 	{
-		if (_reader->get4() != 0x504b5453)
+		if (_reader->GetUInt() != 0x504b5453)
 			break;
-		_reader->get4();
+		_reader->GetUInt();
 		_reader->Read(data, 1, 40);
-		int skip = _reader->get4();
+		int skip = _reader->GetUInt();
 		int from = _reader->GetPosition();
 		if (!strcmp(data, "JPEG_preview_data"))
 		{
-			thumb_offset = from;
-			thumb_length = skip;
+			_thumbOffset = from;
+			_thumbLength = skip;
 		}
 		if (!strcmp(data, "icc_camera_profile"))
 		{
-			profile_offset = from;
-			profile_length = skip;
+			_profileOffset = from;
+			_profileLength = skip;
 		}
 		if (!strcmp(data, "ShootObj_back_type"))
 		{
-			_reader->scanf("%d", &i);
+			_reader->GetScanf("%d", &i);
 			if ((unsigned)i < sizeof mod / sizeof(*mod))
-				strcpy_s(model, LenModel, mod[i]);
+				strcpy_s(_model, LenModel, mod[i]);
 		}
 		if (!strcmp(data, "icc_camera_to_tone_matrix"))
 		{
 			for (size_t i = 0; i < 9; i++)
-				((float *)romm_cam)[i] = _reader->int_to_float(_reader->get4());
-			romm_coeff(romm_cam);
+				((float *)romm_cam)[i] = _reader->IntToFloat(_reader->GetUInt());
+			RommCoeff(romm_cam);
 		}
 		if (!strcmp(data, "CaptProf_color_matrix"))
 		{
 			for (size_t i = 0; i < 9; i++)
-				_reader->scanf("%f", (float *)romm_cam + i);
-			romm_coeff(romm_cam);
+				_reader->GetScanf("%f", (float *)romm_cam + i);
+			RommCoeff(romm_cam);
 		}
 		if (!strcmp(data, "CaptProf_number_of_planes"))
-			_reader->scanf("%d", &planes);
+			_reader->GetScanf("%d", &planes);
 		if (!strcmp(data, "CaptProf_raw_data_rotation"))
-			_reader->scanf("%d", &flip);
+			_reader->GetScanf("%d", &_flip);
 		if (!strcmp(data, "CaptProf_mosaic_pattern"))
 		{
 			for (size_t c = 0; c < 4; c++)
 			{
-				_reader->scanf("%d", &i);
+				_reader->GetScanf("%d", &i);
 				if (i == 1) frot = c ^ (c >> 1);
 			}
 			if (!strcmp(data, "ImgProf_rotation_angle"))
 			{
-				_reader->scanf("%d", &i);
-				flip = i - flip;
+				_reader->GetScanf("%d", &i);
+				_flip = i - _flip;
 			}
 		}
-		if (!strcmp(data, "NeutObj_neutrals") && !cam_mul[0])
+		if (!strcmp(data, "NeutObj_neutrals") && !_camMul[0])
 		{
 			for (size_t c = 0; c < 4; c++)
-				_reader->scanf("%d", neut + c);
+				_reader->GetScanf("%d", neut + c);
 			for (size_t c = 0; c < 3; c++)
-				cam_mul[c] = (float)neut[0] / neut[c + 1];
+				_camMul[c] = (float)neut[0] / neut[c + 1];
 		}
 		if (!strcmp(data, "Rows_data"))
-			load_flags = _reader->get4();
-		parse_mos(from);
+			_loadFlags = _reader->GetUInt();
+		ParseMos(from);
 		_reader->Seek(skip + from, SEEK_SET);
 	}
 	if (planes)
-		filters = (planes == 1) * 0x01010101 *
-		(unsigned char) "\x94\x61\x16\x49"[(flip / 90 + frot) & 3];
+		_filters = (planes == 1) * 0x01010101 *
+		(unsigned char) "\x94\x61\x16\x49"[(_flip / 90 + frot) & 3];
 }
 
 
 
-void CSimpleInfo::sony_decrypt(unsigned *data, int len, int start, int key)
+void CSimpleInfo::SonyDecrypt(unsigned *data, int len, int start, int key)
 {
-	static unsigned pad[128], p;
+	static unsigned pad[128];
+	static unsigned p;
 
 	if (start)
 	{
@@ -5355,17 +5364,17 @@ void CSimpleInfo::sony_decrypt(unsigned *data, int len, int start, int key)
 		*data++ ^= pad[(p - 1) & 127] = pad[p & 127] ^ pad[(p + 64) & 127];
 }
 
-void CSimpleInfo::linear_table(unsigned len)
+void CSimpleInfo::LinearTable(unsigned len)
 {
 	if (len > 0x1000)
 		len = 0x1000;
-	_reader->read_shorts(curve, len);
+	_reader->ReadShorts(_curve, len);
 	for (size_t i = len; i < 0x1000; i++)
-		curve[i] = curve[i - 1];
-	maximum = curve[0xfff];
+		_curve[i] = _curve[i - 1];
+	_maximum = _curve[0xfff];
 }
 
-void CSimpleInfo::romm_coeff(float romm_cam[3][3])
+void CSimpleInfo::RommCoeff(float romm_cam[3][3])
 {
 	static const float rgb_romm[3][3] =	/* ROMM == Kodak ProPhoto */
 	{ { 2.034193, -0.727420, -0.306766 },
@@ -5375,8 +5384,8 @@ void CSimpleInfo::romm_coeff(float romm_cam[3][3])
 
 	for (i = 0; i < 3; i++)
 		for (j = 0; j < 3; j++)
-			for (cmatrix[i][j] = k = 0; k < 3; k++)
-				cmatrix[i][j] += rgb_romm[i][k] * romm_cam[k][j];
+			for (_cMatrix[i][j] = k = 0; k < 3; k++)
+				_cMatrix[i][j] += rgb_romm[i][k] * romm_cam[k][j];
 }
 
 
@@ -5398,7 +5407,7 @@ char* CSimpleInfo::strcasestr(char* haystack, const char* needle)
 }
 #pragma endregion
 
-unsigned CSimpleInfo::getbithuff(int nbits, unsigned short *huff)
+unsigned CSimpleInfo::GetBitHuff(int nbits, unsigned short *huff)
 {
 	static unsigned bitbuf = 0;
 	static int vbits = 0;
@@ -5415,7 +5424,7 @@ unsigned CSimpleInfo::getbithuff(int nbits, unsigned short *huff)
 
 	unsigned c;
 	while (!reset && vbits < nbits && (c = _reader->GetChar()) != EOF &&
-		!(reset = zero_after_ff && c == 0xff && _reader->GetChar()))
+		!(reset = _zeroAfterFF && c == 0xff && _reader->GetChar()))
 	{
 		bitbuf = (bitbuf << 8) + (unsigned char)c;
 		vbits += 8;

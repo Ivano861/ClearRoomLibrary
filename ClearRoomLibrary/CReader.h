@@ -44,17 +44,16 @@ namespace Unmanaged
 		int Eof();
 		int GetChar();
 		char* GetString(char* str, int n);
-		int scanf(const char *format, void* arg);
+		int GetScanf(const char *format, void* arg);
 
-		unsigned short sget2(unsigned char* s);
-		unsigned short get2();
-		unsigned sget4(unsigned char* s);
-		//#define sget4(s) sget4((unsigned char *)s)
-
-		unsigned get4();
-		unsigned getint(int type_X);
-		float int_to_float(int i);
-		double getreal(int type);
-		void read_shorts(unsigned short* pixel, unsigned count);
+		unsigned short GetUShort(unsigned char* s);
+		unsigned short GetUShort();
+		unsigned GetUInt();
+		unsigned GetUInt(unsigned char* s);
+		//#define GetUInt(s) GetUInt((unsigned char *)s)
+		unsigned GetUInt(int type_X);
+		float IntToFloat(int i);
+		double GetReal(int type);
+		void ReadShorts(unsigned short* pixel, unsigned count);
 	};
 }

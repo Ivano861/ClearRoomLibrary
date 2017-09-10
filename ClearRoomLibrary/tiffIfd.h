@@ -17,7 +17,7 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
-struct tiff_ifd
+struct TiffIFD
 {
 	int width;
 	int height;

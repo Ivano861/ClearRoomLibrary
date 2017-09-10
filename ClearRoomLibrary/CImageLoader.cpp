@@ -76,16 +76,16 @@ All RGB cameras use one of these Bayer grids:
 */
 
 #define RAW(row,col) \
-	_info->raw_image[(row)*_info->raw_width+(col)]
+	_info->_rawImage[(row)*_info->_rawWidth+(col)]
 
 #define FC(row,col) \
-	(_info->filters >> ((((row) << 1 & 14) + ((col) & 1)) << 1) & 3)
+	(_info->_filters >> ((((row) << 1 & 14) + ((col) & 1)) << 1) & 3)
 
 #define BAYER(row,col) \
-	_info->image[((row) >> _info->shrink)*_info->iwidth + ((col) >> _info->shrink)][FC(row,col)]
+	_info->_image[((row) >> _info->_shrink)*_info->_iwidth + ((col) >> _info->_shrink)][FC(row,col)]
 
 #define BAYER2(row,col) \
-	_info->image[((row) >> _info->shrink)*_info->iwidth + ((col) >> _info->shrink)][fcol(row,col)]
+	_info->_image[((row) >> _info->_shrink)*_info->_iwidth + ((col) >> _info->_shrink)][FCol(row,col)]
 
 
 CImageLoader::CImageLoader(COptions* options, CSimpleInfo* info, CReader* reader) : _options(options), _info(info), _reader(reader), _writer(nullptr)
@@ -106,368 +106,369 @@ CImageLoader::~CImageLoader()
 
 void CImageLoader::LoadImageRaw()
 {
-	if (_options->user_flip >= 0)
-		_info->flip = _options->user_flip;
-	switch ((_info->flip + 3600) % 360)
+	if (_options->_userFlip >= 0)
+		_info->_flip = _options->_userFlip;
+	switch ((_info->_flip + 3600) % 360)
 	{
 	case 270:
-		_info->flip = 5;
+		_info->_flip = 5;
 		break;
 	case 180:
-		_info->flip = 3;
+		_info->_flip = 3;
 		break;
 	case  90:
-		_info->flip = 6;
+		_info->_flip = 6;
 	}
-	_info->write_fun = WriteThumbType::write_ppm_tiff;
+	_info->_writeFun = WriteThumbType::WritePpmTiff;
 
-	if (_info->load_raw == LoadRawType::kodak_ycbcr_load_raw)
+	if (_info->_loadRaw == LoadRawType::KodakYcbcrLoadRaw)
 	{
-		_info->height += _info->height & 1;
-		_info->width += _info->width & 1;
+		_info->_height += _info->_height & 1;
+		_info->_width += _info->_width & 1;
 	}
 
-	if (!_info->is_raw)
+	if (!_info->_isRaw)
 		throw CExceptionNoRaw();
 
-	_info->shrink = _info->filters && (_info->half_size || _options->threshold || _options->aber[0] != 1 || _options->aber[2] != 1);
-	_info->iheight = (_info->height + _info->shrink) >> _info->shrink;
-	_info->iwidth = (_info->width + _info->shrink) >> _info->shrink;
+	_info->_shrink = _info->_filters && (_info->_halfSize || _options->_threshold || _options->_aber[0] != 1 || _options->_aber[2] != 1);
+	_info->_iheight = (_info->_height + _info->_shrink) >> _info->_shrink;
+	_info->_iwidth = (_info->_width + _info->_shrink) >> _info->_shrink;
 
-	if (_info->meta_length)
+	if (_info->_metaLength)
 	{
-		_info->meta_data = (char *)malloc(_info->meta_length);
-		if (!_info->meta_data)
+		_info->_metaData = (char *)malloc(_info->_metaLength);
+		if (!_info->_metaData)
 			throw CExceptionMemory("LoadImageRaw()");
 	}
-	if (_info->filters || _info->colors == 1)
+	if (_info->_filters || _info->_colors == 1)
 	{
-		_info->raw_image = (unsigned short *)calloc((_info->raw_height + 7), _info->raw_width * 2);
-		if (!_info->raw_image)
+		_info->_rawImage = (unsigned short *)calloc((_info->_rawHeight + 7), _info->_rawWidth * 2);
+		if (!_info->_rawImage)
 			throw CExceptionMemory("LoadImageRaw()");
 	}
 	else
 	{
-		_info->image = (unsigned short(*)[4]) calloc(_info->iheight, _info->iwidth * sizeof *_info->image);
-		if (!_info->image)
+		_info->_image = (unsigned short(*)[4]) calloc(_info->_iheight, _info->_iwidth * sizeof *_info->_image);
+		if (!_info->_image)
 			throw CExceptionMemory("LoadImageRaw()");
 	}
 
-	if (_info->shot_select >= _info->is_raw)
+	if (_info->_shotSelect >= _info->_isRaw)
 		throw CExceptionInvalidImageRequest();
 
-	_reader->Seek(_info->data_offset, SEEK_SET);
+	_reader->Seek(_info->_dataOffset, SEEK_SET);
 	LoadRaw();
 
-	if (_options->document_mode == 3)
+	if (_options->_documentMode == 3)
 	{
-		_info->top_margin = _info->left_margin = _info->fuji_width = 0;
-		_info->height = _info->raw_height;
-		_info->width = _info->raw_width;
+		_info->_topMargin = _info->_leftMargin = _info->_fujiWidth = 0;
+		_info->_height = _info->_rawHeight;
+		_info->_width = _info->_rawWidth;
 	}
-	_info->iheight = (_info->height + _info->shrink) >> _info->shrink;
-	_info->iwidth = (_info->width + _info->shrink) >> _info->shrink;
-	if (_info->raw_image)
+	_info->_iheight = (_info->_height + _info->_shrink) >> _info->_shrink;
+	_info->_iwidth = (_info->_width + _info->_shrink) >> _info->_shrink;
+	if (_info->_rawImage)
 	{
-		_info->image = (unsigned short(*)[4]) calloc(_info->iheight, _info->iwidth * sizeof *_info->image);
-		if (!_info->image)
+		_info->_image = (unsigned short(*)[4]) calloc(_info->_iheight, _info->_iwidth * sizeof *_info->_image);
+		if (!_info->_image)
 			throw CExceptionMemory("LoadImageRaw()");
-		crop_masked_pixels();
-		free(_info->raw_image);
-		_info->raw_image = nullptr;
+		CropMaskedPixels();
+		free(_info->_rawImage);
+		_info->_rawImage = nullptr;
 	}
-	if (_info->zero_is_bad)
-		remove_zeroes();
-	bad_pixels(_options->bpfile);
-	if (_options->dark_frame)
-		subtract (_options->dark_frame);
-	int quality = 2 + !_info->fuji_width;
-	if (_options->user_qual >= 0)
-		quality = _options->user_qual;
-	int i = _info->cblack[3];
+	if (_info->_zeroIsBad)
+		RemoveZeroes();
+	BadPixels(_options->_bpFile);
+	if (_options->_darkFrame)
+		Subtract (_options->_darkFrame);
+	int quality = 2 + !_info->_fujiWidth;
+	if (_options->_userQuality >= 0)
+		quality = _options->_userQuality;
+	int i = _info->_cBlack[3];
 	for (size_t c = 0; c < 3; c++)
 	{
-		if (i > _info->cblack[c])
-			i = _info->cblack[c];
+		if (i > _info->_cBlack[c])
+			i = _info->_cBlack[c];
 	}
 	for (size_t c = 0; c < 4; c++)
-		_info->cblack[c] -= i;
-	_info->black += i;
-	i = _info->cblack[6];
-	for (size_t c = 0; c < (_info->cblack[4] * _info->cblack[5]); c++)
-		if (i > _info->cblack[6+c])
-			i = _info->cblack[6+c];
-	for (size_t c = 0; c < (_info->cblack[4] * _info->cblack[5]); c++)
-		_info->cblack[6+c] -= i;
-	_info->black += i;
-	if (_options->user_black >= 0)
-		_info->black = _options->user_black;
+		_info->_cBlack[c] -= i;
+	_info->_black += i;
+	i = _info->_cBlack[6];
+	for (size_t c = 0; c < (_info->_cBlack[4] * _info->_cBlack[5]); c++)
+		if (i > _info->_cBlack[6+c])
+			i = _info->_cBlack[6+c];
+	for (size_t c = 0; c < (_info->_cBlack[4] * _info->_cBlack[5]); c++)
+		_info->_cBlack[6+c] -= i;
+	_info->_black += i;
+	if (_options->_userBlack >= 0)
+		_info->_black = _options->_userBlack;
 	for (size_t c = 0; c < 4; c++)
-		_info->cblack[c] += _info->black;
-	if (_options->user_sat > 0)
-		_info->maximum = _options->user_sat;
+		_info->_cBlack[c] += _info->_black;
+	if (_options->_userSaturation > 0)
+		_info->_maximum = _options->_userSaturation;
 	//#ifdef COLORCHECK
-	colorcheck();
+	Colorcheck();
 	//#endif
-	if (_info->is_foveon)
+	if (_info->_isFoveon)
 	{
-		if (_options->document_mode || _info->load_raw == LoadRawType::foveon_dp_load_raw)
+		if (_options->_documentMode || _info->_loadRaw == LoadRawType::FoveonDpLoadRaw)
 		{
-			for (i = 0; i < _info->height*_info->width * 4; i++)
-				if ((short)_info->image[0][i] < 0)
-					_info->image[0][i] = 0;
+			for (i = 0; i < _info->_height*_info->_width * 4; i++)
+				if ((short)_info->_image[0][i] < 0)
+					_info->_image[0][i] = 0;
 		}
 		else
 		{
-			foveon_interpolate();
+			FoveonInterpolate();
 		}
 	}
-	else if (_options->document_mode < 2)
+	else if (_options->_documentMode < 2)
 	{
-		scale_colors();
+		ScaleColors();
 	}
-	pre_interpolate();
-	if (_info->filters && !_options->document_mode)
+	PreInterpolate();
+	if (_info->_filters && !_options->_documentMode)
 	{
 		if (quality == 0)
-			lin_interpolate();
-		else if (quality == 1 || _info->colors > 3)
-			vng_interpolate();
-		else if (quality == 2 && _info->filters > 1000)
-			ppg_interpolate();
-		else if (_info->filters == 9)
-			xtrans_interpolate(quality * 2 - 3);
+			LinInterpolate();
+		else if (quality == 1 || _info->_colors > 3)
+			VngInterpolate();
+		else if (quality == 2 && _info->_filters > 1000)
+			PpgInterpolate();
+		else if (_info->_filters == 9)
+			XtransInterpolate(quality * 2 - 3);
 		else
-			ahd_interpolate();
+			AhdInterpolate();
 	}
-	if (_info->mix_green)
+	if (_info->_mixGreen)
 	{
-		_info->colors = 3;
-		for (i = 0; i < _info->height*_info->width; i++)
-			_info->image[i][1] = (_info->image[i][1] + _info->image[i][3]) >> 1;
+		_info->_colors = 3;
+		for (i = 0; i < _info->_height*_info->_width; i++)
+			_info->_image[i][1] = (_info->_image[i][1] + _info->_image[i][3]) >> 1;
 	}
-	if (!_info->is_foveon && _info->colors == 3)
-		median_filter();
-	if (!_info->is_foveon && _options->highlight == 2)
-		blend_highlights();
-	if (!_info->is_foveon && _options->highlight > 2)
-		recover_highlights();
-	if (_options->use_fuji_rotate)
-		fuji_rotate();
+	if (!_info->_isFoveon && _info->_colors == 3)
+		MedianFilter();
+	if (!_info->_isFoveon && _options->_highlight == 2)
+		BlendHighlights();
+	if (!_info->_isFoveon && _options->_highlight > 2)
+		RecoverHighlights();
+	if (_options->_useFujiRotate)
+		FujiRotate();
 	#ifndef NO_LCMS
-	if (_options->cam_profile)
-		apply_profile (_options->cam_profile, _options->out_profile);
+	if (_options->_cameraProfile)
+		ApplyProfile (_options->_cameraProfile, _options->_outProfile);
 	#endif
-	convert_to_rgb();
-	if (_options->use_fuji_rotate)
-		stretch();
+	ConvertToRGB();
+	if (_options->_useFujiRotate)
+		Stretch();
 
 	const char* write_ext;
-	if (_info->write_fun == WriteThumbType::jpeg_thumb)
+	if (_info->_writeFun == WriteThumbType::JpegThumb)
 		write_ext = ".jpg";
-	else if (_options->output_tiff && _info->write_fun == WriteThumbType::write_ppm_tiff)
+	else if (_options->_outputTiff && _info->_writeFun == WriteThumbType::WritePpmTiff)
 		write_ext = ".tiff";
 	else
-		write_ext = &".pgm\0.ppm\0.ppm\0.pam"[(_info->colors * 5 - 5)];
-	char* ofname = (char *) malloc (strlen(_reader->GetFileName()) + 64);
+		write_ext = &".pgm\0.ppm\0.ppm\0.pam"[(_info->_colors * 5 - 5)];
+	size_t lenOutName = strlen(_reader->GetFileName()) + 64;
+	char* ofname = (char *)malloc(lenOutName);
 	CAutoFreeMemory autoFreeOutput(ofname);
 
-	strcpy(ofname, _reader->GetFileName());
+	strcpy_s(ofname, lenOutName, _reader->GetFileName());
 	char* cp = strrchr(ofname, '.');
 	if (cp)
 		*cp = 0;
-	if (_options->multi_out)
+	if (_options->_multiOut)
 		sprintf(ofname + strlen(ofname), "_%0*d",
-			snprintf(0, 0, "%d", _info->is_raw - 1), _info->shot_select);
-	if (_options->thumbnail_only)
-		strcat(ofname, ".thumb");
-	strcat(ofname, write_ext);
+			snprintf(0, 0, "%d", _info->_isRaw - 1), _info->_shotSelect);
+	if (_options->_thumbnailOnly)
+		strcat_s(ofname, lenOutName, ".thumb");
+	strcat_s(ofname, lenOutName, write_ext);
 	_writer = new CWriter(ofname);
 
-	switch (_info->write_fun)
+	switch (_info->_writeFun)
 	{
-	case WriteThumbType::layer_thumb:
-		layer_thumb();
+	case WriteThumbType::LayerThumb:
+		LayerThumb();
 		break;
-	case WriteThumbType::ppm_thumb:
-		ppm_thumb();
+	case WriteThumbType::PpmThumb:
+		PpmThumb();
 		break;
-	case WriteThumbType::ppm16_thumb:
-		ppm16_thumb();
+	case WriteThumbType::Ppm16Thumb:
+		Ppm16Thumb();
 		break;
-	case WriteThumbType::rollei_thumb:
-		rollei_thumb();
+	case WriteThumbType::RolleiThumb:
+		RolleiThumb();
 		break;
-	case WriteThumbType::jpeg_thumb:
-		jpeg_thumb();
+	case WriteThumbType::JpegThumb:
+		JpegThumb();
 		break;
-	case WriteThumbType::foveon_thumb:
-		foveon_thumb();
+	case WriteThumbType::FoveonThumb:
+		FoveonThumb();
 		break;
-	case WriteThumbType::write_ppm_tiff:
-		write_ppm_tiff();
+	case WriteThumbType::WritePpmTiff:
+		WritePpmTiff();
 		break;
-	case WriteThumbType::unknown_write:
+	case WriteThumbType::UnknownWrite:
 	default:
 		break;
 	}
 
-	/*if (_info->image)
+	/*if (_info->_image)
 	{
-		free(_info->image);
-		_info->image = nullptr;
+		free(_info->_image);
+		_info->_image = nullptr;
 	}*/
 	/*
-	if (multi_out) {
-	if (++shot_select < is_raw) arg--;
-	else shot_select = 0;
+	if (_multiOut) {
+	if (++_shotSelect < _isRaw) arg--;
+	else _shotSelect = 0;
 	}
 	*/
 }
 
 void CImageLoader::LoadRaw()
 {
-	switch (_info->load_raw)
+	switch (_info->_loadRaw)
 	{
-	case LoadRawType::unknown_load_raw:
+	case LoadRawType::UnknownLoadRaw:
 		break;
-	case LoadRawType::packed_load_raw:
-		packed_load_raw();
+	case LoadRawType::PackedLoadRaw:
+		PackedLoadRaw();
 		break;
-	case LoadRawType::unpacked_load_raw:
-		unpacked_load_raw();
+	case LoadRawType::UnpackedLoadRaw:
+		UnpackedLoadRaw();
 		break;
-	case LoadRawType::lossless_dng_load_raw:
-		lossless_dng_load_raw();
+	case LoadRawType::LosslessDngLoadRaw:
+		LosslessDngLoadRaw();
 		break;
-	case LoadRawType::lossy_dng_load_raw:
-		lossy_dng_load_raw();
+	case LoadRawType::LossyDngLoadRaw:
+		LossyDngLoadRaw();
 		break;
-	case LoadRawType::packed_dng_load_raw:
-		packed_dng_load_raw();
+	case LoadRawType::PackedDngLoadRaw:
+		PackedDngLoadRaw();
 		break;
-	case LoadRawType::lossless_jpeg_load_raw:
-		lossless_jpeg_load_raw();
+	case LoadRawType::LosslessJpegLoadRaw:
+		LosslessJpegLoadRaw();
 		break;
-	case LoadRawType::canon_load_raw:
-		canon_load_raw();
+	case LoadRawType::CanonLoadRaw:
+		CanonLoadRaw();
 		break;
-	case LoadRawType::canon_600_load_raw:
-		canon_600_load_raw();
+	case LoadRawType::Canon600LoadRaw:
+		Canon600LoadRaw();
 		break;
-	case LoadRawType::canon_rmf_load_raw:
-		canon_rmf_load_raw();
+	case LoadRawType::CanonRmfLoadRaw:
+		CanonRmfLoadRaw();
 		break;
-	case LoadRawType::canon_sraw_load_raw:
-		canon_sraw_load_raw();
+	case LoadRawType::CanonSrawLoadRaw:
+		CanonSrawLoadRaw();
 		break;
-	case LoadRawType::eight_bit_load_raw:
-		eight_bit_load_raw();
+	case LoadRawType::EightBitLoadRaw:
+		EightBitLoadRaw();
 		break;
-	case LoadRawType::foveon_dp_load_raw:
-		foveon_dp_load_raw();
+	case LoadRawType::FoveonDpLoadRaw:
+		FoveonDpLoadRaw();
 		break;
-	case LoadRawType::foveon_sd_load_raw:
-		foveon_sd_load_raw();
+	case LoadRawType::FoveonSdLoadRaw:
+		FoveonSdLoadRaw();
 		break;
-	case LoadRawType::hasselblad_load_raw:
-		hasselblad_load_raw();
+	case LoadRawType::HasselbladLoadRaw:
+		HasselbladLoadRaw();
 		break;
-	case LoadRawType::imacon_full_load_raw:
-		imacon_full_load_raw();
+	case LoadRawType::ImaconFullLoadRaw:
+		ImaconFullLoadRaw();
 		break;
-	case LoadRawType::kodak_262_load_raw:
-		kodak_262_load_raw();
+	case LoadRawType::Kodak262LoadRaw:
+		Kodak262LoadRaw();
 		break;
-	case LoadRawType::kodak_65000_load_raw:
-		kodak_65000_load_raw();
+	case LoadRawType::Kodak65000LoadRaw:
+		Kodak65000LoadRaw();
 		break;
-	case LoadRawType::kodak_c330_load_raw:
-		kodak_c330_load_raw();
+	case LoadRawType::KodakC330LoadRaw:
+		KodakC330LoadRaw();
 		break;
-	case LoadRawType::kodak_c603_load_raw:
-		kodak_c603_load_raw();
+	case LoadRawType::KodakC603LoadRaw:
+		KodakC603LoadRaw();
 		break;
-	case LoadRawType::kodak_dc120_load_raw:
-		kodak_dc120_load_raw();
+	case LoadRawType::KodakDC120LoadRaw:
+		KodakDC120LoadRaw();
 		break;
-	case LoadRawType::kodak_jpeg_load_raw:
-		kodak_jpeg_load_raw();
+	case LoadRawType::KodakJpegLoadRaw:
+		KodakJpegLoadRaw();
 		break;
-	case LoadRawType::kodak_radc_load_raw:
-		kodak_radc_load_raw();
+	case LoadRawType::KodakRadcLoadRaw:
+		KodakRadcLoadRaw();
 		break;
-	case LoadRawType::kodak_rgb_load_raw:
-		kodak_rgb_load_raw();
+	case LoadRawType::KodakRgbLoadRaw:
+		KodakRgbLoadRaw();
 		break;
-	case LoadRawType::kodak_ycbcr_load_raw:
-		kodak_ycbcr_load_raw();
+	case LoadRawType::KodakYcbcrLoadRaw:
+		KodakYcbcrLoadRaw();
 		break;
-	case LoadRawType::leaf_hdr_load_raw:
-		leaf_hdr_load_raw();
+	case LoadRawType::LeafHdrLoadRaw:
+		LeafHdrLoadRaw();
 		break;
-	case LoadRawType::minolta_rd175_load_raw:
-		minolta_rd175_load_raw();
+	case LoadRawType::MinoltaRD175LoadRaw:
+		MinoltaRD175LoadRaw();
 		break;
-	case LoadRawType::nikon_load_raw:
-		nikon_load_raw();
+	case LoadRawType::NikonLoadRaw:
+		NikonLoadRaw();
 		break;
-	case LoadRawType::nikon_yuv_load_raw:
-		nikon_yuv_load_raw();
+	case LoadRawType::NikonYuvLoadRaw:
+		NikonYuvLoadRaw();
 		break;
-	case LoadRawType::nokia_load_raw:
-		nokia_load_raw();
+	case LoadRawType::NokiaLoadRaw:
+		NokiaLoadRaw();
 		break;
-	case LoadRawType::olympus_load_raw:
-		olympus_load_raw();
+	case LoadRawType::OlympusLoadRaw:
+		OlympusLoadRaw();
 		break;
-	case LoadRawType::panasonic_load_raw:
-		panasonic_load_raw();
+	case LoadRawType::PanasonicLoadRaw:
+		PanasonicLoadRaw();
 		break;
-	case LoadRawType::pentax_load_raw:
-		pentax_load_raw();
+	case LoadRawType::PentaxLoadRaw:
+		PentaxLoadRaw();
 		break;
-	case LoadRawType::phase_one_load_raw:
-		phase_one_load_raw();
+	case LoadRawType::PhaseOneLoadRaw:
+		PhaseOneLoadRaw();
 		break;
-	case LoadRawType::phase_one_load_raw_c:
-		phase_one_load_raw_c();
+	case LoadRawType::PhaseOneLoadRawC:
+		PhaseOneLoadRawC();
 		break;
-	case LoadRawType::quicktake_100_load_raw:
-		quicktake_100_load_raw();
+	case LoadRawType::Quicktake100LoadRaw:
+		Quicktake100LoadRaw();
 		break;
-	case LoadRawType::redcine_load_raw:
-		redcine_load_raw();
+	case LoadRawType::RedcineLoadRaw:
+		RedcineLoadRaw();
 		break;
-	case LoadRawType::rollei_load_raw:
-		rollei_load_raw();
+	case LoadRawType::RolleiLoadRaw:
+		RolleiLoadRaw();
 		break;
-	case LoadRawType::samsung_load_raw:
-		samsung_load_raw();
+	case LoadRawType::SamsungLoadRaw:
+		SamsungLoadRaw();
 		break;
-	case LoadRawType::samsung2_load_raw:
-		samsung2_load_raw();
+	case LoadRawType::Samsung2LoadRaw:
+		Samsung2LoadRaw();
 		break;
-	case LoadRawType::samsung3_load_raw:
-		samsung3_load_raw();
+	case LoadRawType::Samsung3LoadRaw:
+		Samsung3LoadRaw();
 		break;
-	case LoadRawType::sinar_4shot_load_raw:
-		sinar_4shot_load_raw();
+	case LoadRawType::Sinar4ShotLoadRaw:
+		Sinar4ShotLoadRaw();
 		break;
-	case LoadRawType::smal_v6_load_raw:
-		smal_v6_load_raw();
+	case LoadRawType::SmalV6LoadRaw:
+		SmalV6LoadRaw();
 		break;
-	case LoadRawType::smal_v9_load_raw:
-		smal_v9_load_raw();
+	case LoadRawType::SmalV9LoadRaw:
+		SmalV9LoadRaw();
 		break;
-	case LoadRawType::sony_load_raw:
-		sony_load_raw();
+	case LoadRawType::SonyLoadRaw:
+		SonyLoadRaw();
 		break;
-	case LoadRawType::sony_arw_load_raw:
-		sony_arw_load_raw();
+	case LoadRawType::SonyArwLoadRaw:
+		SonyArwLoadRaw();
 		break;
-	case LoadRawType::sony_arw2_load_raw:
-		sony_arw2_load_raw();
+	case LoadRawType::SonyArw2LoadRaw:
+		SonyArw2LoadRaw();
 		break;
 	default:
 		break;
@@ -476,248 +477,249 @@ void CImageLoader::LoadRaw()
 
 void CImageLoader::LoadImageThumbnail()
 {
-	if (_options->user_flip >= 0)
-		_info->flip = _options->user_flip;
-	switch ((_info->flip + 3600) % 360)
+	if (_options->_userFlip >= 0)
+		_info->_flip = _options->_userFlip;
+	switch ((_info->_flip + 3600) % 360)
 	{
 	case 270:
-		_info->flip = 5;
+		_info->_flip = 5;
 		break;
 	case 180:
-		_info->flip = 3;
+		_info->_flip = 3;
 		break;
 	case  90:
-		_info->flip = 6;
+		_info->_flip = 6;
 	}
-	_info->write_fun = WriteThumbType::write_ppm_tiff;
+	_info->_writeFun = WriteThumbType::WritePpmTiff;
 
-	if ((!_info->thumb_offset))
+	if ((!_info->_thumbOffset))
 	{
 		throw CExceptionNoThumbnail();
 	}
-	else if (_info->thumb_load_raw != LoadRawType::unknown_load_raw)
+	else if (_info->_thumbLoadRaw != LoadRawType::UnknownLoadRaw)
 	{
-		_info->load_raw = _info->thumb_load_raw;
-		_info->data_offset = _info->thumb_offset;
-		_info->height = _info->thumb_height;
-		_info->width = _info->thumb_width;
-		_info->filters = 0;
-		_info->colors = 3;
+		_info->_loadRaw = _info->_thumbLoadRaw;
+		_info->_dataOffset = _info->_thumbOffset;
+		_info->_height = _info->_thumbHeight;
+		_info->_width = _info->_thumbWidth;
+		_info->_filters = 0;
+		_info->_colors = 3;
 
-		if (!_info->is_raw)
+		if (!_info->_isRaw)
 			throw CExceptionNoRaw();
 
-		_info->shrink = _info->filters && (_info->half_size || _options->threshold || _options->aber[0] != 1 || _options->aber[2] != 1);
-		_info->iheight = (_info->height + _info->shrink) >> _info->shrink;
-		_info->iwidth = (_info->width + _info->shrink) >> _info->shrink;
+		_info->_shrink = _info->_filters && (_info->_halfSize || _options->_threshold || _options->_aber[0] != 1 || _options->_aber[2] != 1);
+		_info->_iheight = (_info->_height + _info->_shrink) >> _info->_shrink;
+		_info->_iwidth = (_info->_width + _info->_shrink) >> _info->_shrink;
 
-		if (_info->meta_length)
+		if (_info->_metaLength)
 		{
-			_info->meta_data = (char *)malloc(_info->meta_length);
-			if (!_info->meta_data)
+			_info->_metaData = (char *)malloc(_info->_metaLength);
+			if (!_info->_metaData)
 				throw CExceptionMemory("LoadImageRaw()");
 		}
-		if (_info->filters || _info->colors == 1)
+		if (_info->_filters || _info->_colors == 1)
 		{
-			_info->raw_image = (unsigned short *)calloc((_info->raw_height + 7), _info->raw_width * 2);
-			if (!_info->raw_image)
+			_info->_rawImage = (unsigned short *)calloc((_info->_rawHeight + 7), _info->_rawWidth * 2);
+			if (!_info->_rawImage)
 				throw CExceptionMemory("LoadImageRaw()");
 		}
 		else
 		{
-			_info->image = (unsigned short(*)[4]) calloc(_info->iheight, _info->iwidth * sizeof *_info->image);
-			if (!_info->image)
+			_info->_image = (unsigned short(*)[4]) calloc(_info->_iheight, _info->_iwidth * sizeof *_info->_image);
+			if (!_info->_image)
 				throw CExceptionMemory("LoadImageRaw()");
 		}
 
-		if (_info->shot_select >= _info->is_raw)
+		if (_info->_shotSelect >= _info->_isRaw)
 			throw CExceptionInvalidImageRequest();
 
-		_reader->Seek(_info->data_offset, SEEK_SET);
+		_reader->Seek(_info->_dataOffset, SEEK_SET);
 		LoadRaw();
 
-		if (_options->document_mode == 3)
+		if (_options->_documentMode == 3)
 		{
-			_info->top_margin = _info->left_margin = _info->fuji_width = 0;
-			_info->height = _info->raw_height;
-			_info->width = _info->raw_width;
+			_info->_topMargin = _info->_leftMargin = _info->_fujiWidth = 0;
+			_info->_height = _info->_rawHeight;
+			_info->_width = _info->_rawWidth;
 		}
-		_info->iheight = (_info->height + _info->shrink) >> _info->shrink;
-		_info->iwidth = (_info->width + _info->shrink) >> _info->shrink;
-		if (_info->raw_image)
+		_info->_iheight = (_info->_height + _info->_shrink) >> _info->_shrink;
+		_info->_iwidth = (_info->_width + _info->_shrink) >> _info->_shrink;
+		if (_info->_rawImage)
 		{
-			_info->image = (unsigned short(*)[4]) calloc(_info->iheight, _info->iwidth * sizeof *_info->image);
-			if (!_info->image)
+			_info->_image = (unsigned short(*)[4]) calloc(_info->_iheight, _info->_iwidth * sizeof *_info->_image);
+			if (!_info->_image)
 				throw CExceptionMemory("LoadImageRaw()");
-			crop_masked_pixels();
-			free(_info->raw_image);
-			_info->raw_image = nullptr;
+			CropMaskedPixels();
+			free(_info->_rawImage);
+			_info->_rawImage = nullptr;
 		}
-		if (_info->zero_is_bad)
-			remove_zeroes();
-		bad_pixels(_options->bpfile);
-		if (_options->dark_frame)
-			subtract(_options->dark_frame);
-		int quality = 2 + !_info->fuji_width;
-		if (_options->user_qual >= 0)
-			quality = _options->user_qual;
-		int i = _info->cblack[3];
+		if (_info->_zeroIsBad)
+			RemoveZeroes();
+		BadPixels(_options->_bpFile);
+		if (_options->_darkFrame)
+			Subtract(_options->_darkFrame);
+		int quality = 2 + !_info->_fujiWidth;
+		if (_options->_userQuality >= 0)
+			quality = _options->_userQuality;
+		int i = _info->_cBlack[3];
 		for (size_t c = 0; c < 3; c++)
 		{
-			if (i > _info->cblack[c])
-				i = _info->cblack[c];
+			if (i > _info->_cBlack[c])
+				i = _info->_cBlack[c];
 		}
 		for (size_t c = 0; c < 4; c++)
-			_info->cblack[c] -= i;
-		_info->black += i;
-		i = _info->cblack[6];
-		for (size_t c = 0; c < (_info->cblack[4] * _info->cblack[5]); c++)
-			if (i > _info->cblack[6 + c])
-				i = _info->cblack[6 + c];
-		for (size_t c = 0; c < (_info->cblack[4] * _info->cblack[5]); c++)
-			_info->cblack[6 + c] -= i;
-		_info->black += i;
-		if (_options->user_black >= 0)
-			_info->black = _options->user_black;
+			_info->_cBlack[c] -= i;
+		_info->_black += i;
+		i = _info->_cBlack[6];
+		for (size_t c = 0; c < (_info->_cBlack[4] * _info->_cBlack[5]); c++)
+			if (i > _info->_cBlack[6 + c])
+				i = _info->_cBlack[6 + c];
+		for (size_t c = 0; c < (_info->_cBlack[4] * _info->_cBlack[5]); c++)
+			_info->_cBlack[6 + c] -= i;
+		_info->_black += i;
+		if (_options->_userBlack >= 0)
+			_info->_black = _options->_userBlack;
 		for (size_t c = 0; c < 4; c++)
-			_info->cblack[c] += _info->black;
-		if (_options->user_sat > 0)
-			_info->maximum = _options->user_sat;
+			_info->_cBlack[c] += _info->_black;
+		if (_options->_userSaturation > 0)
+			_info->_maximum = _options->_userSaturation;
 		//#ifdef COLORCHECK
-		colorcheck();
+		Colorcheck();
 		//#endif
-		if (_info->is_foveon)
+		if (_info->_isFoveon)
 		{
-			if (_options->document_mode || _info->load_raw == LoadRawType::foveon_dp_load_raw)
+			if (_options->_documentMode || _info->_loadRaw == LoadRawType::FoveonDpLoadRaw)
 			{
-				for (i = 0; i < _info->height*_info->width * 4; i++)
-					if ((short)_info->image[0][i] < 0)
-						_info->image[0][i] = 0;
+				for (i = 0; i < _info->_height*_info->_width * 4; i++)
+					if ((short)_info->_image[0][i] < 0)
+						_info->_image[0][i] = 0;
 			}
 			else
 			{
-				foveon_interpolate();
+				FoveonInterpolate();
 			}
 		}
-		else if (_options->document_mode < 2)
+		else if (_options->_documentMode < 2)
 		{
-			scale_colors();
+			ScaleColors();
 		}
-		pre_interpolate();
-		if (_info->filters && !_options->document_mode)
+		PreInterpolate();
+		if (_info->_filters && !_options->_documentMode)
 		{
 			if (quality == 0)
-				lin_interpolate();
-			else if (quality == 1 || _info->colors > 3)
-				vng_interpolate();
-			else if (quality == 2 && _info->filters > 1000)
-				ppg_interpolate();
-			else if (_info->filters == 9)
-				xtrans_interpolate(quality * 2 - 3);
+				LinInterpolate();
+			else if (quality == 1 || _info->_colors > 3)
+				VngInterpolate();
+			else if (quality == 2 && _info->_filters > 1000)
+				PpgInterpolate();
+			else if (_info->_filters == 9)
+				XtransInterpolate(quality * 2 - 3);
 			else
-				ahd_interpolate();
+				AhdInterpolate();
 		}
-		if (_info->mix_green)
+		if (_info->_mixGreen)
 		{
-			_info->colors = 3;
-			for (i = 0; i < _info->height*_info->width; i++)
-				_info->image[i][1] = (_info->image[i][1] + _info->image[i][3]) >> 1;
+			_info->_colors = 3;
+			for (i = 0; i < _info->_height*_info->_width; i++)
+				_info->_image[i][1] = (_info->_image[i][1] + _info->_image[i][3]) >> 1;
 		}
-		if (!_info->is_foveon && _info->colors == 3)
-			median_filter();
-		if (!_info->is_foveon && _options->highlight == 2)
-			blend_highlights();
-		if (!_info->is_foveon && _options->highlight > 2)
-			recover_highlights();
-		if (_options->use_fuji_rotate)
-			fuji_rotate();
+		if (!_info->_isFoveon && _info->_colors == 3)
+			MedianFilter();
+		if (!_info->_isFoveon && _options->_highlight == 2)
+			BlendHighlights();
+		if (!_info->_isFoveon && _options->_highlight > 2)
+			RecoverHighlights();
+		if (_options->_useFujiRotate)
+			FujiRotate();
 #ifndef NO_LCMS
-		if (_options->cam_profile)
-			apply_profile(_options->cam_profile, _options->out_profile);
+		if (_options->_cameraProfile)
+			ApplyProfile(_options->_cameraProfile, _options->_outProfile);
 #endif
-		convert_to_rgb();
-		if (_options->use_fuji_rotate)
-			stretch();
+		ConvertToRGB();
+		if (_options->_useFujiRotate)
+			Stretch();
 	}
 	else
 	{
-		_reader->Seek(_info->thumb_offset, SEEK_SET);
-		_info->write_fun = _info->write_thumb;
+		_reader->Seek(_info->_thumbOffset, SEEK_SET);
+		_info->_writeFun = _info->_writeThumb;
 	}
 
 	const char* write_ext;
-	if (_info->write_fun == WriteThumbType::jpeg_thumb)
+	if (_info->_writeFun == WriteThumbType::JpegThumb)
 		write_ext = ".jpg";
-	else if (_options->output_tiff && _info->write_fun == WriteThumbType::write_ppm_tiff)
+	else if (_options->_outputTiff && _info->_writeFun == WriteThumbType::WritePpmTiff)
 		write_ext = ".tiff";
 	else
-		write_ext = &".pgm\0.ppm\0.ppm\0.pam"[(_info->colors * 5 - 5)];
-	char* ofname = (char *)malloc(strlen(_reader->GetFileName()) + 64);
+		write_ext = &".pgm\0.ppm\0.ppm\0.pam"[(_info->_colors * 5 - 5)];
+	size_t lenOutName = strlen(_reader->GetFileName()) + 64;
+	char* ofname = (char *)malloc(lenOutName);
 	CAutoFreeMemory autoFreeOutput(ofname);
 
-	strcpy(ofname, _reader->GetFileName());
+	strcpy_s(ofname, lenOutName, _reader->GetFileName());
 	char* cp = strrchr(ofname, '.');
 	if (cp)
 		*cp = 0;
-	if (_options->multi_out)
+	if (_options->_multiOut)
 		sprintf(ofname + strlen(ofname), "_%0*d",
-			snprintf(0, 0, "%d", _info->is_raw - 1), _info->shot_select);
-	if (_options->thumbnail_only)
-		strcat(ofname, ".thumb");
-	strcat(ofname, write_ext);
+			snprintf(0, 0, "%d", _info->_isRaw - 1), _info->_shotSelect);
+	if (_options->_thumbnailOnly)
+		strcat_s(ofname, lenOutName, ".thumb");
+	strcat_s(ofname, lenOutName, write_ext);
 	_writer = new CWriter(ofname);
 
-	switch (_info->write_fun)
+	switch (_info->_writeFun)
 	{
-	case WriteThumbType::layer_thumb:
-		layer_thumb();
+	case WriteThumbType::LayerThumb:
+		LayerThumb();
 		break;
-	case WriteThumbType::ppm_thumb:
-		ppm_thumb();
+	case WriteThumbType::PpmThumb:
+		PpmThumb();
 		break;
-	case WriteThumbType::ppm16_thumb:
-		ppm16_thumb();
+	case WriteThumbType::Ppm16Thumb:
+		Ppm16Thumb();
 		break;
-	case WriteThumbType::rollei_thumb:
-		rollei_thumb();
+	case WriteThumbType::RolleiThumb:
+		RolleiThumb();
 		break;
-	case WriteThumbType::jpeg_thumb:
-		jpeg_thumb();
+	case WriteThumbType::JpegThumb:
+		JpegThumb();
 		break;
-	case WriteThumbType::foveon_thumb:
-		foveon_thumb();
+	case WriteThumbType::FoveonThumb:
+		FoveonThumb();
 		break;
-	case WriteThumbType::write_ppm_tiff:
-		write_ppm_tiff();
+	case WriteThumbType::WritePpmTiff:
+		WritePpmTiff();
 		break;
-	case WriteThumbType::unknown_write:
+	case WriteThumbType::UnknownWrite:
 	default:
 		break;
 	}
 }
 
-void CImageLoader::packed_load_raw()
+void CImageLoader::PackedLoadRaw()
 {
 	int vbits = 0;
 	UINT64 bitbuf = 0;
 
-	int bwide = _info->raw_width * _info->tiff_bps / 8;
-	bwide += bwide & _info->load_flags >> 7;
-	int rbits = bwide * 8 - _info->raw_width * _info->tiff_bps;
-	if (_info->load_flags & 1)
+	int bwide = _info->_rawWidth * _info->_tiffBps / 8;
+	bwide += bwide & _info->_loadFlags >> 7;
+	int rbits = bwide * 8 - _info->_rawWidth * _info->_tiffBps;
+	if (_info->_loadFlags & 1)
 		bwide = bwide * 16 / 15;
-	int bite = 8 + (_info->load_flags & 24);
-	int half = (_info->raw_height + 1) >> 1;
-	for (int irow = 0; irow < _info->raw_height; irow++)
+	int bite = 8 + (_info->_loadFlags & 24);
+	int half = (_info->_rawHeight + 1) >> 1;
+	for (int irow = 0; irow < _info->_rawHeight; irow++)
 	{
 		int row = irow;
-		if (_info->load_flags & 2 &&
+		if (_info->_loadFlags & 2 &&
 			(row = irow % half * 2 + irow / half) == 1 &&
-			_info->load_flags & 4)
+			_info->_loadFlags & 4)
 		{
-			if (vbits = 0, _info->tiff_compress)
+			if (vbits = 0, _info->_tiffCompress)
 			{
-				_reader->Seek(_info->data_offset - (-half*bwide & -2048), SEEK_SET);
+				_reader->Seek(_info->_dataOffset - (-half*bwide & -2048), SEEK_SET);
 			}
 			else
 			{
@@ -725,18 +727,18 @@ void CImageLoader::packed_load_raw()
 				_reader->Seek(_reader->GetPosition() >> 3 << 2, SEEK_SET);
 			}
 		}
-		for (int col = 0; col < _info->raw_width; col++)
+		for (int col = 0; col < _info->_rawWidth; col++)
 		{
-			for (vbits -= _info->tiff_bps; vbits < 0; vbits += bite)
+			for (vbits -= _info->_tiffBps; vbits < 0; vbits += bite)
 			{
 				bitbuf <<= bite;
 				for (int i = 0; i < bite; i += 8)
 					bitbuf |= (unsigned)(_reader->GetChar() << i);
 			}
-			int val = bitbuf << (64 - _info->tiff_bps - vbits) >> (64 - _info->tiff_bps);
-			RAW(row, col ^ (_info->load_flags >> 6 & 1)) = val;
-			if (_info->load_flags & 1 && (col % 10) == 9 && _reader->GetChar() &&
-				row < _info->height + _info->top_margin && col < _info->width + _info->left_margin)
+			int val = bitbuf << (64 - _info->_tiffBps - vbits) >> (64 - _info->_tiffBps);
+			RAW(row, col ^ (_info->_loadFlags >> 6 & 1)) = val;
+			if (_info->_loadFlags & 1 && (col % 10) == 9 && _reader->GetChar() &&
+				row < _info->_height + _info->_topMargin && col < _info->_width + _info->_leftMargin)
 			{
 				throw CExceptionFile();
 			}
@@ -745,19 +747,19 @@ void CImageLoader::packed_load_raw()
 	}
 }
 
-void CImageLoader::unpacked_load_raw()
+void CImageLoader::UnpackedLoadRaw()
 {
 	int row, col, bits = 0;
 
-	while (1 << ++bits < _info->maximum);
-	_reader->read_shorts(_info->raw_image, _info->raw_width*_info->raw_height);
-	for (row = 0; row < _info->raw_height; row++)
+	while (1 << ++bits < _info->_maximum);
+	_reader->ReadShorts(_info->_rawImage, _info->_rawWidth*_info->_rawHeight);
+	for (row = 0; row < _info->_rawHeight; row++)
 	{
-		for (col = 0; col < _info->raw_width; col++)
+		for (col = 0; col < _info->_rawWidth; col++)
 		{
-			if ((RAW(row, col) >>= _info->load_flags) >> bits
-				&& (unsigned)(row - _info->top_margin) < _info->height
-				&& (unsigned)(col - _info->left_margin) < _info->width)
+			if ((RAW(row, col) >>= _info->_loadFlags) >> bits
+				&& (unsigned)(row - _info->_topMargin) < _info->_height
+				&& (unsigned)(col - _info->_leftMargin) < _info->_width)
 			{
 				throw CExceptionFile();
 			}
@@ -765,63 +767,63 @@ void CImageLoader::unpacked_load_raw()
 	}
 }
 
-void CImageLoader::lossless_dng_load_raw()
+void CImageLoader::LosslessDngLoadRaw()
 {
 	unsigned trow = 0;
 	unsigned tcol = 0;
 
-	while (trow < _info->raw_height)
+	while (trow < _info->_rawHeight)
 	{
 		unsigned save = _reader->GetPosition();
-		if (_info->tile_length < INT_MAX)
-			_reader->Seek(_reader->get4(), SEEK_SET);
-		jhead jh(*_reader, *_info, false);
+		if (_info->_tileLength < INT_MAX)
+			_reader->Seek(_reader->GetUInt(), SEEK_SET);
+		JHead jh(*_reader, *_info, false);
 		if (!jh._success)
 			break;
-		unsigned jwide = jh.jdata.wide;
-		if (_info->filters)
-			jwide *= jh.jdata.clrs;
-		jwide /= MIN(_info->is_raw, _info->tiff_samples);
-		switch (jh.jdata.algo)
+		unsigned jwide = jh._jdata.wide;
+		if (_info->_filters)
+			jwide *= jh._jdata.clrs;
+		jwide /= MIN(_info->_isRaw, _info->_tiffSamples);
+		switch (jh._jdata.algo)
 		{
 		case 0xc1:
-			jh.jdata.vpred[0] = 16384;
+			jh._jdata.vpred[0] = 16384;
 			_info->getbits(-1);
-			for (unsigned jrow = 0; jrow + 7 < jh.jdata.high; jrow += 8)
+			for (unsigned jrow = 0; jrow + 7 < jh._jdata.high; jrow += 8)
 			{
-				for (unsigned jcol = 0; jcol + 7 < jh.jdata.wide; jcol += 8)
+				for (unsigned jcol = 0; jcol + 7 < jh._jdata.wide; jcol += 8)
 				{
-					jh.ljpeg_idct();
-					unsigned short* rp = jh.jdata.idct;
-					unsigned row = trow + jcol / _info->tile_width + jrow * 2;
-					unsigned col = tcol + jcol % _info->tile_width;
+					jh.LJpegIdct();
+					unsigned short* rp = jh._jdata.idct;
+					unsigned row = trow + jcol / _info->_tileWidth + jrow * 2;
+					unsigned col = tcol + jcol % _info->_tileWidth;
 					for (unsigned i = 0; i < 16; i += 2)
 						for (unsigned j = 0; j < 8; j++)
-							adobe_copy_pixel(row + i, col + j, &rp);
+							AdobeCopyPixel(row + i, col + j, &rp);
 				}
 			}
 			break;
 		case 0xc3:
 			unsigned row = 0;
 			unsigned col = 0;
-			for (unsigned jrow = 0; jrow < jh.jdata.high; jrow++)
+			for (unsigned jrow = 0; jrow < jh._jdata.high; jrow++)
 			{
-				unsigned short* rp = jh.ljpeg_row(jrow);
+				unsigned short* rp = jh.LJpegRow(jrow);
 				for (unsigned jcol = 0; jcol < jwide; jcol++)
 				{
-					adobe_copy_pixel(trow + row, tcol + col, &rp);
-					if (++col >= _info->tile_width || col >= _info->raw_width)
+					AdobeCopyPixel(trow + row, tcol + col, &rp);
+					if (++col >= _info->_tileWidth || col >= _info->_rawWidth)
 						row += 1 + (col = 0);
 				}
 			}
 		}
 		_reader->Seek(save + 4, SEEK_SET);
-		if ((tcol += _info->tile_width) >= _info->raw_width)
-			trow += _info->tile_length + (tcol = 0);
+		if ((tcol += _info->_tileWidth) >= _info->_rawWidth)
+			trow += _info->_tileLength + (tcol = 0);
 	}
 }
 
-void CImageLoader::lossy_dng_load_raw()
+void CImageLoader::LossyDngLoadRaw()
 {
 	jpeg_decompress_struct cinfo;
 	jpeg_error_mgr jerr;
@@ -832,33 +834,33 @@ void CImageLoader::lossy_dng_load_raw()
 
 	unsigned sorder = _reader->GetOrder();
 
-	unsigned save = _info->data_offset - 4;
+	unsigned save = _info->_dataOffset - 4;
 
-	if (_info->meta_offset)
+	if (_info->_metaOffset)
 	{
-		_reader->Seek(_info->meta_offset, SEEK_SET);
+		_reader->Seek(_info->_metaOffset, SEEK_SET);
 		_reader->SetOrder(0x4d4d);
-		unsigned ntags = _reader->get4();
+		unsigned ntags = _reader->GetUInt();
 		while (ntags--)
 		{
-			unsigned opcode = _reader->get4();
-			_reader->get4();
-			_reader->get4();
+			unsigned opcode = _reader->GetUInt();
+			_reader->GetUInt();
+			_reader->GetUInt();
 			if (opcode != 8)
 			{
-				_reader->Seek(_reader->get4(), SEEK_CUR);
+				_reader->Seek(_reader->GetUInt(), SEEK_CUR);
 				continue;
 			}
 			_reader->Seek(20, SEEK_CUR);
-			unsigned c = _reader->get4();
+			unsigned c = _reader->GetUInt();
 			if (c > 2)
 				break;
 			_reader->Seek(12, SEEK_CUR);
-			unsigned deg = _reader->get4();
+			unsigned deg = _reader->GetUInt();
 			if (deg > 8)
 				break;
 			for (size_t i = 0; i <= deg && i < 9; i++)
-				coeff[i] = _reader->getreal(12);
+				coeff[i] = _reader->GetReal(12);
 			for (size_t i = 0; i < 256; i++)
 			{
 				double tot = 0;
@@ -871,20 +873,20 @@ void CImageLoader::lossy_dng_load_raw()
 	}
 	else
 	{
-		_info->gamma_curve(1 / 2.4, 12.92, 1, 255);
+		_info->GammaCurve(1 / 2.4, 12.92, 1, 255);
 		for (size_t c = 0; c < 3; c++)
-			memcpy(cur[c], _info->curve, sizeof cur[0]);
+			memcpy(cur[c], _info->_curve, sizeof cur[0]);
 	}
 	cinfo.err = jpeg_std_error(&jerr);
 	jpeg_create_decompress(&cinfo);
 
 	unsigned trow = 0;
 	unsigned tcol = 0;
-	while (trow < _info->raw_height)
+	while (trow < _info->_rawHeight)
 	{
 		_reader->Seek(save += 4, SEEK_SET);
-		if (_info->tile_length < INT_MAX)
-			_reader->Seek(_reader->get4(), SEEK_SET);
+		if (_info->_tileLength < INT_MAX)
+			_reader->Seek(_reader->GetUInt(), SEEK_SET);
 		jpeg_stdio_src(&cinfo, _reader->GetFILE());
 		jpeg_read_header(&cinfo, TRUE);
 		jpeg_start_decompress(&cinfo);
@@ -893,86 +895,86 @@ void CImageLoader::lossy_dng_load_raw()
 
 		unsigned row;
 		while (cinfo.output_scanline < cinfo.output_height &&
-			(row = trow + cinfo.output_scanline) < _info->height)
+			(row = trow + cinfo.output_scanline) < _info->_height)
 		{
 			jpeg_read_scanlines(&cinfo, buf, 1);
 			pixel = (JSAMPLE(*)[3]) buf[0];
-			for (unsigned col = 0; col < cinfo.output_width && tcol + col < _info->width; col++)
+			for (unsigned col = 0; col < cinfo.output_width && tcol + col < _info->_width; col++)
 			{
 				for (size_t c = 0; c < 3; c++)
-					_info->image[row*_info->width + tcol + col][c] = cur[c][pixel[col][c]];
+					_info->_image[row*_info->_width + tcol + col][c] = cur[c][pixel[col][c]];
 			}
 		}
 		jpeg_abort_decompress(&cinfo);
-		if ((tcol += _info->tile_width) >= _info->raw_width)
-			trow += _info->tile_length + (tcol = 0);
+		if ((tcol += _info->_tileWidth) >= _info->_rawWidth)
+			trow += _info->_tileLength + (tcol = 0);
 	}
 	jpeg_destroy_decompress(&cinfo);
-	_info->maximum = 0xffff;
+	_info->_maximum = 0xffff;
 }
 
-void CImageLoader::packed_dng_load_raw()
+void CImageLoader::PackedDngLoadRaw()
 {
-	unsigned short* pixel = (unsigned short *)calloc(_info->raw_width, _info->tiff_samples * sizeof *pixel);
+	unsigned short* pixel = (unsigned short *)calloc(_info->_rawWidth, _info->_tiffSamples * sizeof *pixel);
 	CAutoFreeMemory autoFree(pixel);
-	for (int row = 0; row < _info->raw_height; row++)
+	for (int row = 0; row < _info->_rawHeight; row++)
 	{
-		if (_info->tiff_bps == 16)
+		if (_info->_tiffBps == 16)
 		{
-			_reader->read_shorts(pixel, _info->raw_width * _info->tiff_samples);
+			_reader->ReadShorts(pixel, _info->_rawWidth * _info->_tiffSamples);
 		}
 		else
 		{
 			_info->getbits(-1);
-			for (int col = 0; col < _info->raw_width * _info->tiff_samples; col++)
-				pixel[col] = _info->getbits(_info->tiff_bps);
+			for (int col = 0; col < _info->_rawWidth * _info->_tiffSamples; col++)
+				pixel[col] = _info->getbits(_info->_tiffBps);
 		}
 		unsigned short *rp = pixel;
-		for (int col = 0; col < _info->raw_width; col++)
-			adobe_copy_pixel(row, col, &rp);
+		for (int col = 0; col < _info->_rawWidth; col++)
+			AdobeCopyPixel(row, col, &rp);
 	}
 }
 
-void CImageLoader::lossless_jpeg_load_raw()
+void CImageLoader::LosslessJpegLoadRaw()
 {
-	jhead jh(*_reader, *_info, false);
+	JHead jh(*_reader, *_info, false);
 	if (!jh._success)
 		return;
 
-	int jwide = jh.jdata.wide * jh.jdata.clrs;
+	int jwide = jh._jdata.wide * jh._jdata.clrs;
 	int row = 0;
 	int col = 0;
 
-	for (int jrow = 0; jrow < jh.jdata.high; jrow++)
+	for (int jrow = 0; jrow < jh._jdata.high; jrow++)
 	{
-		unsigned short* rp = jh.ljpeg_row(jrow);
-		if (_info->load_flags & 1)
-			row = jrow & 1 ? _info->height - 1 - jrow / 2 : jrow / 2;
+		unsigned short* rp = jh.LJpegRow(jrow);
+		if (_info->_loadFlags & 1)
+			row = jrow & 1 ? _info->_height - 1 - jrow / 2 : jrow / 2;
 		for (int jcol = 0; jcol < jwide; jcol++)
 		{
-			int val = _info->curve[*rp++];
-			if (_info->cr2_slice[0])
+			int val = _info->_curve[*rp++];
+			if (_info->_cr2Slice[0])
 			{
 				int jidx = jrow*jwide + jcol;
-				int i = jidx / (_info->cr2_slice[1] * _info->raw_height);
-				int j = i >= _info->cr2_slice[0];
+				int i = jidx / (_info->_cr2Slice[1] * _info->_rawHeight);
+				int j = i >= _info->_cr2Slice[0];
 				if (j)
-					i = _info->cr2_slice[0];
-				jidx -= i * (_info->cr2_slice[1] * _info->raw_height);
-				row = jidx / _info->cr2_slice[1 + j];
-				col = jidx % _info->cr2_slice[1 + j] + i*_info->cr2_slice[1];
+					i = _info->_cr2Slice[0];
+				jidx -= i * (_info->_cr2Slice[1] * _info->_rawHeight);
+				row = jidx / _info->_cr2Slice[1 + j];
+				col = jidx % _info->_cr2Slice[1 + j] + i*_info->_cr2Slice[1];
 			}
-			if (_info->raw_width == 3984 && (col -= 2) < 0)
-				col += (row--, _info->raw_width);
-			if ((unsigned)row < _info->raw_height)
+			if (_info->_rawWidth == 3984 && (col -= 2) < 0)
+				col += (row--, _info->_rawWidth);
+			if ((unsigned)row < _info->_rawHeight)
 				RAW(row, col) = val;
-			if (++col >= _info->raw_width)
+			if (++col >= _info->_rawWidth)
 				col = (row++, 0);
 		}
 	}
 }
 
-void CImageLoader::canon_load_raw()
+void CImageLoader::CanonLoadRaw()
 {
 	int diffbuf[64];
 	int base[2];
@@ -980,21 +982,21 @@ void CImageLoader::canon_load_raw()
 	int carry = 0;
 	int pnum = 0;
 
-	crw_init_tables(_info->tiff_compress, huff);
+	CrwInitTables(_info->_tiffCompress, huff);
 	CAutoFreeMemory autoFreeHuff0(huff[0]);
 	CAutoFreeMemory autoFreeHuff1(huff[1]);
 
-	int lowbits = canon_has_lowbits();
+	int lowbits = CanonHasLowbits();
 	if (!lowbits)
-		_info->maximum = 0x3ff;
-	_reader->Seek(540 + lowbits*_info->raw_height*_info->raw_width / 4, SEEK_SET);
-	_info->zero_after_ff = 1;
+		_info->_maximum = 0x3ff;
+	_reader->Seek(540 + lowbits*_info->_rawHeight*_info->_rawWidth / 4, SEEK_SET);
+	_info->_zeroAfterFF = 1;
 
 	_info->getbits(-1);
-	for (int row = 0; row < _info->raw_height; row += 8)
+	for (int row = 0; row < _info->_rawHeight; row += 8)
 	{
-		unsigned short* pixel = _info->raw_image + row*_info->raw_width;
-		int nblocks = MIN(8, _info->raw_height - row) * _info->raw_width >> 6;
+		unsigned short* pixel = _info->_rawImage + row*_info->_rawWidth;
+		int nblocks = MIN(8, _info->_rawHeight - row) * _info->_rawWidth >> 6;
 		for (int block = 0; block < nblocks; block++)
 		{
 			memset(diffbuf, 0, sizeof diffbuf);
@@ -1019,7 +1021,7 @@ void CImageLoader::canon_load_raw()
 			carry = diffbuf[0];
 			for (int i = 0; i < 64; i++)
 			{
-				if (pnum++ % _info->raw_width == 0)
+				if (pnum++ % _info->_rawWidth == 0)
 					base[0] = base[1] = 512;
 				if ((pixel[(block << 6) + i] = base[i & 1] += diffbuf[i]) >> 10)
 					throw CExceptionFile();
@@ -1028,16 +1030,16 @@ void CImageLoader::canon_load_raw()
 		if (lowbits)
 		{
 			int save = _reader->GetPosition();
-			_reader->Seek(26 + row*_info->raw_width / 4, SEEK_SET);
+			_reader->Seek(26 + row*_info->_rawWidth / 4, SEEK_SET);
 
 			unsigned short* prow = pixel;
-			for (unsigned i = 0; i < _info->raw_width * 2; i++)
+			for (unsigned i = 0; i < _info->_rawWidth * 2; i++)
 			{
 				int c = _reader->GetChar();
 				for (int r = 0; r < 8; r += 2, prow++)
 				{
 					int val = (*prow << 2) + ((c >> r) & 3);
-					if (_info->raw_width == 2672 && val < 512) val += 2;
+					if (_info->_rawWidth == 2672 && val < 512) val += 2;
 					*prow = val;
 				}
 			}
@@ -1046,17 +1048,17 @@ void CImageLoader::canon_load_raw()
 	}
 }
 
-void CImageLoader::canon_600_load_raw()
+void CImageLoader::Canon600LoadRaw()
 {
 	unsigned char  data[1120];
 
 	int row = 0;
-	for (size_t irow = 0; irow < _info->height; irow++)
+	for (size_t irow = 0; irow < _info->_height; irow++)
 	{
 		if (_reader->Read(data, 1, 1120) < 1120)
 			throw CExceptionFile();
 
-		unsigned short* pix = _info->raw_image + row*_info->raw_width;
+		unsigned short* pix = _info->_rawImage + row*_info->_rawWidth;
 		for (unsigned char* dp = data; dp < data + 1120; dp += 10, pix += 8)
 		{
 			pix[0] = (dp[0] << 2) + (dp[1] >> 6);
@@ -1068,36 +1070,36 @@ void CImageLoader::canon_600_load_raw()
 			pix[6] = (dp[7] << 2) + (dp[9] >> 4 & 3);
 			pix[7] = (dp[8] << 2) + (dp[9] >> 6);
 		}
-		if ((row += 2) > _info->height)
+		if ((row += 2) > _info->_height)
 			row = 1;
 	}
 }
 
-void CImageLoader::canon_rmf_load_raw()
+void CImageLoader::CanonRmfLoadRaw()
 {
-	for (int row = 0; row < _info->raw_height; row++)
+	for (int row = 0; row < _info->_rawHeight; row++)
 	{
-		for (int col = 0; col < _info->raw_width - 2; col += 3)
+		for (int col = 0; col < _info->_rawWidth - 2; col += 3)
 		{
-			int bits = _reader->get4();
+			int bits = _reader->GetUInt();
 			for (int c = 0; c < 3; c++)
 			{
 				int orow = row;
 				int ocol = col + c - 4;
 				if (ocol < 0)
 				{
-					ocol += _info->raw_width;
+					ocol += _info->_rawWidth;
 					if ((orow -= 2) < 0)
-						orow += _info->raw_height;
+						orow += _info->_rawHeight;
 				}
-				RAW(orow, ocol) = _info->curve[bits >> (10 * c + 2) & 0x3ff];
+				RAW(orow, ocol) = _info->_curve[bits >> (10 * c + 2) & 0x3ff];
 			}
 		}
 	}
-	_info->maximum = _info->curve[0x3ff];
+	_info->_maximum = _info->_curve[0x3ff];
 }
 
-void CImageLoader::canon_sraw_load_raw()
+void CImageLoader::CanonSrawLoadRaw()
 {
 	short *rp = 0;
 	short(*ip)[4];
@@ -1105,62 +1107,62 @@ void CImageLoader::canon_sraw_load_raw()
 	int jcol = 0;
 	int v[3] = { 0,0,0 };
 
-	jhead jh(*_reader, *_info, 0);
-	if (!jh._success || jh.jdata.clrs < 4)
+	JHead jh(*_reader, *_info, 0);
+	if (!jh._success || jh._jdata.clrs < 4)
 		return;
-	int jwide = (jh.jdata.wide >>= 1) * jh.jdata.clrs;
+	int jwide = (jh._jdata.wide >>= 1) * jh._jdata.clrs;
 
 	int ecol = 0;
-	for (int slice = 0; slice <= _info->cr2_slice[0]; slice++)
+	for (int slice = 0; slice <= _info->_cr2Slice[0]; slice++)
 	{
 		int scol = ecol;
-		ecol += _info->cr2_slice[1] * 2 / jh.jdata.clrs;
-		if (!_info->cr2_slice[0] || ecol > _info->raw_width - 1) ecol = _info->raw_width & -2;
-		for (int row = 0; row < _info->height; row += (jh.jdata.clrs >> 1) - 1)
+		ecol += _info->_cr2Slice[1] * 2 / jh._jdata.clrs;
+		if (!_info->_cr2Slice[0] || ecol > _info->_rawWidth - 1) ecol = _info->_rawWidth & -2;
+		for (int row = 0; row < _info->_height; row += (jh._jdata.clrs >> 1) - 1)
 		{
-			ip = (short(*)[4]) _info->image + row*_info->width;
-			for (int col = scol; col < ecol; col += 2, jcol += jh.jdata.clrs)
+			ip = (short(*)[4]) _info->_image + row*_info->_width;
+			for (int col = scol; col < ecol; col += 2, jcol += jh._jdata.clrs)
 			{
 				if ((jcol %= jwide) == 0)
-					rp = (short *)jh.ljpeg_row(jrow++);
-				if (col >= _info->width)
+					rp = (short *)jh.LJpegRow(jrow++);
+				if (col >= _info->_width)
 					continue;
-				for (size_t c = 0; c < (jh.jdata.clrs - 2); c++)
-					ip[col + (c >> 1)*_info->width + (c & 1)][0] = rp[jcol + c];
-				ip[col][1] = rp[jcol + jh.jdata.clrs - 2] - 16384;
-				ip[col][2] = rp[jcol + jh.jdata.clrs - 1] - 16384;
+				for (size_t c = 0; c < (jh._jdata.clrs - 2); c++)
+					ip[col + (c >> 1)*_info->_width + (c & 1)][0] = rp[jcol + c];
+				ip[col][1] = rp[jcol + jh._jdata.clrs - 2] - 16384;
+				ip[col][2] = rp[jcol + jh._jdata.clrs - 1] - 16384;
 			}
 		}
 	}
 
 	char *cp;
-	for (cp = _info->model2; *cp && !isdigit(*cp); cp++);
+	for (cp = _info->_model2; *cp && !isdigit(*cp); cp++);
 	sscanf(cp, "%d.%d.%d", v, v + 1, v + 2);
 
 	int ver = (v[0] * 1000 + v[1]) * 1000 + v[2];
-	int hue = (jh.jdata.sraw + 1) << 2;
-	if (_info->unique_id >= 0x80000281 || (_info->unique_id == 0x80000218 && ver > 1000006))
-		hue = jh.jdata.sraw << 1;
-	ip = (short(*)[4]) _info->image;
+	int hue = (jh._jdata.sraw + 1) << 2;
+	if (_info->_uniqueId >= 0x80000281 || (_info->_uniqueId == 0x80000218 && ver > 1000006))
+		hue = jh._jdata.sraw << 1;
+	ip = (short(*)[4]) _info->_image;
 	rp = ip[0];
-	for (int row = 0; row < _info->height; row++, ip += _info->width)
+	for (int row = 0; row < _info->_height; row++, ip += _info->_width)
 	{
-		if (row & (jh.jdata.sraw >> 1))
+		if (row & (jh._jdata.sraw >> 1))
 		{
-			for (int col = 0; col < _info->width; col += 2)
+			for (int col = 0; col < _info->_width; col += 2)
 			{
 				for (size_t c = 1; c < 3; c++)
 				{
-					if (row == _info->height - 1)
-						ip[col][c] = ip[col - _info->width][c];
+					if (row == _info->_height - 1)
+						ip[col][c] = ip[col - _info->_width][c];
 					else
-						ip[col][c] = (ip[col - _info->width][c] + ip[col + _info->width][c] + 1) >> 1;
+						ip[col][c] = (ip[col - _info->_width][c] + ip[col + _info->_width][c] + 1) >> 1;
 
-					for (col = 1; col < _info->width; col += 2)
+					for (col = 1; col < _info->_width; col += 2)
 					{
 						for (size_t z = 1; z < 3; z++)
 						{
-							if (col == _info->width - 1)
+							if (col == _info->_width - 1)
 								ip[col][z] = ip[col - 1][z];
 							else
 								ip[col][z] = (ip[col - 1][z] + ip[col + 1][z] + 1) >> 1;
@@ -1174,11 +1176,11 @@ void CImageLoader::canon_sraw_load_raw()
 	int pix[3];
 	for (; rp < ip[0]; rp += 4)
 	{
-		if (_info->unique_id == 0x80000218 ||
-			_info->unique_id == 0x80000250 ||
-			_info->unique_id == 0x80000261 ||
-			_info->unique_id == 0x80000281 ||
-			_info->unique_id == 0x80000287)
+		if (_info->_uniqueId == 0x80000218 ||
+			_info->_uniqueId == 0x80000250 ||
+			_info->_uniqueId == 0x80000261 ||
+			_info->_uniqueId == 0x80000281 ||
+			_info->_uniqueId == 0x80000287)
 		{
 			rp[1] = (rp[1] << 2) + hue;
 			rp[2] = (rp[2] << 2) + hue;
@@ -1188,63 +1190,63 @@ void CImageLoader::canon_sraw_load_raw()
 		}
 		else
 		{
-			if (_info->unique_id < 0x80000218) rp[0] -= 512;
+			if (_info->_uniqueId < 0x80000218) rp[0] -= 512;
 			pix[0] = rp[0] + rp[2];
 			pix[2] = rp[0] + rp[1];
 			pix[1] = rp[0] + ((-778 * rp[1] - (rp[2] << 11)) >> 12);
 		}
 		for (size_t c = 0; c < 3; c++)
-			rp[c] = CLIP(pix[c] * _info->sraw_mul[c] >> 10);
+			rp[c] = CLIP(pix[c] * _info->_srawMul[c] >> 10);
 	}
-	_info->maximum = 0x3fff;
+	_info->_maximum = 0x3fff;
 }
 
-void CImageLoader::eight_bit_load_raw()
+void CImageLoader::EightBitLoadRaw()
 {
-	unsigned char* pixel = (unsigned char *)calloc(_info->raw_width, sizeof *pixel);
+	unsigned char* pixel = (unsigned char *)calloc(_info->_rawWidth, sizeof *pixel);
 	CAutoFreeMemory autoFree(pixel);
-	for (unsigned row = 0; row < _info->raw_height; row++)
+	for (unsigned row = 0; row < _info->_rawHeight; row++)
 	{
-		if (_reader->Read(pixel, 1, _info->raw_width) < _info->raw_width)
+		if (_reader->Read(pixel, 1, _info->_rawWidth) < _info->_rawWidth)
 			throw CExceptionFile();
 
-		for (unsigned col = 0; col < _info->raw_width; col++)
-			RAW(row, col) = _info->curve[pixel[col]];
+		for (unsigned col = 0; col < _info->_rawWidth; col++)
+			RAW(row, col) = _info->_curve[pixel[col]];
 	}
-	_info->maximum = _info->curve[0xff];
+	_info->_maximum = _info->_curve[0xff];
 }
 
-void CImageLoader::hasselblad_load_raw()
+void CImageLoader::HasselbladLoadRaw()
 {
 	int* back[5];
 	int len[2];
 	int diff[12];
 
-	jhead jh(*_reader, *_info, false);
+	JHead jh(*_reader, *_info, false);
 	if (!jh._success)
 		return;
 	_reader->SetOrder(0x4949);
-	ph1_bits(-1);
-	back[4] = (int *)calloc(_info->raw_width, 3 * sizeof **back);
+	Ph1Bits(-1);
+	back[4] = (int *)calloc(_info->_rawWidth, 3 * sizeof **back);
 	CAutoFreeMemory autoFree(back[4]);
 	for (int c = 0; c < 3; c++)
-		back[c] = back[4] + c*_info->raw_width;
-	int sh = _info->tiff_samples > 1;
-	_info->cblack[6] >>= sh;
-	int shot = LIM(_info->shot_select, 1, _info->tiff_samples) - 1;
-	for (int row = 0; row < _info->raw_height; row++)
+		back[c] = back[4] + c*_info->_rawWidth;
+	int sh = _info->_tiffSamples > 1;
+	_info->_cBlack[6] >>= sh;
+	int shot = LIM(_info->_shotSelect, 1, _info->_tiffSamples) - 1;
+	for (int row = 0; row < _info->_rawHeight; row++)
 	{
 		for (int c = 0; c < 4; c++)
 			back[(c + 3) & 3] = back[c];
-		for (int col = 0; col < _info->raw_width; col += 2)
+		for (int col = 0; col < _info->_rawWidth; col += 2)
 		{
-			for (int s = 0; s < _info->tiff_samples * 2; s += 2)
+			for (int s = 0; s < _info->_tiffSamples * 2; s += 2)
 			{
 				for (size_t c = 0; c < 2; c++)
-					len[c] = ph1_huff(jh.jdata.huff[0]);
+					len[c] = Ph1Huff(jh._jdata.huff[0]);
 				for (size_t c = 0; c < 2; c++)
 				{
-					diff[s + c] = ph1_bits(len[c]);
+					diff[s + c] = Ph1Bits(len[c]);
 					if ((diff[s + c] & (1 << (len[c] - 1))) == 0)
 						diff[s + c] -= (1 << len[c]) - 1;
 					if (diff[s + c] == 65535)
@@ -1253,12 +1255,12 @@ void CImageLoader::hasselblad_load_raw()
 			}
 			for (int s = col; s < col + 2; s++)
 			{
-				int pred = 0x8000 + _info->load_flags;
+				int pred = 0x8000 + _info->_loadFlags;
 				if (col)
 					pred = back[2][s - 2];
 				if (col && row > 1)
 				{
-					switch (jh.jdata.psv)
+					switch (jh._jdata.psv)
 					{
 					case 11:
 						pred += back[0][s] / 2 - back[0][s - 2] / 2;
@@ -1266,18 +1268,18 @@ void CImageLoader::hasselblad_load_raw()
 					}
 				}
 				int f = (row & 1) * 3 ^ ((col + s) & 1);
-				for (int c = 0; c < _info->tiff_samples; c++)
+				for (int c = 0; c < _info->_tiffSamples; c++)
 				{
-					pred += diff[(s & 1)*_info->tiff_samples + c];
+					pred += diff[(s & 1)*_info->_tiffSamples + c];
 					unsigned upix = pred >> sh & 0xffff;
-					if (_info->raw_image && c == shot)
+					if (_info->_rawImage && c == shot)
 						RAW(row, s) = upix;
-					if (_info->image)
+					if (_info->_image)
 					{
-						unsigned urow = row - _info->top_margin + (c & 1);
-						unsigned ucol = col - _info->left_margin - ((c >> 1) & 1);
-						unsigned short* ip = &_info->image[urow*_info->width + ucol][f];
-						if (urow < _info->height && ucol < _info->width)
+						unsigned urow = row - _info->_topMargin + (c & 1);
+						unsigned ucol = col - _info->_leftMargin - ((c >> 1) & 1);
+						unsigned short* ip = &_info->_image[urow*_info->_width + ucol][f];
+						if (urow < _info->_height && ucol < _info->_width)
 							*ip = c < 4 ? upix : (*ip + upix) >> 1;
 					}
 				}
@@ -1285,20 +1287,20 @@ void CImageLoader::hasselblad_load_raw()
 			}
 		}
 	}
-	if (_info->image)
-		_info->mix_green = 1;
+	if (_info->_image)
+		_info->_mixGreen = 1;
 }
 
-void CImageLoader::imacon_full_load_raw()
+void CImageLoader::ImaconFullLoadRaw()
 {
-	if (!_info->image)
+	if (!_info->_image)
 		return;
-	for (int row = 0; row < _info->height; row++)
-		for (int col = 0; col < _info->width; col++)
-			_reader->read_shorts(_info->image[row*_info->width + col], 3);
+	for (int row = 0; row < _info->_height; row++)
+		for (int col = 0; col < _info->_width; col++)
+			_reader->ReadShorts(_info->_image[row*_info->_width + col], 3);
 }
 
-void CImageLoader::kodak_262_load_raw()
+void CImageLoader::Kodak262LoadRaw()
 {
 	static const unsigned char kodak_tree[2][26] =
 	{
@@ -1308,18 +1310,18 @@ void CImageLoader::kodak_262_load_raw()
 	unsigned short* huff[2] = {nullptr, nullptr};
 	int pi = 0;
 
-	CAutoFreeMemory autoFreeHuff0(huff[0] = CDecoder::make_decoder(kodak_tree[0]));
-	CAutoFreeMemory autoFreeHuff1(huff[1] = CDecoder::make_decoder(kodak_tree[1]));
+	CAutoFreeMemory autoFreeHuff0(huff[0] = CDecoder::MakeDecoder(kodak_tree[0]));
+	CAutoFreeMemory autoFreeHuff1(huff[1] = CDecoder::MakeDecoder(kodak_tree[1]));
 
-	int ns = (_info->raw_height + 63) >> 5;
-	unsigned char* pixel = (unsigned char *)malloc(_info->raw_width * 32 + ns * 4);
+	int ns = (_info->_rawHeight + 63) >> 5;
+	unsigned char* pixel = (unsigned char *)malloc(_info->_rawWidth * 32 + ns * 4);
 	CAutoFreeMemory autoFree(pixel);
 
-	int* strip = (int *)(pixel + _info->raw_width * 32);
+	int* strip = (int *)(pixel + _info->_rawWidth * 32);
 	_reader->SetOrder(0x4d4d);
 	for (size_t c = 0; c < ns; c++)
-		strip[c] = _reader->get4();
-	for (int row = 0; row < _info->raw_height; row++)
+		strip[c] = _reader->GetUInt();
+	for (int row = 0; row < _info->_rawHeight; row++)
 	{
 		if ((row & 31) == 0)
 		{
@@ -1327,11 +1329,11 @@ void CImageLoader::kodak_262_load_raw()
 			_info->getbits(-1);
 			pi = 0;
 		}
-		for (int col = 0; col < _info->raw_width; col++)
+		for (int col = 0; col < _info->_rawWidth; col++)
 		{
 			int chess = (row + col) & 1;
-			int pi1 = chess ? pi - 2 : pi - _info->raw_width - 1;
-			int pi2 = chess ? pi - 2 * _info->raw_width : pi - _info->raw_width + 1;
+			int pi1 = chess ? pi - 2 : pi - _info->_rawWidth - 1;
+			int pi2 = chess ? pi - 2 * _info->_rawWidth : pi - _info->_rawWidth + 1;
 			if (col <= chess)
 				pi1 = -1;
 			if (pi1 < 0)
@@ -1341,50 +1343,50 @@ void CImageLoader::kodak_262_load_raw()
 			if (pi1 < 0 && col > 1)
 				pi1 = pi2 = pi - 2;
 			int pred = (pi1 < 0) ? 0 : (pixel[pi1] + pixel[pi2]) >> 1;
-			int val = pred + jhead::ljpeg_diff(huff[chess], *_info);
+			int val = pred + JHead::LJpegDiff(huff[chess], *_info);
 			pixel[pi] = val;
 			if (val >> 8)
 				throw CExceptionFile();
-			val = _info->curve[pixel[pi++]];
+			val = _info->_curve[pixel[pi++]];
 			RAW(row, col) = val;
 		}
 	}
 }
 
-void CImageLoader::kodak_65000_load_raw()
+void CImageLoader::Kodak65000LoadRaw()
 {
 	short buf[256];
 	int pred[2];
 
-	for (int row = 0; row < _info->height; row++)
+	for (int row = 0; row < _info->_height; row++)
 	{
-		for (int col = 0; col < _info->width; col += 256)
+		for (int col = 0; col < _info->_width; col += 256)
 		{
 			pred[0] = pred[1] = 0;
-			int len = MIN(256, _info->width - col);
-			int ret = kodak_65000_decode(buf, len);
+			int len = MIN(256, _info->_width - col);
+			int ret = Kodak65000Decode(buf, len);
 			for (int i = 0; i < len; i++)
-				if ((RAW(row, col + i) = _info->curve[ret ? buf[i] : (pred[i & 1] += buf[i])]) >> 12)
+				if ((RAW(row, col + i) = _info->_curve[ret ? buf[i] : (pred[i & 1] += buf[i])]) >> 12)
 					throw CExceptionFile();
 		}
 	}
 }
 
-void CImageLoader::kodak_c330_load_raw()
+void CImageLoader::KodakC330LoadRaw()
 {
 	int rgb[3];
 
-	unsigned char* pixel = (unsigned char *)calloc(_info->raw_width, 2 * sizeof *pixel);
+	unsigned char* pixel = (unsigned char *)calloc(_info->_rawWidth, 2 * sizeof *pixel);
 	CAutoFreeMemory autoFree(pixel);
 
-	for (int row = 0; row < _info->height; row++)
+	for (int row = 0; row < _info->_height; row++)
 	{
-		if (_reader->Read(pixel, _info->raw_width, 2) < 2)
+		if (_reader->Read(pixel, _info->_rawWidth, 2) < 2)
 			throw CExceptionFile();
 
-		if (_info->load_flags && (row & 31) == 31)
-			_reader->Seek(_info->raw_width * 32, SEEK_CUR);
-		for (int col = 0; col < _info->width; col++)
+		if (_info->_loadFlags && (row & 31) == 31)
+			_reader->Seek(_info->_rawWidth * 32, SEEK_CUR);
+		for (int col = 0; col < _info->_width; col++)
 		{
 			int y = pixel[col * 2];
 			int cb = pixel[(col * 2 & -4) | 1] - 128;
@@ -1393,55 +1395,55 @@ void CImageLoader::kodak_c330_load_raw()
 			rgb[2] = rgb[1] + cb;
 			rgb[0] = rgb[1] + cr;
 			for (size_t c = 0; c < 3; c++)
-				_info->image[row*_info->width + col][c] = _info->curve[LIM(rgb[c], 0, 255)];
+				_info->_image[row*_info->_width + col][c] = _info->_curve[LIM(rgb[c], 0, 255)];
 		}
 	}
-	_info->maximum = _info->curve[0xff];
+	_info->_maximum = _info->_curve[0xff];
 }
 
-void CImageLoader::kodak_c603_load_raw()
+void CImageLoader::KodakC603LoadRaw()
 {
 	int rgb[3];
 
-	unsigned char* pixel = (unsigned char *)calloc(_info->raw_width, 3 * sizeof *pixel);
+	unsigned char* pixel = (unsigned char *)calloc(_info->_rawWidth, 3 * sizeof *pixel);
 	CAutoFreeMemory autoFree(pixel);
-	for (int row = 0; row < _info->height; row++)
+	for (int row = 0; row < _info->_height; row++)
 	{
 		if (~row & 1)
-			if (_reader->Read(pixel, _info->raw_width, 3) < 3)
+			if (_reader->Read(pixel, _info->_rawWidth, 3) < 3)
 				throw CExceptionFile();
 
-		for (int col = 0; col < _info->width; col++)
+		for (int col = 0; col < _info->_width; col++)
 		{
-			int y = pixel[_info->width * 2 * (row & 1) + col];
-			int cb = pixel[_info->width + (col & -2)] - 128;
-			int cr = pixel[_info->width + (col & -2) + 1] - 128;
+			int y = pixel[_info->_width * 2 * (row & 1) + col];
+			int cb = pixel[_info->_width + (col & -2)] - 128;
+			int cr = pixel[_info->_width + (col & -2) + 1] - 128;
 			rgb[1] = y - ((cb + cr + 2) >> 2);
 			rgb[2] = rgb[1] + cb;
 			rgb[0] = rgb[1] + cr;
 			for (size_t c = 0; c < 3; c++)
-				_info->image[row*_info->width + col][c] = _info->curve[LIM(rgb[c], 0, 255)];
+				_info->_image[row*_info->_width + col][c] = _info->_curve[LIM(rgb[c], 0, 255)];
 		}
 	}
-	_info->maximum = _info->curve[0xff];
+	_info->_maximum = _info->_curve[0xff];
 }
 
-void CImageLoader::kodak_dc120_load_raw()
+void CImageLoader::KodakDC120LoadRaw()
 {
 	static const int mul[4] = { 162, 192, 187,  92 };
 	static const int add[4] = { 0, 636, 424, 212 };
 	unsigned char pixel[848];
 
-	for (int row = 0; row < _info->height; row++)
+	for (int row = 0; row < _info->_height; row++)
 	{
 		if (_reader->Read(pixel, 1, 848) < 848)
 			throw CExceptionFile();
 
 		int shift = row * mul[row & 3] + add[row & 3];
-		for (int col = 0; col < _info->width; col++)
+		for (int col = 0; col < _info->_width; col++)
 			RAW(row, col) = (unsigned short)pixel[(col + shift) % 848];
 	}
-	_info->maximum = 0xff;
+	_info->_maximum = 0xff;
 }
 
 #pragma region Manege method jpeg.lib
@@ -1451,14 +1453,14 @@ METHODDEF(boolean) fill_input_buffer(j_decompress_ptr cinfo)
 	static unsigned char jpeg_buffer[4096];
 
 	size_t nbytes = fread(jpeg_buffer, 1, 4096, _fileForMethod);
-	swab((char*)jpeg_buffer, (char*)jpeg_buffer, nbytes);
+	_swab((char*)jpeg_buffer, (char*)jpeg_buffer, nbytes);
 	cinfo->src->next_input_byte = jpeg_buffer;
 	cinfo->src->bytes_in_buffer = nbytes;
 	return TRUE;
 }
 #pragma endregion
 
-void CImageLoader::kodak_jpeg_load_raw()
+void CImageLoader::KodakJpegLoadRaw()
 {
 	jpeg_decompress_struct cinfo;
 	jpeg_error_mgr jerr;
@@ -1477,22 +1479,22 @@ void CImageLoader::kodak_jpeg_load_raw()
 #pragma endregion
 	jpeg_read_header(&cinfo, TRUE);
 	jpeg_start_decompress(&cinfo);
-	if ((cinfo.output_width != _info->width) ||
-		(cinfo.output_height * 2 != _info->height) ||
+	if ((cinfo.output_width != _info->_width) ||
+		(cinfo.output_height * 2 != _info->_height) ||
 		(cinfo.output_components != 3))
 	{
 		jpeg_destroy_decompress(&cinfo);
 		throw CExceptionJpegError();;
 	}
 	buf = (*cinfo.mem->alloc_sarray)
-		((j_common_ptr)&cinfo, JPOOL_IMAGE, _info->width * 3, 1);
+		((j_common_ptr)&cinfo, JPOOL_IMAGE, _info->_width * 3, 1);
 
 	while (cinfo.output_scanline < cinfo.output_height)
 	{
 		row = cinfo.output_scanline * 2;
 		jpeg_read_scanlines(&cinfo, buf, 1);
 		pixel = (JSAMPLE(*)[3]) buf[0];
-		for (col = 0; col < _info->width; col += 2)
+		for (col = 0; col < _info->_width; col += 2)
 		{
 			RAW(row + 0, col + 0) = pixel[col + 0][1] << 1;
 			RAW(row + 1, col + 1) = pixel[col + 1][1] << 1;
@@ -1502,13 +1504,13 @@ void CImageLoader::kodak_jpeg_load_raw()
 	}
 	jpeg_finish_decompress(&cinfo);
 	jpeg_destroy_decompress(&cinfo);
-	_info->maximum = 0xff << 1;
+	_info->_maximum = 0xff << 1;
 }
 
 #define FORYX for (y=1; y < 3; y++) for (x=col+1; x >= col; x--)
 #define PREDICTOR (c ? (buf[c][y-1][x] + buf[c][y][x+1]) / 2 \
 : (buf[c][y-1][x+1] + 2*buf[c][y-1][x] + buf[c][y][x+1]) / 4)
-void CImageLoader::kodak_radc_load_raw()
+void CImageLoader::KodakRadcLoadRaw()
 {
 	static const char src[] =
 	{
@@ -1540,18 +1542,18 @@ void CImageLoader::kodak_radc_load_raw()
 
 	for (size_t i = 2; i < 12; i += 2)
 		for (size_t c = pt[i - 2]; c <= pt[i]; c++)
-			_info->curve[c] = (float)(c - pt[i - 2]) / (pt[i] - pt[i - 2]) * (pt[i + 1] - pt[i - 1]) + pt[i - 1] + 0.5;
+			_info->_curve[c] = (float)(c - pt[i - 2]) / (pt[i] - pt[i - 2]) * (pt[i + 1] - pt[i - 1]) + pt[i - 1] + 0.5;
 	int s = 0;
 	for (size_t i = 0; i < sizeof src; i += 2)
 		for (int c = 0; c < (256 >> src[i]); c++)
 			((unsigned short *)huff)[s++] = src[i] << 8 | (unsigned char)src[i + 1];
-	s = _info->kodak_cbpp == 243 ? 2 : 3;
+	s = _info->_kodakCbpp == 243 ? 2 : 3;
 	for (int c = 0; c < 256; c++)
 		huff[18][c] = (8 - s) << 8 | c >> s << s | 1 << (s - 1);
 	_info->getbits(-1);
 	for (size_t i = 0; i < sizeof(buf) / sizeof(short); i++)
 		((short *)buf)[i] = 2048;
-	for (int row = 0; row < _info->height; row += 4)
+	for (int row = 0; row < _info->_height; row += 4)
 	{
 		for (size_t c = 0; c < 3; c++)
 			mul[c] = _info->getbits(6);
@@ -1566,31 +1568,31 @@ void CImageLoader::kodak_radc_load_raw()
 			last[c] = mul[c];
 			for (int r = 0; r <= !c; r++)
 			{
-				buf[c][1][_info->width / 2] = buf[c][2][_info->width / 2] = mul[c] << 7;
+				buf[c][1][_info->_width / 2] = buf[c][2][_info->_width / 2] = mul[c] << 7;
 				int tree = 1;
-				for (int col = _info->width / 2; col > 0; )
+				for (int col = _info->_width / 2; col > 0; )
 				{
-					if ((tree = radc_token(tree)))
+					if ((tree = RadcToken(tree)))
 					{
 						col -= 2;
 						if (tree == 8)
-							FORYX buf[c][y][x] = (unsigned char)radc_token(18) * mul[c];
+							FORYX buf[c][y][x] = (unsigned char)RadcToken(18) * mul[c];
 						else
-							FORYX buf[c][y][x] = radc_token(tree + 10) * 16 + PREDICTOR;
+							FORYX buf[c][y][x] = RadcToken(tree + 10) * 16 + PREDICTOR;
 					}
 					else
 					{
 						int nreps;
 						do
 						{
-							nreps = (col > 2) ? radc_token(9) + 1 : 1;
+							nreps = (col > 2) ? RadcToken(9) + 1 : 1;
 							for (int rep = 0; rep < 8 && rep < nreps && col > 0; rep++)
 							{
 								col -= 2;
 								FORYX buf[c][y][x] = PREDICTOR;
 								if (rep & 1)
 								{
-									int step = radc_token(10) << 4;
+									int step = RadcToken(10) << 4;
 									FORYX buf[c][y][x] += step;
 								}
 							}
@@ -1599,7 +1601,7 @@ void CImageLoader::kodak_radc_load_raw()
 				}
 				for (y = 0; y < 2; y++)
 				{
-					for (x = 0; x < _info->width / 2; x++)
+					for (x = 0; x < _info->_width / 2; x++)
 					{
 						int val = (buf[c][y + 1][x] << 4) / mul[c];
 						if (val < 0) val = 0;
@@ -1614,12 +1616,12 @@ void CImageLoader::kodak_radc_load_raw()
 		}
 		for (y = row; y < row + 4; y++)
 		{
-			for (x = 0; x < _info->width; x++)
+			for (x = 0; x < _info->_width; x++)
 			{
 				if ((x + y) & 1)
 				{
 					int r = x ? x - 1 : x + 1;
-					s = x + 1 < _info->width ? x + 1 : x - 1;
+					s = x + 1 < _info->_width ? x + 1 : x - 1;
 					int val = (RAW(y, x) - 2048) * 2 + (RAW(y, r) + RAW(y, s)) / 2;
 					if (val < 0)
 						val = 0;
@@ -1628,26 +1630,26 @@ void CImageLoader::kodak_radc_load_raw()
 			}
 		}
 	}
-	for (size_t i = 0; i < _info->height*_info->width; i++)
-		_info->raw_image[i] = _info->curve[_info->raw_image[i]];
-	_info->maximum = 0x3fff;
+	for (size_t i = 0; i < _info->_height*_info->_width; i++)
+		_info->_rawImage[i] = _info->_curve[_info->_rawImage[i]];
+	_info->_maximum = 0x3fff;
 }
 #undef FORYX
 #undef PREDICTOR
 
-void CImageLoader::kodak_rgb_load_raw()
+void CImageLoader::KodakRgbLoadRaw()
 {
 	short buf[768];
 	int rgb[3];
 
-	unsigned short *ip = _info->image[0];
+	unsigned short *ip = _info->_image[0];
 
-	for (int row = 0; row < _info->height; row++)
+	for (int row = 0; row < _info->_height; row++)
 	{
-		for (int col = 0; col < _info->width; col += 256)
+		for (int col = 0; col < _info->_width; col += 256)
 		{
-			int len = MIN(256, _info->width - col);
-			kodak_65000_decode(buf, len * 3);
+			int len = MIN(256, _info->_width - col);
+			Kodak65000Decode(buf, len * 3);
 			memset(rgb, 0, sizeof rgb);
 			short* bp = buf;
 			for (int i = 0; i < len; i++, ip += 4)
@@ -1658,20 +1660,20 @@ void CImageLoader::kodak_rgb_load_raw()
 	}
 }
 
-void CImageLoader::kodak_ycbcr_load_raw()
+void CImageLoader::KodakYcbcrLoadRaw()
 {
 	short buf[384];
 	int y[2][2];
 	int rgb[3];
 
-	if (!_info->image)
+	if (!_info->_image)
 		return;
-	for (int row = 0; row < _info->height; row += 2)
+	for (int row = 0; row < _info->_height; row += 2)
 	{
-		for (int col = 0; col < _info->width; col += 128)
+		for (int col = 0; col < _info->_width; col += 128)
 		{
-			int len = MIN(128, _info->width - col);
-			kodak_65000_decode(buf, len * 3);
+			int len = MIN(128, _info->_width - col);
+			Kodak65000Decode(buf, len * 3);
 			int cb = 0;
 			int cr = 0;
 			y[0][1] = y[1][1] = 0;
@@ -1690,9 +1692,9 @@ void CImageLoader::kodak_ycbcr_load_raw()
 						if ((y[j][k] = y[j][k ^ 1] + *bp++) >> 10)
 							throw CExceptionFile();
 
-						unsigned short* ip = _info->image[(row + j)*_info->width + col + i + k];
+						unsigned short* ip = _info->_image[(row + j)*_info->_width + col + i + k];
 						for (size_t c = 0; c < 3; c++)
-							ip[c] = _info->curve[LIM(y[j][k] + rgb[c], 0, 0xfff)];
+							ip[c] = _info->_curve[LIM(y[j][k] + rgb[c], 0, 0xfff)];
 					}
 				}
 			}
@@ -1700,56 +1702,56 @@ void CImageLoader::kodak_ycbcr_load_raw()
 	}
 }
 
-void CImageLoader::kodak_thumb_load_raw()
+void CImageLoader::LodakThumbLoadRaw()
 {
-	_info->colors = _info->thumb_misc >> 5;
-	for (int row = 0; row < _info->height; row++)
-		for (int col = 0; col < _info->width; col++)
-			_reader->read_shorts(_info->image[row*_info->width + col], _info->colors);
-	_info->maximum = (1 << (_info->thumb_misc & 31)) - 1;
+	_info->_colors = _info->_thumbMisc >> 5;
+	for (int row = 0; row < _info->_height; row++)
+		for (int col = 0; col < _info->_width; col++)
+			_reader->ReadShorts(_info->_image[row*_info->_width + col], _info->_colors);
+	_info->_maximum = (1 << (_info->_thumbMisc & 31)) - 1;
 }
 
-void CImageLoader::leaf_hdr_load_raw()
+void CImageLoader::LeafHdrLoadRaw()
 {
 	unsigned short *pixel = nullptr;
 	CAutoFreeMemory autoFree(pixel, false);
 
-	if (!_info->filters)
+	if (!_info->_filters)
 	{
-		pixel = (unsigned short *)calloc(_info->raw_width, sizeof *pixel);
+		pixel = (unsigned short *)calloc(_info->_rawWidth, sizeof *pixel);
 		autoFree.ChangePointer(pixel);
 	}
 
 	unsigned tile = 0;
-	for (size_t c = 0; c < _info->tiff_samples; c++)
+	for (size_t c = 0; c < _info->_tiffSamples; c++)
 	{
-		for (size_t r = 0; r < _info->raw_height; r++)
+		for (size_t r = 0; r < _info->_rawHeight; r++)
 		{
-			if (r % _info->tile_length == 0)
+			if (r % _info->_tileLength == 0)
 			{
-				_reader->Seek(_info->data_offset + 4 * tile++, SEEK_SET);
-				_reader->Seek(_reader->get4(), SEEK_SET);
+				_reader->Seek(_info->_dataOffset + 4 * tile++, SEEK_SET);
+				_reader->Seek(_reader->GetUInt(), SEEK_SET);
 			}
-			if (_info->filters && c != _info->shot_select)
+			if (_info->_filters && c != _info->_shotSelect)
 				continue;
-			if (_info->filters)
-				pixel = _info->raw_image + r*_info->raw_width;
+			if (_info->_filters)
+				pixel = _info->_rawImage + r*_info->_rawWidth;
 
-			_reader->read_shorts(pixel, _info->raw_width);
-			int row = r - _info->top_margin;
-			if (!_info->filters && row < _info->height)
-				for (size_t col = 0; col < _info->width; col++)
-					_info->image[row*_info->width + col][c] = pixel[col + _info->left_margin];
+			_reader->ReadShorts(pixel, _info->_rawWidth);
+			int row = r - _info->_topMargin;
+			if (!_info->_filters && row < _info->_height)
+				for (size_t col = 0; col < _info->_width; col++)
+					_info->_image[row*_info->_width + col][c] = pixel[col + _info->_leftMargin];
 		}
 	}
-	if (!_info->filters)
+	if (!_info->_filters)
 	{
-		_info->maximum = 0xffff;
-		_info->raw_color = 1;
+		_info->_maximum = 0xffff;
+		_info->_rawColor = 1;
 	}
 }
 
-void CImageLoader::minolta_rd175_load_raw()
+void CImageLoader::MinoltaRD175LoadRaw()
 {
 	unsigned char pixel[768];
 
@@ -1788,10 +1790,10 @@ void CImageLoader::minolta_rd175_load_raw()
 				RAW(row, col) = pixel[col / 2] << 1;
 		}
 	}
-	_info->maximum = 0xff << 1;
+	_info->_maximum = 0xff << 1;
 }
 
-void CImageLoader::nikon_load_raw()
+void CImageLoader::NikonLoadRaw()
 {
 	static const unsigned char nikon_tree[][32] =
 	{
@@ -1814,49 +1816,49 @@ void CImageLoader::nikon_load_raw()
 	int tree = 0;
 	int split = 0;
 
-	_reader->Seek(_info->meta_offset, SEEK_SET);
+	_reader->Seek(_info->_metaOffset, SEEK_SET);
 	unsigned short ver0 = _reader->GetChar();
 	unsigned short ver1 = _reader->GetChar();
 	if (ver0 == 0x49 || ver1 == 0x58)
 		_reader->Seek(2110, SEEK_CUR);
 	if (ver0 == 0x46)
 		tree = 2;
-	if (_info->tiff_bps == 14)
+	if (_info->_tiffBps == 14)
 		tree += 3;
-	_reader->read_shorts(vpred[0], 4);
-	int max = 1 << _info->tiff_bps & 0x7fff;
-	if ((csize = _reader->get2()) > 1)
+	_reader->ReadShorts(vpred[0], 4);
+	int max = 1 << _info->_tiffBps & 0x7fff;
+	if ((csize = _reader->GetUShort()) > 1)
 		step = max / (csize - 1);
 	if (ver0 == 0x44 && ver1 == 0x20 && step > 0)
 	{
 		for (int i = 0; i < csize; i++)
-			_info->curve[i*step] = _reader->get2();
+			_info->_curve[i*step] = _reader->GetUShort();
 		for (int i = 0; i < max; i++)
-			_info->curve[i] = (_info->curve[i - i%step] * (step - i%step) + _info->curve[i - i%step + step] * (i%step)) / step;
-		_reader->Seek(_info->meta_offset + 562, SEEK_SET);
-		split = _reader->get2();
+			_info->_curve[i] = (_info->_curve[i - i%step] * (step - i%step) + _info->_curve[i - i%step + step] * (i%step)) / step;
+		_reader->Seek(_info->_metaOffset + 562, SEEK_SET);
+		split = _reader->GetUShort();
 	}
 	else if (ver0 != 0x46 && csize <= 0x4001)
 	{
-		_reader->read_shorts(_info->curve, max = csize);
+		_reader->ReadShorts(_info->_curve, max = csize);
 	}
 
-	while (_info->curve[max - 2] == _info->curve[max - 1])
+	while (_info->_curve[max - 2] == _info->_curve[max - 1])
 		max--;
 
-	unsigned short* huff = CDecoder::make_decoder(nikon_tree[tree]);
+	unsigned short* huff = CDecoder::MakeDecoder(nikon_tree[tree]);
 	CAutoFreeMemory autoFree(huff);
-	_reader->Seek(_info->data_offset, SEEK_SET);
+	_reader->Seek(_info->_dataOffset, SEEK_SET);
 	_info->getbits(-1);
 	int min = 0;
-	for (int row = 0; row < _info->height; row++)
+	for (int row = 0; row < _info->_height; row++)
 	{
 		if (split && row == split)
 		{
-			autoFree.ChangePointer(huff = CDecoder::make_decoder(nikon_tree[tree + 1]));
+			autoFree.ChangePointer(huff = CDecoder::MakeDecoder(nikon_tree[tree + 1]));
 			max += (min = 16) << 1;
 		}
-		for (int col = 0; col < _info->raw_width; col++)
+		for (int col = 0; col < _info->_rawWidth; col++)
 		{
 			int i = _info->gethuff(huff);
 			int len = i & 15;
@@ -1871,20 +1873,20 @@ void CImageLoader::nikon_load_raw()
 			if ((unsigned short)(hpred[col & 1] + min) >= max)
 				throw CExceptionFile();
 
-			RAW(row, col) = _info->curve[LIM((short)hpred[col & 1], 0, 0x3fff)];
+			RAW(row, col) = _info->_curve[LIM((short)hpred[col & 1], 0, 0x3fff)];
 		}
 	}
 }
 
-void CImageLoader::nikon_yuv_load_raw()
+void CImageLoader::NikonYuvLoadRaw()
 {
 	int yuv[4];
 	int rgb[3];
 	UINT64 bitbuf = 0;
 
-	for (int row = 0; row < _info->raw_height; row++)
+	for (int row = 0; row < _info->_rawHeight; row++)
 	{
-		for (int col = 0; col < _info->raw_width; col++)
+		for (int col = 0; col < _info->_rawWidth; col++)
 		{
 			int b = col & 1;
 			if (!b)
@@ -1899,19 +1901,19 @@ void CImageLoader::nikon_yuv_load_raw()
 			rgb[1] = yuv[b] - 0.337633*yuv[2] - 0.698001*yuv[3];
 			rgb[2] = yuv[b] + 1.732446*yuv[2];
 			for (size_t c = 0; c < 3; c++)
-				_info->image[row*_info->width + col][c] = _info->curve[LIM(rgb[c], 0, 0xfff)] / _info->cam_mul[c];
+				_info->_image[row*_info->_width + col][c] = _info->_curve[LIM(rgb[c], 0, 0xfff)] / _info->_camMul[c];
 		}
 	}
 }
 
-void CImageLoader::nokia_load_raw()
+void CImageLoader::NokiaLoadRaw()
 {
 	int rev = 3 * (_reader->GetOrder() == 0x4949);
-	int dwide = (_info->raw_width * 5 + 1) / 4;
+	int dwide = (_info->_rawWidth * 5 + 1) / 4;
 	unsigned char* data = (unsigned char *)malloc(dwide * 2);
 	CAutoFreeMemory autoFree(data);
 
-	for (int row = 0; row < _info->raw_height; row++)
+	for (int row = 0; row < _info->_rawHeight; row++)
 	{
 		if (_reader->Read(data + dwide, 1, dwide) < dwide)
 			throw CExceptionFile();
@@ -1919,28 +1921,28 @@ void CImageLoader::nokia_load_raw()
 		for (int c = 0; c < dwide; c++)
 			data[c] = data[dwide + (c ^ rev)];
 		unsigned char* dp = data;
-		for (int col = 0; col < _info->raw_width; dp += 5, col += 4)
+		for (int col = 0; col < _info->_rawWidth; dp += 5, col += 4)
 			for (int c = 0; c < 4; c++)
 				RAW(row, col + c) = (dp[c] << 2) | (dp[4] >> (c << 1) & 3);
 	}
 	autoFree.Release();
 
-	_info->maximum = 0x3ff;
-	if (strcmp(_info->make, "OmniVision"))
+	_info->_maximum = 0x3ff;
+	if (strcmp(_info->_make, "OmniVision"))
 		return;
 
-	int row = _info->raw_height / 2;
+	int row = _info->_rawHeight / 2;
 	double sum[] = { 0,0 };
-	for (int c = 0; c < (_info->width - 1); c++)
+	for (int c = 0; c < (_info->_width - 1); c++)
 	{
 		sum[c & 1] += SQR(RAW(row, c) - RAW(row + 1, c + 1));
 		sum[~c & 1] += SQR(RAW(row + 1, c) - RAW(row, c + 1));
 	}
 	if (sum[1] > sum[0])
-		_info->filters = 0x4b4b4b4b;
+		_info->_filters = 0x4b4b4b4b;
 }
 
-void CImageLoader::olympus_load_raw()
+void CImageLoader::OlympusLoadRaw()
 {
 	unsigned short huff[4096];
 	int acarry[2][3];
@@ -1952,10 +1954,10 @@ void CImageLoader::olympus_load_raw()
 			huff[++n] = (i + 1) << 8 | i;
 	_reader->Seek(7, SEEK_CUR);
 	_info->getbits(-1);
-	for (int row = 0; row < _info->height; row++)
+	for (int row = 0; row < _info->_height; row++)
 	{
 		memset(acarry, 0, sizeof acarry);
-		for (int col = 0; col < _info->raw_width; col++)
+		for (int col = 0; col < _info->_rawWidth; col++)
 		{
 			int* carry = acarry[col & 1];
 			int i = 2 * (carry[2] < 3);
@@ -1964,14 +1966,14 @@ void CImageLoader::olympus_load_raw()
 			int sign = _info->getbits(3);
 			int low = sign & 3;
 			sign = sign << 29 >> 31;
-			int high = _info->getbithuff(12, huff);
+			int high = _info->GetBitHuff(12, huff);
 			if (high == 12)
 				high = _info->getbits(16 - nbits) >> 1;
 			carry[0] = (high << nbits) | _info->getbits(nbits);
 			int diff = (carry[0] ^ sign) + carry[1];
 			carry[1] = (diff * 3 + carry[1]) >> 5;
 			carry[2] = carry[0] > 16 ? 0 : carry[2] + 1;
-			if (col >= _info->width)
+			if (col >= _info->_width)
 				continue;
 			int pred;
 			if (row < 2 && col < 2)
@@ -2003,25 +2005,25 @@ void CImageLoader::olympus_load_raw()
 	}
 }
 
-void CImageLoader::panasonic_load_raw()
+void CImageLoader::PanasonicLoadRaw()
 {
 	int sh = 0;
 	int pred[2];
 	int nonz[2];
 
-	pana_bits(0);
-	for (int row = 0; row < _info->height; row++)
+	PanaBits(0);
+	for (int row = 0; row < _info->_height; row++)
 	{
-		for (int col = 0; col < _info->raw_width; col++)
+		for (int col = 0; col < _info->_rawWidth; col++)
 		{
 			int i = col % 14;
 			if (i == 0)
 				pred[0] = pred[1] = nonz[0] = nonz[1] = 0;
 			if (i % 3 == 2)
-				sh = 4 >> (3 - pana_bits(2));
+				sh = 4 >> (3 - PanaBits(2));
 			if (nonz[i & 1])
 			{
-				int j = pana_bits(8);
+				int j = PanaBits(8);
 				if ((j))
 				{
 					if ((pred[i & 1] -= 0x80 << sh) < 0 || sh == 4)
@@ -2029,73 +2031,73 @@ void CImageLoader::panasonic_load_raw()
 					pred[i & 1] += j << sh;
 				}
 			}
-			else if ((nonz[i & 1] = pana_bits(8)) || i > 11)
+			else if ((nonz[i & 1] = PanaBits(8)) || i > 11)
 			{
-				pred[i & 1] = nonz[i & 1] << 4 | pana_bits(4);
+				pred[i & 1] = nonz[i & 1] << 4 | PanaBits(4);
 			}
-			if ((RAW(row, col) = pred[col & 1]) > 4098 && col < _info->width)
+			if ((RAW(row, col) = pred[col & 1]) > 4098 && col < _info->_width)
 				throw CExceptionFile();
 		}
 	}
 }
 
-void CImageLoader::pentax_load_raw()
+void CImageLoader::PentaxLoadRaw()
 {
 	unsigned short bit[2][15];
 	unsigned short huff[4097];
 	unsigned short vpred[2][2] = { { 0,0 },{ 0,0 } };
 	unsigned short hpred[2];
 
-	_reader->Seek(_info->meta_offset, SEEK_SET);
-	int dep = (_reader->get2() + 12) & 15;
+	_reader->Seek(_info->_metaOffset, SEEK_SET);
+	int dep = (_reader->GetUShort() + 12) & 15;
 	_reader->Seek(12, SEEK_CUR);
 	for (size_t c = 0; c < dep; c++)
-		bit[0][c] = _reader->get2();
+		bit[0][c] = _reader->GetUShort();
 	for (size_t c = 0; c < dep; c++)
 		bit[1][c] = _reader->GetChar();
 	for (size_t c = 0; c < dep; c++)
 		for (int i = bit[0][c]; i <= ((bit[0][c] + (4096 >> bit[1][c]) - 1) & 4095); )
 			huff[++i] = bit[1][c] << 8 | c;
 	huff[0] = 12;
-	_reader->Seek(_info->data_offset, SEEK_SET);
+	_reader->Seek(_info->_dataOffset, SEEK_SET);
 	_info->getbits(-1);
-	for (int row = 0; row < _info->raw_height; row++)
+	for (int row = 0; row < _info->_rawHeight; row++)
 	{
-		for (int col = 0; col < _info->raw_width; col++)
+		for (int col = 0; col < _info->_rawWidth; col++)
 		{
-			int diff = jhead::ljpeg_diff(huff, *_info);
+			int diff = JHead::LJpegDiff(huff, *_info);
 			if (col < 2)
 				hpred[col] = vpred[row & 1][col] += diff;
 			else
 				hpred[col & 1] += diff;
 			RAW(row, col) = hpred[col & 1];
-			if (hpred[col & 1] >> _info->tiff_bps)
+			if (hpred[col & 1] >> _info->_tiffBps)
 				throw CExceptionFile();
 		}
 	}
 }
 
-void CImageLoader::phase_one_load_raw()
+void CImageLoader::PhaseOneLoadRaw()
 {
-	_reader->Seek(_info->ph1.key_off, SEEK_SET);
-	unsigned short akey = _reader->get2();
-	unsigned short bkey = _reader->get2();
-	unsigned short mask = _info->ph1.format == 1 ? 0x5555 : 0x1354;
-	_reader->Seek(_info->data_offset, SEEK_SET);
-	_reader->read_shorts(_info->raw_image, _info->raw_width*_info->raw_height);
-	if (_info->ph1.format)
+	_reader->Seek(_info->_ph1.key_off, SEEK_SET);
+	unsigned short akey = _reader->GetUShort();
+	unsigned short bkey = _reader->GetUShort();
+	unsigned short mask = _info->_ph1.format == 1 ? 0x5555 : 0x1354;
+	_reader->Seek(_info->_dataOffset, SEEK_SET);
+	_reader->ReadShorts(_info->_rawImage, _info->_rawWidth*_info->_rawHeight);
+	if (_info->_ph1.format)
 	{
-		for (size_t i = 0; i < _info->raw_width*_info->raw_height; i += 2)
+		for (size_t i = 0; i < _info->_rawWidth*_info->_rawHeight; i += 2)
 		{
-			unsigned short a = _info->raw_image[i + 0] ^ akey;
-			unsigned short b = _info->raw_image[i + 1] ^ bkey;
-			_info->raw_image[i + 0] = (a & mask) | (b & ~mask);
-			_info->raw_image[i + 1] = (b & mask) | (a & ~mask);
+			unsigned short a = _info->_rawImage[i + 0] ^ akey;
+			unsigned short b = _info->_rawImage[i + 1] ^ bkey;
+			_info->_rawImage[i + 0] = (a & mask) | (b & ~mask);
+			_info->_rawImage[i + 1] = (b & mask) | (a & ~mask);
 		}
 	}
 }
 
-void CImageLoader::phase_one_load_raw_c()
+void CImageLoader::PhaseOneLoadRawC()
 {
 	static const int length[] = { 8,7,6,9,11,10,5,12,14,13 };
 	int len[2];
@@ -2103,33 +2105,33 @@ void CImageLoader::phase_one_load_raw_c()
 	short (*cblack)[2];
 	short (*rblack)[2];
 
-	unsigned short* pixel = (unsigned short *)calloc(_info->raw_width * 3 + _info->raw_height * 4, 2);
+	unsigned short* pixel = (unsigned short *)calloc(_info->_rawWidth * 3 + _info->_rawHeight * 4, 2);
 	CAutoFreeMemory autoFree(pixel);
 
-	int* offset = (int *)(pixel + _info->raw_width);
-	_reader->Seek(_info->strip_offset, SEEK_SET);
-	for (size_t row = 0; row < _info->raw_height; row++)
-		offset[row] = _reader->get4();
-	cblack = (short(*)[2]) (offset + _info->raw_height);
-	_reader->Seek(_info->ph1.black_col, SEEK_SET);
-	if (_info->ph1.black_col)
-		_reader->read_shorts((unsigned short *)cblack[0], _info->raw_height * 2);
+	int* offset = (int *)(pixel + _info->_rawWidth);
+	_reader->Seek(_info->_stripOffset, SEEK_SET);
+	for (size_t row = 0; row < _info->_rawHeight; row++)
+		offset[row] = _reader->GetUInt();
+	cblack = (short(*)[2]) (offset + _info->_rawHeight);
+	_reader->Seek(_info->_ph1.black_col, SEEK_SET);
+	if (_info->_ph1.black_col)
+		_reader->ReadShorts((unsigned short *)cblack[0], _info->_rawHeight * 2);
 
-	rblack = cblack + _info->raw_height;
-	_reader->Seek(_info->ph1.black_row, SEEK_SET);
-	if (_info->ph1.black_row)
-		_reader->read_shorts((unsigned short *)rblack[0], _info->raw_width * 2);
+	rblack = cblack + _info->_rawHeight;
+	_reader->Seek(_info->_ph1.black_row, SEEK_SET);
+	if (_info->_ph1.black_row)
+		_reader->ReadShorts((unsigned short *)rblack[0], _info->_rawWidth * 2);
 
 	for (unsigned i = 0; i < 256; i++)
-		_info->curve[i] = i*i / 3.969 + 0.5;
-	for (int row = 0; row < _info->raw_height; row++)
+		_info->_curve[i] = i*i / 3.969 + 0.5;
+	for (int row = 0; row < _info->_rawHeight; row++)
 	{
-		_reader->Seek(_info->data_offset + offset[row], SEEK_SET);
-		ph1_bits(-1);
+		_reader->Seek(_info->_dataOffset + offset[row], SEEK_SET);
+		Ph1Bits(-1);
 		pred[0] = pred[1] = 0;
-		for (int col = 0; col < _info->raw_width; col++)
+		for (int col = 0; col < _info->_rawWidth; col++)
 		{
-			if (col >= (_info->raw_width & -8))
+			if (col >= (_info->_rawWidth & -8))
 			{
 				len[0] = len[1] = 14;
 			}
@@ -2138,35 +2140,35 @@ void CImageLoader::phase_one_load_raw_c()
 				for (size_t i = 0; i < 2; i++)
 				{
 					int j;
-					for (j = 0; j < 5 && !ph1_bits(1); j++);
+					for (j = 0; j < 5 && !Ph1Bits(1); j++);
 					if (j--)
-						len[i] = length[j * 2 + ph1_bits(1)];
+						len[i] = length[j * 2 + Ph1Bits(1)];
 				}
 			}
 			int i = len[col & 1];
 			if (i == 14)
-				pixel[col] = pred[col & 1] = ph1_bits(16);
+				pixel[col] = pred[col & 1] = Ph1Bits(16);
 			else
-				pixel[col] = pred[col & 1] += ph1_bits(i) + 1 - (1 << (i - 1));
+				pixel[col] = pred[col & 1] += Ph1Bits(i) + 1 - (1 << (i - 1));
 			if (pred[col & 1] >> 16)
 				throw CExceptionFile();
 
-			if (_info->ph1.format == 5 && pixel[col] < 256)
-				pixel[col] = _info->curve[pixel[col]];
+			if (_info->_ph1.format == 5 && pixel[col] < 256)
+				pixel[col] = _info->_curve[pixel[col]];
 		}
-		for (int col = 0; col < _info->raw_width; col++)
+		for (int col = 0; col < _info->_rawWidth; col++)
 		{
-			int i = (pixel[col] << 2 * (_info->ph1.format != 8)) - _info->ph1.black
-				+ cblack[row][col >= _info->ph1.split_col]
-				+ rblack[col][row >= _info->ph1.split_row];
+			int i = (pixel[col] << 2 * (_info->_ph1.format != 8)) - _info->_ph1.black
+				+ cblack[row][col >= _info->_ph1.split_col]
+				+ rblack[col][row >= _info->_ph1.split_row];
 			if (i > 0)
 				RAW(row, col) = i;
 		}
 	}
-	_info->maximum = 0xfffc - _info->ph1.black;
+	_info->_maximum = 0xfffc - _info->_ph1.black;
 }
 
-void CImageLoader::quicktake_100_load_raw()
+void CImageLoader::Quicktake100LoadRaw()
 {
 	static const short gstep[16] =
 	{ -89,-60,-44,-32,-22,-15,-8,-2,2,8,15,22,32,44,60,89 };
@@ -2197,10 +2199,10 @@ void CImageLoader::quicktake_100_load_raw()
 
 	_info->getbits(-1);
 	memset(pixel, 0x80, sizeof pixel);
-	for (int row = 2; row < _info->height + 2; row++)
+	for (int row = 2; row < _info->_height + 2; row++)
 	{
 		int col;
-		for (col = 2 + (row & 1); col < _info->width + 2; col += 2)
+		for (col = 2 + (row & 1); col < _info->_width + 2; col += 2)
 		{
 			val = ((pixel[row - 1][col - 1] + 2 * pixel[row - 1][col + 1] +
 				pixel[row][col - 2]) >> 2) + gstep[_info->getbits(4)];
@@ -2214,9 +2216,9 @@ void CImageLoader::quicktake_100_load_raw()
 	}
 	for (int rb = 0; rb < 2; rb++)
 	{
-		for (int row = 2 + rb; row < _info->height + 2; row += 2)
+		for (int row = 2 + rb; row < _info->_height + 2; row += 2)
 		{
-			for (int col = 3 - (row & 1); col < _info->width + 2; col += 2)
+			for (int col = 3 - (row & 1); col < _info->_width + 2; col += 2)
 			{
 				if (row < 4 || col < 4)
 				{
@@ -2240,28 +2242,28 @@ void CImageLoader::quicktake_100_load_raw()
 			}
 		}
 	}
-	for (int row = 2; row < _info->height + 2; row++)
+	for (int row = 2; row < _info->_height + 2; row++)
 	{
-		for (int col = 3 - (row & 1); col < _info->width + 2; col += 2)
+		for (int col = 3 - (row & 1); col < _info->_width + 2; col += 2)
 		{
 			val = ((pixel[row][col - 1] + (pixel[row][col] << 2) + pixel[row][col + 1]) >> 1) - 0x100;
 			pixel[row][col] = LIM(val, 0, 255);
 		}
 	}
-	for (int row = 0; row < _info->height; row++)
-		for (int col = 0; col < _info->width; col++)
+	for (int row = 0; row < _info->_height; row++)
+		for (int col = 0; col < _info->_width; col++)
 			RAW(row, col) = curve[pixel[row + 2][col + 2]];
-	_info->maximum = 0x3ff;
+	_info->_maximum = 0x3ff;
 }
 
-void CImageLoader::redcine_load_raw()
+void CImageLoader::RedcineLoadRaw()
 {
 	jas_init();
 	jas_stream_t* in = jas_stream_fopen(_reader->GetFileName(), "rb");
 	if (!in)
 		throw CExceptionFile("Jasper open file failed");
 
-	jas_stream_seek(in, _info->data_offset + 20, SEEK_SET);
+	jas_stream_seek(in, _info->_dataOffset + 20, SEEK_SET);
 	jas_image_t* jimg = jas_image_decode(in, -1, 0);
 	if (!jimg)
 	{
@@ -2270,16 +2272,16 @@ void CImageLoader::redcine_load_raw()
 		throw CExceptionFile("Jasper decode file failed");
 	}
 
-	jas_matrix_t* jmat = jas_matrix_create(_info->height / 2, _info->width / 2);
+	jas_matrix_t* jmat = jas_matrix_create(_info->_height / 2, _info->_width / 2);
 	if (!jmat)
 	{
 		jas_image_destroy(jimg);
 		jas_stream_close(in);
 
-		throw CExceptionMemory("redcine_load_raw()");
+		throw CExceptionMemory("RedcineLoadRaw()");
 	}
 
-	unsigned short* img = (unsigned short *)calloc((_info->height + 2), (_info->width + 2) * 2);
+	unsigned short* img = (unsigned short *)calloc((_info->_height + 2), (_info->_width + 2) * 2);
 	CAutoFreeMemory autoFree(img, false);
 	if (!img)
 	{
@@ -2292,48 +2294,48 @@ void CImageLoader::redcine_load_raw()
 
 	for (int c = 0; c < 4; c++)
 	{
-		jas_image_readcmpt(jimg, c, 0, 0, _info->width / 2, _info->height / 2, jmat);
+		jas_image_readcmpt(jimg, c, 0, 0, _info->_width / 2, _info->_height / 2, jmat);
 		jas_seqent_t* data = jas_matrix_getref(jmat, 0, 0);
-		for (int row = c >> 1; row < _info->height; row += 2)
-			for (int col = c & 1; col < _info->width; col += 2)
-				img[(row + 1)*(_info->width + 2) + col + 1] = data[(row / 2)*(_info->width / 2) + col / 2];
+		for (int row = c >> 1; row < _info->_height; row += 2)
+			for (int col = c & 1; col < _info->_width; col += 2)
+				img[(row + 1)*(_info->_width + 2) + col + 1] = data[(row / 2)*(_info->_width / 2) + col / 2];
 	}
-	for (int col = 1; col <= _info->width; col++)
+	for (int col = 1; col <= _info->_width; col++)
 	{
-		img[col] = img[2 * (_info->width + 2) + col];
-		img[(_info->height + 1)*(_info->width + 2) + col] = img[(_info->height - 1)*(_info->width + 2) + col];
+		img[col] = img[2 * (_info->_width + 2) + col];
+		img[(_info->_height + 1)*(_info->_width + 2) + col] = img[(_info->_height - 1)*(_info->_width + 2) + col];
 	}
-	for (int row = 0; row < _info->height + 2; row++)
+	for (int row = 0; row < _info->_height + 2; row++)
 	{
-		img[row*(_info->width + 2)] = img[row*(_info->width + 2) + 2];
-		img[(row + 1)*(_info->width + 2) - 1] = img[(row + 1)*(_info->width + 2) - 3];
+		img[row*(_info->_width + 2)] = img[row*(_info->_width + 2) + 2];
+		img[(row + 1)*(_info->_width + 2) - 1] = img[(row + 1)*(_info->_width + 2) - 3];
 	}
-	for (int row = 1; row <= _info->height; row++)
+	for (int row = 1; row <= _info->_height; row++)
 	{
 		int col = 1 + (FC(row, 1) & 1);
-		unsigned short* pix = img + row*(_info->width + 2) + col;
-		for (; col <= _info->width; col += 2, pix += 2)
+		unsigned short* pix = img + row*(_info->_width + 2) + col;
+		for (; col <= _info->_width; col += 2, pix += 2)
 		{
-			int c = (((pix[0] - 0x800) << 3) + pix[-(_info->width + 2)] + pix[_info->width + 2] + pix[-1] + pix[1]) >> 2;
+			int c = (((pix[0] - 0x800) << 3) + pix[-(_info->_width + 2)] + pix[_info->_width + 2] + pix[-1] + pix[1]) >> 2;
 			pix[0] = LIM(c, 0, 4095);
 		}
 	}
-	for (int row = 0; row < _info->height; row++)
-		for (int col = 0; col < _info->width; col++)
-			RAW(row, col) = _info->curve[img[(row + 1)*(_info->width + 2) + col + 1]];
+	for (int row = 0; row < _info->_height; row++)
+		for (int col = 0; col < _info->_width; col++)
+			RAW(row, col) = _info->_curve[img[(row + 1)*(_info->_width + 2) + col + 1]];
 	jas_matrix_destroy(jmat);
 	jas_image_destroy(jimg);
 	jas_stream_close(in);
 }
 
-void CImageLoader::rollei_load_raw()
+void CImageLoader::RolleiLoadRaw()
 {
 	unsigned char pixel[10];
 	unsigned iten = 0;
 	unsigned buffer = 0;
 	unsigned todo[16];
 
-	unsigned isix = _info->raw_width * _info->raw_height * 5 / 8;
+	unsigned isix = _info->_rawWidth * _info->_rawHeight * 5 / 8;
 	while (_reader->Read(pixel, 1, 10) == 10)
 	{
 		unsigned i;
@@ -2349,35 +2351,35 @@ void CImageLoader::rollei_load_raw()
 			todo[i + 1] = buffer >> (14 - i) * 5;
 		}
 		for (i = 0; i < 16; i += 2)
-			_info->raw_image[todo[i]] = (todo[i + 1] & 0x3ff);
+			_info->_rawImage[todo[i]] = (todo[i + 1] & 0x3ff);
 	}
-	_info->maximum = 0x3ff;
+	_info->_maximum = 0x3ff;
 }
 
-void CImageLoader::samsung_load_raw()
+void CImageLoader::SamsungLoadRaw()
 {
 	int op[4];
 	int len[4];
 
 	_reader->SetOrder(0x4949);
-	for (int row = 0; row < _info->raw_height; row++)
+	for (int row = 0; row < _info->_rawHeight; row++)
 	{
-		_reader->Seek(_info->strip_offset + row * 4, SEEK_SET);
-		_reader->Seek(_info->data_offset + _reader->get4(), SEEK_SET);
-		ph1_bits(-1);
+		_reader->Seek(_info->_stripOffset + row * 4, SEEK_SET);
+		_reader->Seek(_info->_dataOffset + _reader->GetUInt(), SEEK_SET);
+		Ph1Bits(-1);
 		for (size_t c = 0; c < 4; c++)
 			len[c] = row < 2 ? 7 : 4;
-		for (int col = 0; col < _info->raw_width; col += 16)
+		for (int col = 0; col < _info->_rawWidth; col += 16)
 		{
-			int dir = ph1_bits(1);
+			int dir = Ph1Bits(1);
 			for (size_t c = 0; c < 4; c++)
-				op[c] = ph1_bits(2);
+				op[c] = Ph1Bits(2);
 			for (size_t c = 0; c < 4; c++)
 			{
 				switch (op[c])
 				{
 				case 3:
-					len[c] = ph1_bits(4);
+					len[c] = Ph1Bits(4);
 					break;
 				case 2:
 					len[c]--;
@@ -2389,19 +2391,19 @@ void CImageLoader::samsung_load_raw()
 			for (int c = 0; c < 16; c += 2)
 			{
 				int i = len[((c & 1) << 1) | (c >> 3)];
-				RAW(row, col + c) = ((signed)ph1_bits(i) << (32 - i) >> (32 - i)) +
+				RAW(row, col + c) = ((signed)Ph1Bits(i) << (32 - i) >> (32 - i)) +
 					(dir ? RAW(row + (~c | -2), col + c) : col ? RAW(row, col + (c | -2)) : 128);
 				if (c == 14)
 					c = -1;
 			}
 		}
 	}
-	for (int row = 0; row < _info->raw_height - 1; row += 2)
-		for (int col = 0; col < _info->raw_width - 1; col += 2)
+	for (int row = 0; row < _info->_rawHeight - 1; row += 2)
+		for (int col = 0; col < _info->_rawWidth - 1; col += 2)
 			SWAP(RAW(row, col + 1), RAW(row + 1, col));
 }
 
-void CImageLoader::samsung2_load_raw()
+void CImageLoader::Samsung2LoadRaw()
 {
 	static const unsigned short tab[14] =
 	{
@@ -2418,23 +2420,23 @@ void CImageLoader::samsung2_load_raw()
 		for (int c = 0; c < (1024 >> (tab[i] >> 8)); c++)
 			huff[++n] = tab[i];
 	_info->getbits(-1);
-	for (int row = 0; row < _info->raw_height; row++)
+	for (int row = 0; row < _info->_rawHeight; row++)
 	{
-		for (int col = 0; col < _info->raw_width; col++)
+		for (int col = 0; col < _info->_rawWidth; col++)
 		{
-			int diff = jhead::ljpeg_diff(huff, *_info);
+			int diff = JHead::LJpegDiff(huff, *_info);
 			if (col < 2)
 				hpred[col] = vpred[row & 1][col] += diff;
 			else
 				hpred[col & 1] += diff;
 			RAW(row, col) = hpred[col & 1];
-			if (hpred[col & 1] >> _info->tiff_bps)
+			if (hpred[col & 1] >> _info->_tiffBps)
 				throw CExceptionFile();
 		}
 	}
 }
 
-void CImageLoader::samsung3_load_raw()
+void CImageLoader::Samsung3LoadRaw()
 {
 	unsigned short lent[3][2];
 	unsigned short len[4];
@@ -2443,36 +2445,36 @@ void CImageLoader::samsung3_load_raw()
 	_reader->SetOrder(0x4949);
 	_reader->Seek(9, SEEK_CUR);
 	int opt = _reader->GetChar();
-	int init = (_reader->get2(), _reader->get2());
-	for (int row = 0; row < _info->raw_height; row++)
+	int init = (_reader->GetUShort(), _reader->GetUShort());
+	for (int row = 0; row < _info->_rawHeight; row++)
 	{
-		_reader->Seek((_info->data_offset - _reader->GetPosition()) & 15, SEEK_CUR);
-		ph1_bits(-1);
+		_reader->Seek((_info->_dataOffset - _reader->GetPosition()) & 15, SEEK_CUR);
+		Ph1Bits(-1);
 		int mag = 0;
 		int pmode = 7;
 		for (size_t c = 0; c < 6; c++)
 			((unsigned short *)lent)[c] = row < 2 ? 7 : 4;
 		prow[row & 1] = &RAW(row - 1, 1 - ((row & 1) << 1));	// green
 		prow[~row & 1] = &RAW(row - 2, 0);			// red and blue
-		for (int tab = 0; tab + 15 < _info->raw_width; tab += 16)
+		for (int tab = 0; tab + 15 < _info->_rawWidth; tab += 16)
 		{
 			if (~opt & 4 && !(tab & 63))
 			{
-				int i = ph1_bits(2);
-				mag = i < 3 ? mag - '2' + "204"[i] : ph1_bits(12);
+				int i = Ph1Bits(2);
+				mag = i < 3 ? mag - '2' + "204"[i] : Ph1Bits(12);
 			}
 			if (opt & 2)
-				pmode = 7 - 4 * ph1_bits(1);
-			else if (!ph1_bits(1))
-				pmode = ph1_bits(3);
-			if (opt & 1 || !ph1_bits(1))
+				pmode = 7 - 4 * Ph1Bits(1);
+			else if (!Ph1Bits(1))
+				pmode = Ph1Bits(3);
+			if (opt & 1 || !Ph1Bits(1))
 			{
 				for (size_t c = 0; c < 4; c++)
-					len[c] = ph1_bits(2);
+					len[c] = Ph1Bits(2);
 				for (size_t c = 0; c < 4; c++)
 				{
 					int i = ((row & 1) << 1 | (c & 1)) % 3;
-					len[c] = len[c] < 3 ? lent[i][0] - '1' + "120"[len[c]] : ph1_bits(4);
+					len[c] = len[c] < 3 ? lent[i][0] - '1' + "120"[len[c]] : Ph1Bits(4);
 					lent[i][0] = lent[i][1];
 					lent[i][1] = len[c];
 				}
@@ -2484,7 +2486,7 @@ void CImageLoader::samsung3_load_raw()
 					? (tab ? RAW(row, tab - 2 + (col & 1)) : init)
 					: (prow[col & 1][col - '4' + "0224468"[pmode]] + prow[col & 1][col - '4' + "0244668"[pmode]] + 1) >> 1;
 				int i = len[c >> 2];
-				int diff = ph1_bits(i);
+				int diff = Ph1Bits(i);
 				if (diff >> (i - 1))
 					diff -= 1 << i;
 				diff = diff * (mag * 2 + 1) + mag;
@@ -2494,103 +2496,103 @@ void CImageLoader::samsung3_load_raw()
 	}
 }
 
-void CImageLoader::sinar_4shot_load_raw()
+void CImageLoader::Sinar4ShotLoadRaw()
 {
-	if (_info->raw_image)
+	if (_info->_rawImage)
 	{
-		unsigned shot = LIM(_info->shot_select, 1, 4) - 1;
-		_reader->Seek(_info->data_offset + shot * 4, SEEK_SET);
-		_reader->Seek(_reader->get4(), SEEK_SET);
-		unpacked_load_raw();
+		unsigned shot = LIM(_info->_shotSelect, 1, 4) - 1;
+		_reader->Seek(_info->_dataOffset + shot * 4, SEEK_SET);
+		_reader->Seek(_reader->GetUInt(), SEEK_SET);
+		UnpackedLoadRaw();
 		return;
 	}
-	unsigned short* pixel = (unsigned short *)calloc(_info->raw_width, sizeof *pixel);
+	unsigned short* pixel = (unsigned short *)calloc(_info->_rawWidth, sizeof *pixel);
 	CAutoFreeMemory autoFree(pixel);
 
 	for (unsigned shot = 0; shot < 4; shot++)
 	{
-		_reader->Seek(_info->data_offset + shot * 4, SEEK_SET);
-		_reader->Seek(_reader->get4(), SEEK_SET);
-		for (unsigned row = 0; row < _info->raw_height; row++)
+		_reader->Seek(_info->_dataOffset + shot * 4, SEEK_SET);
+		_reader->Seek(_reader->GetUInt(), SEEK_SET);
+		for (unsigned row = 0; row < _info->_rawHeight; row++)
 		{
-			_reader->read_shorts(pixel, _info->raw_width);
-			unsigned r = row - _info->top_margin - (shot >> 1 & 1);
-			if (r >= _info->height)
+			_reader->ReadShorts(pixel, _info->_rawWidth);
+			unsigned r = row - _info->_topMargin - (shot >> 1 & 1);
+			if (r >= _info->_height)
 				continue;
-			for (unsigned col = 0; col < _info->raw_width; col++)
+			for (unsigned col = 0; col < _info->_rawWidth; col++)
 			{
-				unsigned c = col - _info->left_margin - (shot & 1);
-				if (c >= _info->width)
+				unsigned c = col - _info->_leftMargin - (shot & 1);
+				if (c >= _info->_width)
 					continue;
-				_info->image[r*_info->width + c][(row & 1) * 3 ^ (~col & 1)] = pixel[col];
+				_info->_image[r*_info->_width + c][(row & 1) * 3 ^ (~col & 1)] = pixel[col];
 			}
 		}
 	}
-	_info->mix_green = 1;
+	_info->_mixGreen = 1;
 }
 
-void CImageLoader::smal_v6_load_raw()
+void CImageLoader::SmalV6LoadRaw()
 {
 	unsigned seg[2][2];
 
 	_reader->Seek(16, SEEK_SET);
 	seg[0][0] = 0;
-	seg[0][1] = _reader->get2();
-	seg[1][0] = _info->raw_width * _info->raw_height;
+	seg[0][1] = _reader->GetUShort();
+	seg[1][0] = _info->_rawWidth * _info->_rawHeight;
 	seg[1][1] = INT_MAX;
-	smal_decode_segment(seg, 0);
+	SmalDecodeSegment(seg, 0);
 }
 
-void CImageLoader::smal_v9_load_raw()
+void CImageLoader::SmalV9LoadRaw()
 {
 	unsigned seg[256][2];
 
 	_reader->Seek(67, SEEK_SET);
-	unsigned offset = _reader->get4();
+	unsigned offset = _reader->GetUInt();
 	unsigned nseg = (unsigned char)_reader->GetChar();
 	_reader->Seek(offset, SEEK_SET);
 	for (size_t i = 0; i < nseg * 2; i++)
-		((unsigned *)seg)[i] = _reader->get4() + _info->data_offset*(i & 1);
+		((unsigned *)seg)[i] = _reader->GetUInt() + _info->_dataOffset*(i & 1);
 	_reader->Seek(78, SEEK_SET);
 	unsigned holes = _reader->GetChar();
 	_reader->Seek(88, SEEK_SET);
-	seg[nseg][0] = _info->raw_height * _info->raw_width;
-	seg[nseg][1] = _reader->get4() + _info->data_offset;
+	seg[nseg][0] = _info->_rawHeight * _info->_rawWidth;
+	seg[nseg][1] = _reader->GetUInt() + _info->_dataOffset;
 	for (size_t i = 0; i < nseg; i++)
-		smal_decode_segment(seg + i, holes);
+		SmalDecodeSegment(seg + i, holes);
 	if (holes)
-		fill_holes(holes);
+		FillHoles(holes);
 }
 
-void CImageLoader::sony_load_raw()
+void CImageLoader::SonyLoadRaw()
 {
 	unsigned char head[40];
 
 	_reader->Seek(200896, SEEK_SET);
 	_reader->Seek((unsigned)_reader->GetChar() * 4 - 1, SEEK_CUR);
 	_reader->SetOrder( 0x4d4d);
-	unsigned key = _reader->get4();
+	unsigned key = _reader->GetUInt();
 	_reader->Seek(164600, SEEK_SET);
 	_reader->Read(head, 1, 40);
-	sony_decrypt((unsigned *)head, 10, 1, key);
+	_info->SonyDecrypt((unsigned *)head, 10, 1, key);
 	for (unsigned i = 26; i-- > 22; )
 		key = key << 8 | head[i];
-	_reader->Seek(_info->data_offset, SEEK_SET);
-	for (unsigned row = 0; row < _info->raw_height; row++)
+	_reader->Seek(_info->_dataOffset, SEEK_SET);
+	for (unsigned row = 0; row < _info->_rawHeight; row++)
 	{
-		unsigned short* pixel = _info->raw_image + row*_info->raw_width;
-		if (_reader->Read(pixel, 2, _info->raw_width) < _info->raw_width)
+		unsigned short* pixel = _info->_rawImage + row*_info->_rawWidth;
+		if (_reader->Read(pixel, 2, _info->_rawWidth) < _info->_rawWidth)
 			throw CExceptionFile();
 
-		sony_decrypt((unsigned *)pixel, _info->raw_width / 2, !row, key);
-		for (unsigned col = 0; col < _info->raw_width; col++)
+		_info->SonyDecrypt((unsigned *)pixel, _info->_rawWidth / 2, !row, key);
+		for (unsigned col = 0; col < _info->_rawWidth; col++)
 			if ((pixel[col] = ntohs(pixel[col])) >> 14)
 				throw CExceptionFile();
 	}
-	_info->maximum = 0x3ff0;
+	_info->_maximum = 0x3ff0;
 }
 
-void CImageLoader::sony_arw_load_raw()
+void CImageLoader::SonyArwLoadRaw()
 {
 	static const unsigned short tab[18] =
 	{
@@ -2606,32 +2608,32 @@ void CImageLoader::sony_arw_load_raw()
 		for (size_t c = 0; c < (32768 >> (tab[i] >> 8)); c++)
 			huff[++n] = tab[i];
 	_info->getbits(-1);
-	for (int col = _info->raw_width; col--; )
+	for (int col = _info->_rawWidth; col--; )
 	{
-		for (int row = 0; row < _info->raw_height + 1; row += 2)
+		for (int row = 0; row < _info->_rawHeight + 1; row += 2)
 		{
-			if (row == _info->raw_height) row = 1;
-			if ((sum += jhead::ljpeg_diff(huff, *_info)) >> 12)
+			if (row == _info->_rawHeight) row = 1;
+			if ((sum += JHead::LJpegDiff(huff, *_info)) >> 12)
 				throw CExceptionFile();
-			if (row < _info->height) RAW(row, col) = sum;
+			if (row < _info->_height) RAW(row, col) = sum;
 		}
 	}
 }
 
-void CImageLoader::sony_arw2_load_raw()
+void CImageLoader::SonyArw2LoadRaw()
 {
 	unsigned short pix[16];
 
-	unsigned char* data = (unsigned char *)malloc(_info->raw_width + 1);
+	unsigned char* data = (unsigned char *)malloc(_info->_rawWidth + 1);
 	CAutoFreeMemory autoFree(data);
 
-	for (int row = 0; row < _info->height; row++)
+	for (int row = 0; row < _info->_height; row++)
 	{
-		_reader->Read(data, 1, _info->raw_width);
+		_reader->Read(data, 1, _info->_rawWidth);
 		unsigned char* dp = data;
-		for (int col = 0; col < _info->raw_width - 30; dp += 16)
+		for (int col = 0; col < _info->_rawWidth - 30; dp += 16)
 		{
-			int val = _reader->sget4(dp);
+			int val = _reader->GetUInt(dp);
 			int max = 0x7ff & val;
 			int min = 0x7ff & val >> 11;
 			int imax = 0x0f & val >> 22;
@@ -2651,12 +2653,12 @@ void CImageLoader::sony_arw2_load_raw()
 				}
 				else
 				{
-					pix[i] = ((_reader->sget2(dp + (bit >> 3)) >> (bit & 7) & 0x7f) << sh) + min;
+					pix[i] = ((_reader->GetUShort(dp + (bit >> 3)) >> (bit & 7) & 0x7f) << sh) + min;
 					if (pix[i] > 0x7ff) pix[i] = 0x7ff;
 					bit += 7;
 				}
 				for (i = 0; i < 16; i++, col += 2)
-					RAW(row, col) = _info->curve[pix[i] << 1] >> 2;
+					RAW(row, col) = _info->_curve[pix[i] << 1] >> 2;
 				col -= col & 1 ? 1 : 31;
 			}
 		}
@@ -2667,88 +2669,88 @@ void CImageLoader::sony_arw2_load_raw()
 
 
 
-void CImageLoader::adobe_copy_pixel(unsigned row, unsigned col, unsigned short** rp)
+void CImageLoader::AdobeCopyPixel(unsigned row, unsigned col, unsigned short** rp)
 {
-	if (_info->tiff_samples == 2 && _info->shot_select)
+	if (_info->_tiffSamples == 2 && _info->_shotSelect)
 		(*rp)++;
-	if (_info->raw_image)
+	if (_info->_rawImage)
 	{
-		if (row < _info->raw_height && col < _info->raw_width)
-			RAW(row, col) = _info->curve[**rp];
-		*rp += _info->tiff_samples;
+		if (row < _info->_rawHeight && col < _info->_rawWidth)
+			RAW(row, col) = _info->_curve[**rp];
+		*rp += _info->_tiffSamples;
 	}
 	else
 	{
-		if (row < _info->height && col < _info->width)
-			for (size_t c = 0; c < _info->tiff_samples; c++)
-				_info->image[row*_info->width + col][c] = _info->curve[(*rp)[c]];
-		*rp += _info->tiff_samples;
+		if (row < _info->_height && col < _info->_width)
+			for (size_t c = 0; c < _info->_tiffSamples; c++)
+				_info->_image[row*_info->_width + col][c] = _info->_curve[(*rp)[c]];
+		*rp += _info->_tiffSamples;
 	}
-	if (_info->tiff_samples == 2 && _info->shot_select)
+	if (_info->_tiffSamples == 2 && _info->_shotSelect)
 		(*rp)--;
 }
 
-void CImageLoader::crop_masked_pixels()
+void CImageLoader::CropMaskedPixels()
 {
-	if (_info->load_raw == LoadRawType::phase_one_load_raw ||
-		_info->load_raw == LoadRawType::phase_one_load_raw_c)
+	if (_info->_loadRaw == LoadRawType::PhaseOneLoadRaw ||
+		_info->_loadRaw == LoadRawType::PhaseOneLoadRawC)
 	{
-		phase_one_correct();
+		PhaseOneCorrect();
 	}
-	if (_info->fuji_width)
+	if (_info->_fujiWidth)
 	{
-		for (int row = 0; row < _info->raw_height - _info->top_margin * 2; row++)
+		for (int row = 0; row < _info->_rawHeight - _info->_topMargin * 2; row++)
 		{
-			for (int col = 0; col < _info->fuji_width << !_info->fuji_layout; col++)
+			for (int col = 0; col < _info->_fujiWidth << !_info->_fujiLayout; col++)
 			{
 				unsigned r, c;
-				if (_info->fuji_layout)
+				if (_info->_fujiLayout)
 				{
-					r = _info->fuji_width - 1 - col + (row >> 1);
+					r = _info->_fujiWidth - 1 - col + (row >> 1);
 					c = col + ((row + 1) >> 1);
 				}
 				else
 				{
-					r = _info->fuji_width - 1 + row - (col >> 1);
+					r = _info->_fujiWidth - 1 + row - (col >> 1);
 					c = row + ((col + 1) >> 1);
 				}
-				if (r < _info->height && c < _info->width)
-					BAYER(r, c) = RAW(row + _info->top_margin, col + _info->left_margin);
+				if (r < _info->_height && c < _info->_width)
+					BAYER(r, c) = RAW(row + _info->_topMargin, col + _info->_leftMargin);
 			}
 		}
 	}
 	else
 	{
-		for (int row = 0; row < _info->height; row++)
-			for (int col = 0; col < _info->width; col++)
-				BAYER2(row, col) = RAW(row + _info->top_margin, col + _info->left_margin);
+		for (int row = 0; row < _info->_height; row++)
+			for (int col = 0; col < _info->_width; col++)
+				BAYER2(row, col) = RAW(row + _info->_topMargin, col + _info->_leftMargin);
 	}
-	if (_info->mask[0][3] <= 0)
+	if (_info->_mask[0][3] <= 0)
 	{
-		if (_info->load_raw == LoadRawType::canon_load_raw ||
-			_info->load_raw == LoadRawType::lossless_jpeg_load_raw)
+		if (_info->_loadRaw == LoadRawType::CanonLoadRaw ||
+			_info->_loadRaw == LoadRawType::LosslessJpegLoadRaw)
 		{
-			_info->mask[0][1] = _info->mask[1][1] += 2;
-			_info->mask[0][3] -= 2;
+			_info->_mask[0][1] = _info->_mask[1][1] += 2;
+			_info->_mask[0][3] -= 2;
 		}
-		if (_info->load_raw == LoadRawType::canon_load_raw ||
-			_info->load_raw == LoadRawType::lossless_jpeg_load_raw ||
-			_info->load_raw == LoadRawType::canon_600_load_raw ||
-			_info->load_raw == LoadRawType::sony_load_raw ||
-			(_info->load_raw == LoadRawType::eight_bit_load_raw && strncmp(_info->model, "DC2", 3)) ||
-			_info->load_raw == LoadRawType::kodak_262_load_raw ||
-			(_info->load_raw == LoadRawType::packed_load_raw && (_info->load_flags & 32)))
+		if (_info->_loadRaw == LoadRawType::CanonLoadRaw ||
+			_info->_loadRaw == LoadRawType::LosslessJpegLoadRaw ||
+			_info->_loadRaw == LoadRawType::Canon600LoadRaw ||
+			_info->_loadRaw == LoadRawType::SonyLoadRaw ||
+			(_info->_loadRaw == LoadRawType::EightBitLoadRaw && strncmp(_info->_model, "DC2", 3)) ||
+			_info->_loadRaw == LoadRawType::Kodak262LoadRaw ||
+			(_info->_loadRaw == LoadRawType::PackedLoadRaw && (_info->_loadFlags & 32)))
 		{
-			_info->mask[0][0] = _info->mask[1][0] = _info->top_margin;
-			_info->mask[0][2] = _info->mask[1][2] = _info->top_margin + _info->height;
-			_info->mask[0][3] += _info->left_margin;
-			_info->mask[1][1] += _info->left_margin + _info->width;
-			_info->mask[1][3] += _info->raw_width;
+			_info->_mask[0][0] = _info->_mask[1][0] = _info->_topMargin;
+			_info->_mask[0][2] = _info->_mask[1][2] = _info->_topMargin + _info->_height;
+			_info->_mask[0][3] += _info->_leftMargin;
+			_info->_mask[1][1] += _info->_leftMargin + _info->_width;
+			_info->_mask[1][3] += _info->_rawWidth;
 		}
-		if (_info->load_raw == LoadRawType::nokia_load_raw)
+		if (_info->_loadRaw == LoadRawType::NokiaLoadRaw)
 		{
-			_info->mask[0][2] = _info->top_margin;
-			_info->mask[0][3] = _info->width;
+			_info->_mask[0][2] = _info->_topMargin;
+			_info->_mask[0][3] = _info->_width;
 		}
 	}
 
@@ -2757,11 +2759,11 @@ void CImageLoader::crop_masked_pixels()
 	unsigned zero = 0;
 	for (size_t m = 0; m < 8; m++)
 	{
-		for (int row = MAX(_info->mask[m][0], 0); row < MIN(_info->mask[m][2], _info->raw_height); row++)
+		for (int row = MAX(_info->_mask[m][0], 0); row < MIN(_info->_mask[m][2], _info->_rawHeight); row++)
 		{
-			for (int col = MAX(_info->mask[m][1], 0); col < MIN(_info->mask[m][3], _info->raw_width); col++)
+			for (int col = MAX(_info->_mask[m][1], 0); col < MIN(_info->_mask[m][3], _info->_rawWidth); col++)
 			{
-				unsigned c = FC(row - _info->top_margin, col - _info->left_margin);
+				unsigned c = FC(row - _info->_topMargin, col - _info->_leftMargin);
 				unsigned val = RAW(row, col);
 				mblack[c] += val;
 				mblack[4 + c]++;
@@ -2769,20 +2771,20 @@ void CImageLoader::crop_masked_pixels()
 			}
 		}
 	}
-	if (_info->load_raw == LoadRawType::canon_600_load_raw && _info->width < _info->raw_width)
+	if (_info->_loadRaw == LoadRawType::Canon600LoadRaw && _info->_width < _info->_rawWidth)
 	{
-		_info->black = (mblack[0] + mblack[1] + mblack[2] + mblack[3]) / (mblack[4] + mblack[5] + mblack[6] + mblack[7]) - 4;
-		canon_600_correct();
+		_info->_black = (mblack[0] + mblack[1] + mblack[2] + mblack[3]) / (mblack[4] + mblack[5] + mblack[6] + mblack[7]) - 4;
+		Canon600Correct();
 	}
 	else if (zero < mblack[4] && mblack[5] && mblack[6] && mblack[7])
 	{
 		for (size_t c = 0; c < 4; c++)
-			_info->cblack[c] = mblack[c] / mblack[4 + c];
-		_info->cblack[4] = _info->cblack[5] = _info->cblack[6] = 0;
+			_info->_cBlack[c] = mblack[c] / mblack[4 + c];
+		_info->_cBlack[4] = _info->_cBlack[5] = _info->_cBlack[6] = 0;
 	}
 }
 
-int CImageLoader::fcol(int row, int col)
+int CImageLoader::FCol(int row, int col)
 {
 	static const char filter[16][16] =
 	{ { 2,1,1,3,2,3,2,0,3,2,3,0,1,2,1,0 },
@@ -2802,14 +2804,14 @@ int CImageLoader::fcol(int row, int col)
 	  { 2,1,3,2,3,1,2,1,0,3,0,2,0,2,0,2 },
 	  { 0,3,1,0,0,2,0,3,2,1,3,1,1,3,1,3 } };
 
-	if (_info->filters == 1)
-		return filter[(row + _info->top_margin) & 15][(col + _info->left_margin) & 15];
-	if (_info->filters == 9)
-		return _info->xtrans[(row + 6) % 6][(col + 6) % 6];
+	if (_info->_filters == 1)
+		return filter[(row + _info->_topMargin) & 15][(col + _info->_leftMargin) & 15];
+	if (_info->_filters == 9)
+		return _info->_xtrans[(row + 6) % 6][(col + 6) % 6];
 	return FC(row, col);
 }
 
-void CImageLoader::phase_one_correct()
+void CImageLoader::PhaseOneCorrect()
 {
 	int val[4];
 	int dev[4];
@@ -2824,72 +2826,71 @@ void CImageLoader::phase_one_correct()
 	int qmult_applied = 0;
 	int qlin_applied = 0;
 
-	if (_info->half_size || !_info->meta_length)
+	if (_info->_halfSize || !_info->_metaLength)
 		return;
-	_reader->Seek(_info->meta_offset, SEEK_SET);
-	_reader->SetOrder(_reader->get2());
+	_reader->Seek(_info->_metaOffset, SEEK_SET);
+	_reader->SetOrder(_reader->GetUShort());
 	_reader->Seek(6, SEEK_CUR);
-	_reader->Seek(_info->meta_offset + _reader->get4(), SEEK_SET);
-	unsigned entries = _reader->get4();
-	_reader->get4();
+	_reader->Seek(_info->_metaOffset + _reader->GetUInt(), SEEK_SET);
+	unsigned entries = _reader->GetUInt();
+	_reader->GetUInt();
 	while (entries--)
 	{
-		unsigned tag = _reader->get4();
-		int len = _reader->get4();
-		unsigned data = _reader->get4();
+		unsigned tag = _reader->GetUInt();
+		int len = _reader->GetUInt();
+		unsigned data = _reader->GetUInt();
 		unsigned save = _reader->GetPosition();
-		_reader->Seek(_info->meta_offset + data, SEEK_SET);
+		_reader->Seek(_info->_metaOffset + data, SEEK_SET);
 		if (tag == 0x419)				/* Polynomial curve */
 		{
-			//for (_reader->get4(), i = 0; i < 8; i++)
-			_reader->get4();
+			_reader->GetUInt();
 			for (size_t i = 0; i < 8; i++)
-				poly[i] = _reader->getreal(11);
-			poly[3] += (_info->ph1.tag_210 - poly[7]) * poly[6] + 1;
+				poly[i] = _reader->GetReal(11);
+			poly[3] += (_info->_ph1.tag_210 - poly[7]) * poly[6] + 1;
 			for (int i = 0; i < 0x10000; i++)
 			{
 				float num = (poly[5] * i + poly[3])*i + poly[1];
-				_info->curve[i] = LIM(num, 0, 65535);
+				_info->_curve[i] = LIM(num, 0, 65535);
 			}
 			/* apply to right half */
-			for (unsigned row = 0; row < _info->raw_height; row++)
-				for (unsigned col = (tag & 1)*_info->ph1.split_col; col < _info->raw_width; col++)
-					RAW(row, col) = _info->curve[RAW(row, col)];
+			for (unsigned row = 0; row < _info->_rawHeight; row++)
+				for (unsigned col = (tag & 1)*_info->_ph1.split_col; col < _info->_rawWidth; col++)
+					RAW(row, col) = _info->_curve[RAW(row, col)];
 		}
 		else if (tag == 0x41a)			/* Polynomial curve */
 		{
 			for (size_t i = 0; i < 4; i++)
-				poly[i] = _reader->getreal(11);
+				poly[i] = _reader->GetReal(11);
 			for (int i = 0; i < 0x10000; i++)
 			{
 				float num = 0;
 				for (int j = 4; j--; )
 					num = num * i + poly[j];
-				_info->curve[i] = LIM(num + i, 0, 65535);
+				_info->_curve[i] = LIM(num + i, 0, 65535);
 			}
 			/* apply to whole image */
-			for (unsigned row = 0; row < _info->raw_height; row++)
-				for (unsigned col = (tag & 1)*_info->ph1.split_col; col < _info->raw_width; col++)
-					RAW(row, col) = _info->curve[RAW(row, col)];
+			for (unsigned row = 0; row < _info->_rawHeight; row++)
+				for (unsigned col = (tag & 1)*_info->_ph1.split_col; col < _info->_rawWidth; col++)
+					RAW(row, col) = _info->_curve[RAW(row, col)];
 		}
 		else if (tag == 0x400)			/* Sensor defects */
 		{
 			while ((len -= 8) >= 0)
 			{
-				unsigned col = _reader->get2();
-				unsigned row = _reader->get2();
-				unsigned type = _reader->get2(); _reader->get2();
-				if (col >= _info->raw_width)
+				unsigned col = _reader->GetUShort();
+				unsigned row = _reader->GetUShort();
+				unsigned type = _reader->GetUShort(); _reader->GetUShort();
+				if (col >= _info->_rawWidth)
 					continue;
 				if (type == 131 || type == 137)		/* Bad column */
 				{
-					for (row = 0; row < _info->raw_height; row++)
+					for (row = 0; row < _info->_rawHeight; row++)
 					{
-						if (FC(row - _info->top_margin, col - _info->left_margin) == 1)
+						if (FC(row - _info->_topMargin, col - _info->_leftMargin) == 1)
 						{
 							int sum = 0;
 							for (size_t i = 0; i < 4; i++)
-								sum += val[i] = raw(row + dir[i][0], col + dir[i][1]);
+								sum += val[i] = Raw(row + dir[i][0], col + dir[i][1]);
 							int max = 0;
 							for (int i = 0; i < 4; i++)
 							{
@@ -2903,40 +2904,40 @@ void CImageLoader::phase_one_correct()
 						{
 							int sum = 0;
 							for (size_t i = 8; i < 12; i++)
-								sum += raw(row + dir[i][0], col + dir[i][1]);
+								sum += Raw(row + dir[i][0], col + dir[i][1]);
 							RAW(row, col) = 0.5 + sum * 0.0732233 +
-								(raw(row, col - 2) + raw(row, col + 2)) * 0.3535534;
+								(Raw(row, col - 2) + Raw(row, col + 2)) * 0.3535534;
 						}
 					}
 				}
 				else if (type == 129)			/* Bad pixel */
 				{
-					if (row >= _info->raw_height)
+					if (row >= _info->_rawHeight)
 						continue;
-					int j = (FC(row - _info->top_margin, col - _info->left_margin) != 1) * 4;
+					int j = (FC(row - _info->_topMargin, col - _info->_leftMargin) != 1) * 4;
 					int sum = 0;
 					for (size_t i = j; i < j + 8; i++)
-						sum += raw(row + dir[i][0], col + dir[i][1]);
+						sum += Raw(row + dir[i][0], col + dir[i][1]);
 					RAW(row, col) = (sum + 4) >> 3;
 				}
 			}
 		}
 		else if (tag == 0x401)			/* All-color flat fields */
 		{
-			phase_one_flat_field(1, 2);
+			PhaseOneFlatField(1, 2);
 		}
 		else if (tag == 0x416 || tag == 0x410)
 		{
-			phase_one_flat_field(0, 2);
+			PhaseOneFlatField(0, 2);
 		}
 		else if (tag == 0x40b)			/* Red+blue flat field */
 		{
-			phase_one_flat_field(0, 4);
+			PhaseOneFlatField(0, 4);
 		}
 		else if (tag == 0x412)
 		{
 			_reader->Seek(36, SEEK_CUR);
-			int diff = abs(_reader->get2() - _info->ph1.tag_21a);
+			int diff = abs(_reader->GetUShort() - _info->_ph1.tag_21a);
 			if (mindiff > diff)
 			{
 				mindiff = diff;
@@ -2950,7 +2951,7 @@ void CImageLoader::phase_one_correct()
 			for (qr = 0; qr < 2; qr++)
 				for (qc = 0; qc < 2; qc++)
 					for (size_t i = 0; i < 16; i++)
-						lc[qr][qc][i] = _reader->get4();
+						lc[qr][qc][i] = _reader->GetUInt();
 			for (size_t i = 0; i < 16; i++)
 			{
 				int v = 0;
@@ -2972,10 +2973,10 @@ void CImageLoader::phase_one_correct()
 					cx[0] = cf[0] = 0;
 					cx[17] = cf[17] = ((unsigned)ref[15] * 65535) / lc[qr][qc][15];
 					cx[18] = cf[18] = 65535;
-					cubic_spline(cx, cf, 19);
-					for (unsigned row = (qr ? _info->ph1.split_row : 0); row < (qr ? _info->raw_height : _info->ph1.split_row); row++)
-						for (unsigned col = (qc ? _info->ph1.split_col : 0); col < (qc ? _info->raw_width : _info->ph1.split_col); col++)
-							RAW(row, col) = _info->curve[RAW(row, col)];
+					CubicSpline(cx, cf, 19);
+					for (unsigned row = (qr ? _info->_ph1.split_row : 0); row < (qr ? _info->_rawHeight : _info->_ph1.split_row); row++)
+						for (unsigned col = (qc ? _info->_ph1.split_col : 0); col < (qc ? _info->_rawWidth : _info->_ph1.split_col); col++)
+							RAW(row, col) = _info->_curve[RAW(row, col)];
 				}
 			}
 			qlin_applied = 1;
@@ -2983,30 +2984,30 @@ void CImageLoader::phase_one_correct()
 		else if (tag == 0x41e && !qmult_applied) /* Quadrant multipliers */
 		{
 			float qmult[2][2] = { { 1, 1 },{ 1, 1 } };
-			_reader->get4();
-			_reader->get4();
-			_reader->get4();
-			_reader->get4();
-			qmult[0][0] = 1.0 + _reader->getreal(11);
-			_reader->get4();
-			_reader->get4();
-			_reader->get4();
-			_reader->get4();
-			_reader->get4();
-			qmult[0][1] = 1.0 + _reader->getreal(11);
-			_reader->get4();
-			_reader->get4();
-			_reader->get4();
-			qmult[1][0] = 1.0 + _reader->getreal(11);
-			_reader->get4();
-			_reader->get4();
-			_reader->get4();
-			qmult[1][1] = 1.0 + _reader->getreal(11);
-			for (unsigned row = 0; row < _info->raw_height; row++)
+			_reader->GetUInt();
+			_reader->GetUInt();
+			_reader->GetUInt();
+			_reader->GetUInt();
+			qmult[0][0] = 1.0 + _reader->GetReal(11);
+			_reader->GetUInt();
+			_reader->GetUInt();
+			_reader->GetUInt();
+			_reader->GetUInt();
+			_reader->GetUInt();
+			qmult[0][1] = 1.0 + _reader->GetReal(11);
+			_reader->GetUInt();
+			_reader->GetUInt();
+			_reader->GetUInt();
+			qmult[1][0] = 1.0 + _reader->GetReal(11);
+			_reader->GetUInt();
+			_reader->GetUInt();
+			_reader->GetUInt();
+			qmult[1][1] = 1.0 + _reader->GetReal(11);
+			for (unsigned row = 0; row < _info->_rawHeight; row++)
 			{
-				for (unsigned col = 0; col < _info->raw_width; col++)
+				for (unsigned col = 0; col < _info->_rawWidth; col++)
 				{
-					int i = qmult[row >= _info->ph1.split_row][col >= _info->ph1.split_col] * RAW(row, col);
+					int i = qmult[row >= _info->_ph1.split_row][col >= _info->_ph1.split_col] * RAW(row, col);
 					RAW(row, col) = LIM(i, 0, 65535);
 				}
 			}
@@ -3017,11 +3018,11 @@ void CImageLoader::phase_one_correct()
 			unsigned short lc[2][2][7], ref[7];
 			int qr, qc;
 			for (size_t i = 0; i < 7; i++)
-				ref[i] = _reader->get4();
+				ref[i] = _reader->GetUInt();
 			for (qr = 0; qr < 2; qr++)
 				for (qc = 0; qc < 2; qc++)
 					for (size_t i = 0; i < 7; i++)
-						lc[qr][qc][i] = _reader->get4();
+						lc[qr][qc][i] = _reader->GetUInt();
 			for (qr = 0; qr < 2; qr++)
 			{
 				for (qc = 0; qc < 2; qc++)
@@ -3034,10 +3035,10 @@ void CImageLoader::phase_one_correct()
 					}
 					cx[0] = cf[0] = 0;
 					cx[8] = cf[8] = 65535;
-					cubic_spline(cx, cf, 9);
-					for (unsigned row = (qr ? _info->ph1.split_row : 0); row < (qr ? _info->raw_height : _info->ph1.split_row); row++)
-						for (unsigned col = (qc ? _info->ph1.split_col : 0); col < (qc ? _info->raw_width : _info->ph1.split_col); col++)
-							RAW(row, col) = _info->curve[RAW(row, col)];
+					CubicSpline(cx, cf, 9);
+					for (unsigned row = (qr ? _info->_ph1.split_row : 0); row < (qr ? _info->_rawHeight : _info->_ph1.split_row); row++)
+						for (unsigned col = (qc ? _info->_ph1.split_col : 0); col < (qc ? _info->_rawWidth : _info->_ph1.split_col); col++)
+							RAW(row, col) = _info->_curve[RAW(row, col)];
 				}
 			}
 			qmult_applied = 1;
@@ -3049,25 +3050,25 @@ void CImageLoader::phase_one_correct()
 	{
 		_reader->Seek(off_412, SEEK_SET);
 		for (size_t i = 0; i < 9; i++)
-			head[i] = _reader->get4() & 0x7fff;
+			head[i] = _reader->GetUInt() & 0x7fff;
 		yval[0] = (float *)calloc(head[1] * head[3] + head[2] * head[4], 6);
 		CAutoFreeMemory autoFree(yval[0]);
 
 		yval[1] = (float  *)(yval[0] + head[1] * head[3]);
 		xval[0] = (unsigned short *)(yval[1] + head[2] * head[4]);
 		xval[1] = (unsigned short *)(xval[0] + head[1] * head[3]);
-		_reader->get2();
+		_reader->GetUShort();
 		for (size_t i = 0; i < 2; i++)
 			for (size_t j = 0; j < head[i + 1] * head[i + 3]; j++)
-				yval[i][j] = _reader->getreal(11);
+				yval[i][j] = _reader->GetReal(11);
 		for (size_t i = 0; i < 2; i++)
 			for (size_t j = 0; j < head[i + 1] * head[i + 3]; j++)
-				xval[i][j] = _reader->get2();
-		for (unsigned row = 0; row < _info->raw_height; row++)
+				xval[i][j] = _reader->GetUShort();
+		for (unsigned row = 0; row < _info->_rawHeight; row++)
 		{
-			for (unsigned col = 0; col < _info->raw_width; col++)
+			for (unsigned col = 0; col < _info->_rawWidth; col++)
 			{
-				float cfrac = (float)col * head[3] / _info->raw_width;
+				float cfrac = (float)col * head[3] / _info->_rawWidth;
 				int cip = cfrac;
 				cfrac -= cip;
 				float num = RAW(row, col) * 0.5;
@@ -3088,29 +3089,29 @@ void CImageLoader::phase_one_correct()
 	}
 }
 
-void CImageLoader::canon_600_correct()
+void CImageLoader::Canon600Correct()
 {
 	static const short mul[4][2] = { { 1141,1145 },{ 1128,1109 },{ 1178,1149 },{ 1128,1109 } };
 
-	for (int row = 0; row < _info->height; row++)
+	for (int row = 0; row < _info->_height; row++)
 	{
-		for (int col = 0; col < _info->width; col++)
+		for (int col = 0; col < _info->_width; col++)
 		{
-			int val = BAYER(row, col) - _info->black;
+			int val = BAYER(row, col) - _info->_black;
 			if (val < 0)
 				val = 0;
 			val = val * mul[row & 3][col & 1] >> 9;
 			BAYER(row, col) = val;
 		}
 	}
-	canon_600_fixed_wb(1311);
-	canon_600_auto_wb();
-	canon_600_coeff();
-	_info->maximum = (0x3ff - _info->black) * 1109 >> 9;
-	_info->black = 0;
+	Canon600FixedWB(1311);
+	Canon600AutoWB();
+	Canon600Coeff();
+	_info->_maximum = (0x3ff - _info->_black) * 1109 >> 9;
+	_info->_black = 0;
 }
 
-void CImageLoader::canon_600_fixed_wb(int temp)
+void CImageLoader::Canon600FixedWB(int temp)
 {
 	static const short mul[4][5] =
 	{
@@ -3130,16 +3131,16 @@ void CImageLoader::canon_600_fixed_wb(int temp)
 	if (lo != hi)
 		frac = (float)(temp - *mul[lo]) / (*mul[hi] - *mul[lo]);
 	for (size_t i = 1; i < 5; i++)
-		_info->pre_mul[i - 1] = 1 / (frac * mul[hi][i] + (1 - frac) * mul[lo][i]);
+		_info->_preMul[i - 1] = 1 / (frac * mul[hi][i] + (1 - frac) * mul[lo][i]);
 }
 
-void CImageLoader::canon_600_auto_wb()
+void CImageLoader::Canon600AutoWB()
 {
 	int count[] = { 0,0 };
 	int test[8], total[2][8], ratio[2][2], stat[2];
 
 	memset(&total, 0, sizeof total);
-	int i = _info->canon_ev + 0.5;
+	int i = _info->_canonEV + 0.5;
 	int mar;
 	if (i < 10)
 		mar = 150;
@@ -3147,11 +3148,11 @@ void CImageLoader::canon_600_auto_wb()
 		mar = 20;
 	else
 		mar = 280 - 20 * i;
-	if (_info->flash_used)
+	if (_info->_flashUsed)
 		mar = 80;
-	for (int row = 14; row < _info->height - 14; row += 4)
+	for (int row = 14; row < _info->_height - 14; row += 4)
 	{
-		for (int col = 10; col < _info->width; col += 2)
+		for (int col = 10; col < _info->_width; col += 2)
 		{
 			for (i = 0; i < 8; i++)
 				test[(i & 4) + FC(row + (i >> 1), col + (i & 1))] = BAYER(row + (i >> 1), col + (i & 1));
@@ -3164,7 +3165,7 @@ void CImageLoader::canon_600_auto_wb()
 			for (i = 0; i < 2; i++) {
 				for (int j = 0; j < 4; j += 2)
 					ratio[i][j >> 1] = ((test[i * 4 + j + 1] - test[i * 4 + j]) << 10) / test[i * 4 + j];
-				stat[i] = canon_600_color(ratio[i], mar);
+				stat[i] = Canon600Color(ratio[i], mar);
 			}
 			int st = stat[0] | stat[1];
 			if (st > 1)
@@ -3183,11 +3184,11 @@ void CImageLoader::canon_600_auto_wb()
 	{
 		int st = count[0] * 200 < count[1];
 		for (i = 0; i < 4; i++)
-			_info->pre_mul[i] = 1.0 / (total[st][i] + total[st][i + 4]);
+			_info->_preMul[i] = 1.0 / (total[st][i] + total[st][i + 4]);
 	}
 }
 
-void CImageLoader::canon_600_coeff()
+void CImageLoader::Canon600Coeff()
 {
 	static const short table[6][12] =
 	{
@@ -3200,8 +3201,8 @@ void CImageLoader::canon_600_coeff()
 	};
 
 	int t = 0;
-	float mc = _info->pre_mul[1] / _info->pre_mul[2];
-	float yc = _info->pre_mul[3] / _info->pre_mul[2];
+	float mc = _info->_preMul[1] / _info->_preMul[2];
+	float yc = _info->_preMul[3] / _info->_preMul[2];
 	if (mc > 1 && mc <= 1.28 && yc < 0.8789)
 		t = 1;
 	if (mc > 1.28 && mc <= 2)
@@ -3211,20 +3212,20 @@ void CImageLoader::canon_600_coeff()
 		else if (yc <= 2)
 			t = 4;
 	}
-	if (_info->flash_used)
+	if (_info->_flashUsed)
 		t = 5;
-	_info->raw_color = 0;
+	_info->_rawColor = 0;
 	for (size_t i = 0; i < 3; i++)
-		for (size_t c = 0; c < _info->colors; c++)
-			_info->rgb_cam[i][c] = table[t][i * 4 + c] / 1024.0;
+		for (size_t c = 0; c < _info->_colors; c++)
+			_info->_rgbCam[i][c] = table[t][i * 4 + c] / 1024.0;
 }
 
-/* Return values:  0 = white  1 = near white  2 = not white */
-int CImageLoader::canon_600_color(int ratio[2], int mar)
+/* Return values:  0 = _white  1 = near _white  2 = not _white */
+int CImageLoader::Canon600Color(int ratio[2], int mar)
 {
 	int clipped = 0;
 
-	if (_info->flash_used)
+	if (_info->_flashUsed)
 	{
 		if (ratio[1] < -104)
 			ratio[1] = -104; clipped = 1;
@@ -3240,7 +3241,7 @@ int CImageLoader::canon_600_color(int ratio[2], int mar)
 		if (ratio[1] > 307)
 			ratio[1] = 307; clipped = 1;
 	}
-	int target = _info->flash_used || ratio[1] < 197
+	int target = _info->_flashUsed || ratio[1] < 197
 		? -38 - (398 * ratio[1] >> 10)
 		: -123 + (48 * ratio[1] >> 10);
 	if (target - mar <= ratio[0] && target + 20 >= ratio[0] && !clipped)
@@ -3256,17 +3257,17 @@ int CImageLoader::canon_600_color(int ratio[2], int mar)
 	return 1;
 }
 
-inline int CImageLoader::raw(unsigned row, unsigned col)
+inline int CImageLoader::Raw(unsigned row, unsigned col)
 {
-	return (row < _info->raw_height && col < _info->raw_width) ? RAW(row, col) : 0;
+	return (row < _info->_rawHeight && col < _info->_rawWidth) ? RAW(row, col) : 0;
 }
 
-void CImageLoader::phase_one_flat_field(int is_float, int nc)
+void CImageLoader::PhaseOneFlatField(int is_float, int nc)
 {
 	unsigned short head[8];
 	float mult[4];
 
-	_reader->read_shorts(head, 8);
+	_reader->ReadShorts(head, 8);
 	if (head[2] * head[3] * head[4] * head[5] == 0)
 		return;
 	unsigned wide = head[2] / head[4] + (head[2] % head[4] != 0);
@@ -3280,7 +3281,7 @@ void CImageLoader::phase_one_flat_field(int is_float, int nc)
 		{
 			for (size_t c = 0; c < nc; c += 2)
 			{
-				float num = is_float ? _reader->getreal(11) : _reader->get2() / 32768.0;
+				float num = is_float ? _reader->GetReal(11) : _reader->GetUShort() / 32768.0;
 				if (y == 0) mrow[c*wide + x] = num;
 				else mrow[(c + 1)*wide + x] = (num - mrow[c*wide + x]) / head[5];
 			}
@@ -3288,7 +3289,7 @@ void CImageLoader::phase_one_flat_field(int is_float, int nc)
 		if (y == 0)
 			continue;
 		unsigned rend = head[1] + y*head[5];
-		for (unsigned row = rend - head[5]; row < _info->raw_height && row < rend && row < head[1] + head[3] - head[5]; row++)
+		for (unsigned row = rend - head[5]; row < _info->_rawHeight && row < rend && row < head[1] + head[3] - head[5]; row++)
 		{
 			for (unsigned x = 1; x < wide; x++)
 			{
@@ -3298,9 +3299,9 @@ void CImageLoader::phase_one_flat_field(int is_float, int nc)
 					mult[c + 1] = (mrow[c*wide + x] - mult[c]) / head[4];
 				}
 				unsigned cend = head[0] + x*head[4];
-				for (unsigned col = cend - head[4]; col < _info->raw_width && col < cend && col < head[0] + head[2] - head[4]; col++)
+				for (unsigned col = cend - head[4]; col < _info->_rawWidth && col < cend && col < head[0] + head[2] - head[4]; col++)
 				{
-					unsigned c = nc > 2 ? FC(row - _info->top_margin, col - _info->left_margin) : 0;
+					unsigned c = nc > 2 ? FC(row - _info->_topMargin, col - _info->_leftMargin) : 0;
 					if (!(c & 1))
 					{
 						c = RAW(row, col) * mult[c];
@@ -3317,7 +3318,7 @@ void CImageLoader::phase_one_flat_field(int is_float, int nc)
 	}
 }
 
-void CImageLoader::cubic_spline(const int* x_, const int* y_, const int len)
+void CImageLoader::CubicSpline(const int* x_, const int* y_, const int len)
 {
 	float** A = (float **)calloc(((2 * len + 4) * sizeof **A + sizeof *A), 2 * len);
 	if (!A)
@@ -3380,12 +3381,12 @@ void CImageLoader::cubic_spline(const int* x_, const int* y_, const int len)
 					+ (c[j] * 0.5) * v*v + ((c[j + 1] - c[j]) / (6 * d[j])) * v*v*v;
 			}
 		}
-		_info->curve[i] = y_out < 0.0 ? 0 : (y_out >= 1.0 ? 65535 :
+		_info->_curve[i] = y_out < 0.0 ? 0 : (y_out >= 1.0 ? 65535 :
 			(unsigned short)(y_out * 65535.0 + 0.5));
 	}
 }
 
-void CImageLoader::crw_init_tables(unsigned table, unsigned short* huff[2])
+void CImageLoader::CrwInitTables(unsigned table, unsigned short* huff[2])
 {
 	static const unsigned char first_tree[3][29] =
 	{
@@ -3449,8 +3450,8 @@ void CImageLoader::crw_init_tables(unsigned table, unsigned short* huff[2])
 		table = 2;
 	try
 	{
-		huff[0] = CDecoder::make_decoder(first_tree[table]);
-		huff[1] = CDecoder::make_decoder(second_tree[table]);
+		huff[0] = CDecoder::MakeDecoder(first_tree[table]);
+		huff[1] = CDecoder::MakeDecoder(second_tree[table]);
 	}
 	catch (const CExceptionMemory&)
 	{
@@ -3467,7 +3468,7 @@ Return 0 if the image starts with compressed data,
 
 In Canon compressed data, 0xff is always followed by 0x00.
 */
-int CImageLoader::canon_has_lowbits()
+int CImageLoader::CanonHasLowbits()
 {
 	unsigned char test[0x4000];
 	int ret = 1;
@@ -3486,7 +3487,7 @@ int CImageLoader::canon_has_lowbits()
 	return ret;
 }
 
-unsigned CImageLoader::ph1_bithuff(int nbits, unsigned short* huff)
+unsigned CImageLoader::Ph1Bithuff(int nbits, unsigned short* huff)
 {
 	static UINT64 bitbuf = 0;
 	static int vbits = 0;
@@ -3497,7 +3498,7 @@ unsigned CImageLoader::ph1_bithuff(int nbits, unsigned short* huff)
 		return 0;
 	if (vbits < nbits)
 	{
-		bitbuf = bitbuf << 32 | _reader->get4();
+		bitbuf = bitbuf << 32 | _reader->GetUInt();
 		vbits += 32;
 	}
 	unsigned c = bitbuf << (64 - vbits) >> (64 - nbits);
@@ -3510,7 +3511,7 @@ unsigned CImageLoader::ph1_bithuff(int nbits, unsigned short* huff)
 	return c;
 }
 
-int CImageLoader::kodak_65000_decode(short *out, int bsize)
+int CImageLoader::Kodak65000Decode(short *out, int bsize)
 {
 	unsigned char blen[768];
 	unsigned short raw[6];
@@ -3525,7 +3526,7 @@ int CImageLoader::kodak_65000_decode(short *out, int bsize)
 			_reader->Seek(save, SEEK_SET);
 			for (i = 0; i < bsize; i += 8)
 			{
-				_reader->read_shorts(raw, 6);
+				_reader->ReadShorts(raw, 6);
 				out[i] = raw[0] >> 12 << 8 | raw[2] >> 12 << 4 | raw[4] >> 12;
 				out[i + 1] = raw[1] >> 12 << 8 | raw[3] >> 12 << 4 | raw[5] >> 12;
 				for (int j = 0; j < 6; j++)
@@ -3562,7 +3563,7 @@ int CImageLoader::kodak_65000_decode(short *out, int bsize)
 	return 0;
 }
 
-unsigned CImageLoader::pana_bits(int nbits)
+unsigned CImageLoader::PanaBits(int nbits)
 {
 	static unsigned char buf[0x4000];
 	static int vbits;
@@ -3571,8 +3572,8 @@ unsigned CImageLoader::pana_bits(int nbits)
 		return vbits = 0;
 	if (!vbits)
 	{
-		_reader->Read(buf + _info->load_flags, 1, 0x4000 - _info->load_flags);
-		_reader->Read(buf, 1, _info->load_flags);
+		_reader->Read(buf + _info->_loadFlags, 1, 0x4000 - _info->_loadFlags);
+		_reader->Read(buf, 1, _info->_loadFlags);
 	}
 	vbits = (vbits - nbits) & 0x1ffff;
 	int byte = vbits >> 3 ^ 0x3ff0;
@@ -3580,7 +3581,7 @@ unsigned CImageLoader::pana_bits(int nbits)
 }
 
 /* Kudos to Rich Taylor for figuring out SMaL's compression algorithm. */
-void CImageLoader::smal_decode_segment(unsigned seg[2][2], int holes)
+void CImageLoader::SmalDecodeSegment(unsigned seg[2][2], int holes)
 {
 	unsigned char hist[3][13] =
 	{
@@ -3599,8 +3600,8 @@ void CImageLoader::smal_decode_segment(unsigned seg[2][2], int holes)
 
 	_reader->Seek(seg[0][1] + 1, SEEK_SET);
 	_info->getbits(-1);
-	if (seg[1][0] > _info->raw_width*_info->raw_height)
-		seg[1][0] = _info->raw_width*_info->raw_height;
+	if (seg[1][0] > _info->_rawWidth*_info->_rawHeight)
+		seg[1][0] = _info->_rawWidth*_info->_rawHeight;
 	for (int pix = seg[0][0]; pix < seg[1][0]; pix++)
 	{
 		for (int s = 0; s < 3; s++)
@@ -3652,30 +3653,30 @@ void CImageLoader::smal_decode_segment(unsigned seg[2][2], int holes)
 			diff = diff ? -diff : 0x80;
 		if (_reader->GetPosition() + 12 >= seg[1][1])
 			diff = 0;
-		_info->raw_image[pix] = pred[pix & 1] += diff;
-		if (!(pix & 1) && HOLE(pix / _info->raw_width))
+		_info->_rawImage[pix] = pred[pix & 1] += diff;
+		if (!(pix & 1) && HOLE(pix / _info->_rawWidth))
 			pix += 2;
 	}
-	_info->maximum = 0xff;
+	_info->_maximum = 0xff;
 }
 
-void CImageLoader::fill_holes(int holes)
+void CImageLoader::FillHoles(int holes)
 {
 	int val[4];
 
-	for (int row = 2; row < _info->height - 2; row++)
+	for (int row = 2; row < _info->_height - 2; row++)
 	{
 		if (!HOLE(row))
 			continue;
-		for (int col = 1; col < _info->width - 1; col += 4)
+		for (int col = 1; col < _info->_width - 1; col += 4)
 		{
 			val[0] = RAW(row - 1, col - 1);
 			val[1] = RAW(row - 1, col + 1);
 			val[2] = RAW(row + 1, col - 1);
 			val[3] = RAW(row + 1, col + 1);
-			RAW(row, col) = median4(val);
+			RAW(row, col) = Median4(val);
 		}
-		for (int col = 2; col < _info->width - 2; col += 4)
+		for (int col = 2; col < _info->_width - 2; col += 4)
 		{
 			if (HOLE(row - 2) || HOLE(row + 2))
 			{
@@ -3687,13 +3688,13 @@ void CImageLoader::fill_holes(int holes)
 				val[1] = RAW(row, col + 2);
 				val[2] = RAW(row - 2, col);
 				val[3] = RAW(row + 2, col);
-				RAW(row, col) = median4(val);
+				RAW(row, col) = Median4(val);
 			}
 		}
 	}
 }
 
-int CImageLoader::median4(int *p)
+int CImageLoader::Median4(int *p)
 {
 	int sum = p[0];
 	int max = sum;
@@ -3707,30 +3708,11 @@ int CImageLoader::median4(int *p)
 	return (sum - min - max) >> 1;
 }
 
-void CImageLoader::sony_decrypt(unsigned *data, int len, int start, int key)
+void CImageLoader::RemoveZeroes()
 {
-	static unsigned pad[128];
-	static unsigned p;
-
-	if (start)
+	for (unsigned row = 0; row < _info->_height; row++)
 	{
-		for (p = 0; p < 4; p++)
-			pad[p] = key = key * 48828125 + 1;
-		pad[3] = pad[3] << 1 | (pad[0] ^ pad[2]) >> 31;
-		for (p = 4; p < 127; p++)
-			pad[p] = (pad[p - 4] ^ pad[p - 2]) << 1 | (pad[p - 3] ^ pad[p - 1]) >> 31;
-		for (p = 0; p < 127; p++)
-			pad[p] = htonl(pad[p]);
-	}
-	while (len-- && p++)
-		*data++ ^= pad[(p - 1) & 127] = pad[p & 127] ^ pad[(p + 64) & 127];
-}
-
-void CImageLoader::remove_zeroes()
-{
-	for (unsigned row = 0; row < _info->height; row++)
-	{
-		for (unsigned col = 0; col < _info->width; col++)
+		for (unsigned col = 0; col < _info->_width; col++)
 		{
 			if (BAYER(row, col) == 0)
 			{
@@ -3740,7 +3722,7 @@ void CImageLoader::remove_zeroes()
 				{
 					for (unsigned c = col - 2; c <= col + 2; c++)
 					{
-						if (r < _info->height && c < _info->width &&
+						if (r < _info->_height && c < _info->_width &&
 							FC(r, c) == FC(row, col) && BAYER(r, c))
 						{
 							tot += (n++, BAYER(r, c));
@@ -3758,13 +3740,13 @@ void CImageLoader::remove_zeroes()
 Seach from the current directory up to the root looking for
 a ".badpixels" file, and fix those pixels now.
 */
-void CImageLoader::bad_pixels(const char *cfname)
+void CImageLoader::BadPixels(const char *cfname)
 {
 	// TODO: manage file
 	FILE* fp = 0;
 	int fixed = 0;
 
-	if (!_info->filters)
+	if (!_info->_filters)
 		return;
 
 	if (cfname)
@@ -3820,9 +3802,9 @@ void CImageLoader::bad_pixels(const char *cfname)
 		int col;
 		if (sscanf(line, "%d %d %d", &col, &row, &time) != 3)
 			continue;
-		if ((unsigned)col >= _info->width || (unsigned)row >= _info->height)
+		if ((unsigned)col >= _info->_width || (unsigned)row >= _info->_height)
 			continue;
-		if (time > _info->timestamp)
+		if (time > _info->_timestamp)
 			continue;
 		int n = 0;
 		int tot = 0;
@@ -3832,8 +3814,8 @@ void CImageLoader::bad_pixels(const char *cfname)
 			{
 				for (int c = col - rad; c <= col + rad; c++)
 				{
-					if ((unsigned)r < _info->height && (unsigned)c < _info->width &&
-						(r != row || c != col) && fcol(r, c) == fcol(row, col))
+					if ((unsigned)r < _info->_height && (unsigned)c < _info->_width &&
+						(r != row || c != col) && FCol(r, c) == FCol(row, col))
 					{
 						tot += BAYER2(r, c);
 						n++;
@@ -3848,7 +3830,7 @@ void CImageLoader::bad_pixels(const char *cfname)
 	fclose(fp);
 }
 
-void CImageLoader::subtract(const char *fname)
+void CImageLoader::Subtract(const char *fname)
 {
 	// TODO: manage file
 	FILE *fp;
@@ -3899,25 +3881,25 @@ void CImageLoader::subtract(const char *fname)
 		fprintf(stderr, ("%s is not a valid PGM file!\n"), fname);
 		fclose(fp);  return;
 	}
-	else if (dim[0] != _info->width || dim[1] != _info->height || dim[2] != 65535)
+	else if (dim[0] != _info->_width || dim[1] != _info->_height || dim[2] != 65535)
 	{
 		fprintf(stderr, ("%s has the wrong dimensions!\n"), fname);
 		fclose(fp);  return;
 	}
-	unsigned short* pixel = (unsigned short *)calloc(_info->width, sizeof *pixel);
+	unsigned short* pixel = (unsigned short *)calloc(_info->_width, sizeof *pixel);
 	CAutoFreeMemory autoFree(pixel);
-	for (int row = 0; row < _info->height; row++)
+	for (int row = 0; row < _info->_height; row++)
 	{
-		fread(pixel, 2, _info->width, fp);
-		for (int col = 0; col < _info->width; col++)
+		fread(pixel, 2, _info->_width, fp);
+		for (int col = 0; col < _info->_width; col++)
 			BAYER(row, col) = MAX(BAYER(row, col) - ntohs(pixel[col]), 0);
 	}
 	fclose(fp);
-	memset(_info->cblack, 0, sizeof _info->cblack);
-	_info->black = 0;
+	memset(_info->_cBlack, 0, sizeof _info->_cBlack);
+	_info->_black = 0;
 }
 
-void CImageLoader::colorcheck()
+void CImageLoader::Colorcheck()
 {
 #ifdef COLORCHECK
 #define NSQ 24
@@ -3961,30 +3943,30 @@ void CImageLoader::colorcheck()
 	memset(gmb_cam, 0, sizeof gmb_cam);
 	for (size_t sq = 0; sq < NSQ; sq++)
 	{
-		for (size_t c = 0; c < _info->colors; c++)
+		for (size_t c = 0; c < _info->_colors; c++)
 			count[c] = 0;
 		for (int row = cut[sq][3]; row < cut[sq][3] + cut[sq][1]; row++)
 		{
 			for (int col = cut[sq][2]; col < cut[sq][2] + cut[sq][0]; col++)
 			{
 				int c = FC(row, col);
-				if (c >= _info->colors) c -= 2;
+				if (c >= _info->_colors) c -= 2;
 				gmb_cam[sq][c] += BAYER2(row, col);
-				BAYER2(row, col) = _info->black + (BAYER2(row, col) - _info->black) / 2;
+				BAYER2(row, col) = _info->_black + (BAYER2(row, col) - _info->_black) / 2;
 				count[c]++;
 			}
 		}
-		for (size_t c = 0; c < _info->colors; c++)
-			gmb_cam[sq][c] = gmb_cam[sq][c] / count[c] - _info->black;
+		for (size_t c = 0; c < _info->_colors; c++)
+			gmb_cam[sq][c] = gmb_cam[sq][c] / count[c] - _info->_black;
 		gmb_xyz[sq][0] = gmb_xyY[sq][2] * gmb_xyY[sq][0] / gmb_xyY[sq][1];
 		gmb_xyz[sq][1] = gmb_xyY[sq][2];
 		gmb_xyz[sq][2] = gmb_xyY[sq][2] * (1 - gmb_xyY[sq][0] - gmb_xyY[sq][1]) / gmb_xyY[sq][1];
 	}
-	pseudoinverse(gmb_xyz, inverse, NSQ);
+	_info->PseudoInverse(gmb_xyz, inverse, NSQ);
 	for (size_t pass = 0; pass < 2; pass++)
 	{
-		_info->raw_color = 0;
-		for (size_t i = 0; i < _info->colors; i++)
+		_info->_rawColor = 0;
+		for (size_t i = 0; i < _info->_colors; i++)
 		{
 			for (size_t j = 0; j < 3; j++)
 			{
@@ -3995,12 +3977,12 @@ void CImageLoader::colorcheck()
 				}
 			}
 		}
-		cam_xyz_coeff(_info->rgb_cam, cam_xyz);
+		_info->CamXyzCoeff(_info->_rgbCam, cam_xyz);
 
-		for (size_t c = 0; c < _info->colors; c++)
-			balance[c] = _info->pre_mul[c] * gmb_cam[20][c];
+		for (size_t c = 0; c < _info->_colors; c++)
+			balance[c] = _info->_preMul[c] * gmb_cam[20][c];
 		for (size_t sq = 0; sq < NSQ; sq++)
-			for (size_t c = 0; c < _info->colors; c++)
+			for (size_t c = 0; c < _info->_colors; c++)
 				gmb_cam[sq][c] *= balance[c];
 	}
 #undef NSQ
@@ -4008,90 +3990,23 @@ void CImageLoader::colorcheck()
 }
 
 
-void CImageLoader::pseudoinverse(double(*in)[3], double(*out)[3], int size)
-{
-	double work[3][6];
-
-	for (int i = 0; i < 3; i++)
-	{
-		for (int j = 0; j < 6; j++)
-			work[i][j] = j == i + 3;
-		for (int j = 0; j < 3; j++)
-			for (int k = 0; k < size; k++)
-				work[i][j] += in[k][i] * in[k][j];
-	}
-	for (int i = 0; i < 3; i++)
-	{
-		double num = work[i][i];
-		for (int j = 0; j < 6; j++)
-			work[i][j] /= num;
-		for (int k = 0; k < 3; k++)
-		{
-			if (k == i)
-				continue;
-			num = work[k][i];
-			for (int j = 0; j < 6; j++)
-				work[k][j] -= work[i][j] * num;
-		}
-	}
-	for (int i = 0; i < size; i++)
-	{
-		for (int j = 0; j < 3; j++)
-		{
-			out[i][j] = 0;
-			for (int k = 0; k < 3; k++)
-				out[i][j] += work[j][k + 3] * in[i][k];
-		}
-	}
-}
-
-void CImageLoader::cam_xyz_coeff(float rgb_cam[3][4], double cam_xyz[4][3])
-{
-	double cam_rgb[4][3];
-	double inverse[4][3];
-
-	for (size_t i = 0; i < _info->colors; i++)		/* Multiply out XYZ colorspace */
-	{
-		for (size_t j = 0; j < 3; j++)
-		{
-			cam_rgb[i][j] = 0;
-			for (size_t k = 0; k < 3; k++)
-				cam_rgb[i][j] += cam_xyz[i][k] * _info->xyz_rgb[k][j];
-		}
-	}
-
-	for (size_t i = 0; i < _info->colors; i++)		/* Normalize cam_rgb so that */
-	{
-		double num = 0;
-		for (size_t j = 0; j < 3; j++)		/* cam_rgb * (1,1,1) is (1,1,1,1) */
-			num += cam_rgb[i][j];
-		for (size_t j = 0; j < 3; j++)
-			cam_rgb[i][j] /= num;
-		_info->pre_mul[i] = 1 / num;
-	}
-	pseudoinverse(cam_rgb, inverse, _info->colors);
-	for (size_t i = 0; i < 3; i++)
-		for (size_t j = 0; j < _info->colors; j++)
-			rgb_cam[i][j] = inverse[j][i];
-}
-
-void CImageLoader::scale_colors()
+void CImageLoader::ScaleColors()
 {
 	unsigned sum[8];
 	int val;
 	double dsum[8];
 	float scale_mul[4];
 
-	if (_options->user_mul[0])
-		memcpy(_info->pre_mul, _options->user_mul, sizeof _info->pre_mul);
-	if (_options->use_auto_wb || (_options->use_camera_wb && _info->cam_mul[0] == -1))
+	if (_options->_userMul[0])
+		memcpy(_info->_preMul, _options->_userMul, sizeof _info->_preMul);
+	if (_options->_useAutoWB || (_options->_useCameraWB && _info->_camMul[0] == -1))
 	{
 		memset(dsum, 0, sizeof dsum);
-		unsigned bottom = MIN(_options->greybox[1] + _options->greybox[3], _info->height);
-		unsigned right = MIN(_options->greybox[0] + _options->greybox[2], _info->width);
-		for (unsigned row = _options->greybox[1]; row < bottom; row += 8)
+		unsigned bottom = MIN(_options->_greybox[1] + _options->_greybox[3], _info->_height);
+		unsigned right = MIN(_options->_greybox[0] + _options->_greybox[2], _info->_width);
+		for (unsigned row = _options->_greybox[1]; row < bottom; row += 8)
 		{
-			for (unsigned col = _options->greybox[0]; col < right; col += 8)
+			for (unsigned col = _options->_greybox[0]; col < right; col += 8)
 			{
 				memset(sum, 0, sizeof sum);
 				for (unsigned y = row; y < row + 8 && y < bottom; y++)
@@ -4100,22 +4015,22 @@ void CImageLoader::scale_colors()
 					{
 						for (size_t c = 0; c < 4; c++)
 						{
-							if (_info->filters)
+							if (_info->_filters)
 							{
-								c = fcol(y, x);
+								c = FCol(y, x);
 								val = BAYER2(y, x);
 							}
 							else
 							{
-								val = _info->image[y*_info->width + x][c];
+								val = _info->_image[y*_info->_width + x][c];
 							}
-							if (val > _info->maximum - 25)
+							if (val > _info->_maximum - 25)
 								goto skip_block;
-							if ((val -= _info->cblack[c]) < 0)
+							if ((val -= _info->_cBlack[c]) < 0)
 								val = 0;
 							sum[c] += val;
 							sum[c + 4]++;
-							if (_info->filters) break;
+							if (_info->_filters) break;
 						}
 					}
 				}
@@ -4126,9 +4041,9 @@ void CImageLoader::scale_colors()
 		}
 		for (size_t c = 0; c < 4; c++)
 			if (dsum[c])
-				_info->pre_mul[c] = dsum[c + 4] / dsum[c];
+				_info->_preMul[c] = dsum[c + 4] / dsum[c];
 	}
-	if (_options->use_camera_wb && _info->cam_mul[0] != -1)
+	if (_options->_useCameraWB && _info->_camMul[0] != -1)
 	{
 		memset(sum, 0, sizeof sum);
 		for (unsigned row = 0; row < 8; row++)
@@ -4136,94 +4051,94 @@ void CImageLoader::scale_colors()
 			for (unsigned col = 0; col < 8; col++)
 			{
 				unsigned c = FC(row, col);
-				if ((val = _info->white[row][col] - _info->cblack[c]) > 0)
+				if ((val = _info->_white[row][col] - _info->_cBlack[c]) > 0)
 					sum[c] += val;
 				sum[c + 4]++;
 			}
 		}
 		if (sum[0] && sum[1] && sum[2] && sum[3])
 			for (size_t c = 0; c < 4; c++)
-				_info->pre_mul[c] = (float)sum[c + 4] / sum[c];
-		else if (_info->cam_mul[0] && _info->cam_mul[2])
-			memcpy(_info->pre_mul, _info->cam_mul, sizeof _info->pre_mul);
+				_info->_preMul[c] = (float)sum[c + 4] / sum[c];
+		else if (_info->_camMul[0] && _info->_camMul[2])
+			memcpy(_info->_preMul, _info->_camMul, sizeof _info->_preMul);
 		else
 			fprintf(stderr, ("%s: Cannot use camera white balance.\n"), _reader->GetFileName());
 	}
-	if (_info->pre_mul[1] == 0)
-		_info->pre_mul[1] = 1;
-	if (_info->pre_mul[3] == 0)
-		_info->pre_mul[3] = _info->colors < 4 ? _info->pre_mul[1] : 1;
-	int dark = _info->black;
-	int sat = _info->maximum;
-	if (_options->threshold)
-		wavelet_denoise();
-	_info->maximum -= _info->black;
+	if (_info->_preMul[1] == 0)
+		_info->_preMul[1] = 1;
+	if (_info->_preMul[3] == 0)
+		_info->_preMul[3] = _info->_colors < 4 ? _info->_preMul[1] : 1;
+	int dark = _info->_black;
+	int sat = _info->_maximum;
+	if (_options->_threshold)
+		WaveletDenoise();
+	_info->_maximum -= _info->_black;
 
 	double dmin = DBL_MAX;
 	double dmax = 0;
 	for (size_t c = 0; c < 4; c++)
 	{
-		if (dmin > _info->pre_mul[c])
-			dmin = _info->pre_mul[c];
-		if (dmax < _info->pre_mul[c])
-			dmax = _info->pre_mul[c];
+		if (dmin > _info->_preMul[c])
+			dmin = _info->_preMul[c];
+		if (dmax < _info->_preMul[c])
+			dmax = _info->_preMul[c];
 	}
-	if (!_options->highlight)
+	if (!_options->_highlight)
 		dmax = dmin;
 	for (size_t c = 0; c < 4; c++)
-		scale_mul[c] = (_info->pre_mul[c] /= dmax) * 65535.0 / _info->maximum;
-	if (_info->filters > 1000 && (_info->cblack[4] + 1) / 2 == 1 && (_info->cblack[5] + 1) / 2 == 1)
+		scale_mul[c] = (_info->_preMul[c] /= dmax) * 65535.0 / _info->_maximum;
+	if (_info->_filters > 1000 && (_info->_cBlack[4] + 1) / 2 == 1 && (_info->_cBlack[5] + 1) / 2 == 1)
 	{
 		for (size_t c = 0; c < 4; c++)
-			_info->cblack[FC(c / 2, c % 2)] += _info->cblack[6 + c / 2 % _info->cblack[4] * _info->cblack[5] + c % 2 % _info->cblack[5]];
-		_info->cblack[4] = _info->cblack[5] = 0;
+			_info->_cBlack[FC(c / 2, c % 2)] += _info->_cBlack[6 + c / 2 % _info->_cBlack[4] * _info->_cBlack[5] + c % 2 % _info->_cBlack[5]];
+		_info->_cBlack[4] = _info->_cBlack[5] = 0;
 	}
-	unsigned size = _info->iheight*_info->iwidth;
+	unsigned size = _info->_iheight*_info->_iwidth;
 	for (unsigned i = 0; i < size * 4; i++)
 	{
-		if (!(val = ((unsigned short *)_info->image)[i]))
+		if (!(val = ((unsigned short *)_info->_image)[i]))
 			continue;
-		if (_info->cblack[4] && _info->cblack[5])
-			val -= _info->cblack[6 + i / 4 / _info->iwidth % _info->cblack[4] * _info->cblack[5] + i / 4 % _info->iwidth % _info->cblack[5]];
-		val -= _info->cblack[i & 3];
+		if (_info->_cBlack[4] && _info->_cBlack[5])
+			val -= _info->_cBlack[6 + i / 4 / _info->_iwidth % _info->_cBlack[4] * _info->_cBlack[5] + i / 4 % _info->_iwidth % _info->_cBlack[5]];
+		val -= _info->_cBlack[i & 3];
 		val *= scale_mul[i & 3];
-		((unsigned short *)_info->image)[i] = CLIP(val);
+		((unsigned short *)_info->_image)[i] = CLIP(val);
 	}
-	if ((_options->aber[0] != 1 || _options->aber[2] != 1) && _info->colors == 3)
+	if ((_options->_aber[0] != 1 || _options->_aber[2] != 1) && _info->_colors == 3)
 	{
 		for (size_t c = 0; c < 4; c += 2)
 		{
-			if (_options->aber[c] == 1)
+			if (_options->_aber[c] == 1)
 				continue;
 			unsigned short* img = (unsigned short *)malloc(size * sizeof *img);
 			CAutoFreeMemory autoFree(img);
 			for (size_t i = 0; i < size; i++)
-				img[i] = _info->image[i][c];
-			for (unsigned row = 0; row < _info->iheight; row++)
+				img[i] = _info->_image[i][c];
+			for (unsigned row = 0; row < _info->_iheight; row++)
 			{
-				float fr = (row - _info->iheight*0.5) * _options->aber[c] + _info->iheight*0.5;
+				float fr = (row - _info->_iheight*0.5) * _options->_aber[c] + _info->_iheight*0.5;
 				unsigned ur = fr;
-				if (ur > _info->iheight - 2)
+				if (ur > _info->_iheight - 2)
 					continue;
 				fr -= ur;
-				for (unsigned col = 0; col < _info->iwidth; col++)
+				for (unsigned col = 0; col < _info->_iwidth; col++)
 				{
-					float fc = (col - _info->iwidth*0.5) * _options->aber[c] + _info->iwidth*0.5;
+					float fc = (col - _info->_iwidth*0.5) * _options->_aber[c] + _info->_iwidth*0.5;
 					unsigned uc = fc;
-					if (uc > _info->iwidth - 2)
+					if (uc > _info->_iwidth - 2)
 						continue;
 					fc -= uc;
-					unsigned short* pix = img + ur*_info->iwidth + uc;
-					_info->image[row*_info->iwidth + col][c] =
+					unsigned short* pix = img + ur*_info->_iwidth + uc;
+					_info->_image[row*_info->_iwidth + col][c] =
 						(pix[0] * (1 - fc) + pix[1] * fc) * (1 - fr) +
-						(pix[_info->iwidth] * (1 - fc) + pix[_info->iwidth + 1] * fc) * fr;
+						(pix[_info->_iwidth] * (1 - fc) + pix[_info->_iwidth + 1] * fc) * fr;
 				}
 			}
 		}
 	}
 }
 
-void CImageLoader::wavelet_denoise()
+void CImageLoader::WaveletDenoise()
 {
 	static const float noise[] = { 0.8002,0.2735,0.1202,0.0585,0.0291,0.0152,0.0080,0.0044 };
 	float mul[2];
@@ -4231,43 +4146,43 @@ void CImageLoader::wavelet_denoise()
 	unsigned short* window[4];
 
 	int scale = 1;
-	while (_info->maximum << scale < 0x10000)
+	while (_info->_maximum << scale < 0x10000)
 		scale++;
-	_info->maximum <<= --scale;
-	_info->black <<= scale;
+	_info->_maximum <<= --scale;
+	_info->_black <<= scale;
 	for (size_t c = 0; c < 4; c++)
-		_info->cblack[c] <<= scale;
+		_info->_cBlack[c] <<= scale;
 
 	float *fimg = 0;
-	int size = _info->iheight*_info->iwidth;
+	int size = _info->_iheight*_info->_iwidth;
 	if (size < 0x15550000)
-		fimg = (float *)malloc((size * 3 + _info->iheight + _info->iwidth) * sizeof *fimg);
+		fimg = (float *)malloc((size * 3 + _info->_iheight + _info->_iwidth) * sizeof *fimg);
 	CAutoFreeMemory autoFree(fimg);
 	float* temp = fimg + size * 3;
-	int nc = _info->colors;
-	if (nc == 3 && _info->filters)
+	int nc = _info->_colors;
+	if (nc == 3 && _info->_filters)
 		nc++;
 	for (size_t c = 0; c < nc; c++)
 	{			/* denoise R,G1,B,G3 individually */
 		for (int i = 0; i < size; i++)
-			fimg[i] = 256 * sqrt(_info->image[i][c] << scale);
+			fimg[i] = 256 * sqrt(_info->_image[i][c] << scale);
 		int hpass = 0;
 		int lpass;
 		for (int lev = 0; lev < 5; lev++)
 		{
 			lpass = size*((lev & 1) + 1);
-			for (int row = 0; row < _info->iheight; row++)
+			for (int row = 0; row < _info->_iheight; row++)
 			{
-				hat_transform(temp, fimg + hpass + row*_info->iwidth, 1, _info->iwidth, 1 << lev);
-				for (int col = 0; col < _info->iwidth; col++)
-					fimg[lpass + row*_info->iwidth + col] = temp[col] * 0.25;
+				HatTransform(temp, fimg + hpass + row*_info->_iwidth, 1, _info->_iwidth, 1 << lev);
+				for (int col = 0; col < _info->_iwidth; col++)
+					fimg[lpass + row*_info->_iwidth + col] = temp[col] * 0.25;
 			}
-			for (int col = 0; col < _info->iwidth; col++) {
-				hat_transform(temp, fimg + lpass + col, _info->iwidth, _info->iheight, 1 << lev);
-				for (int row = 0; row < _info->iheight; row++)
-					fimg[lpass + row*_info->iwidth + col] = temp[row] * 0.25;
+			for (int col = 0; col < _info->_iwidth; col++) {
+				HatTransform(temp, fimg + lpass + col, _info->_iwidth, _info->_iheight, 1 << lev);
+				for (int row = 0; row < _info->_iheight; row++)
+					fimg[lpass + row*_info->_iwidth + col] = temp[row] * 0.25;
 			}
-			float thold = _options->threshold * noise[lev];
+			float thold = _options->_threshold * noise[lev];
 			for (int i = 0; i < size; i++)
 			{
 				fimg[hpass + i] -= fimg[lpass + i];
@@ -4279,30 +4194,30 @@ void CImageLoader::wavelet_denoise()
 			hpass = lpass;
 		}
 		for (int i = 0; i < size; i++)
-			_info->image[i][c] = CLIP(SQR(fimg[i] + fimg[lpass + i]) / 0x10000);
+			_info->_image[i][c] = CLIP(SQR(fimg[i] + fimg[lpass + i]) / 0x10000);
 	}
-	if (_info->filters && _info->colors == 3)  /* pull G1 and G3 closer together */
+	if (_info->_filters && _info->_colors == 3)  /* pull G1 and G3 closer together */
 	{
 		for (int row = 0; row < 2; row++)
 		{
-			mul[row] = 0.125 * _info->pre_mul[FC(row + 1, 0) | 1] / _info->pre_mul[FC(row, 0) | 1];
-			blk[row] = _info->cblack[FC(row, 0) | 1];
+			mul[row] = 0.125 * _info->_preMul[FC(row + 1, 0) | 1] / _info->_preMul[FC(row, 0) | 1];
+			blk[row] = _info->_cBlack[FC(row, 0) | 1];
 		}
 		for (int i = 0; i < 4; i++)
-			window[i] = (unsigned short *)fimg + _info->width*i;
+			window[i] = (unsigned short *)fimg + _info->_width*i;
 		int wlast = -1;
-		for (int row = 1; row < _info->height - 1; row++)
+		for (int row = 1; row < _info->_height - 1; row++)
 		{
 			while (wlast < row + 1)
 			{
 				wlast++;
 				for (int i = 0; i < 4; i++)
 					window[(i + 3) & 3] = window[i];
-				for (int col = FC(wlast, 1) & 1; col < _info->width; col += 2)
+				for (int col = FC(wlast, 1) & 1; col < _info->_width; col += 2)
 					window[2][col] = BAYER(wlast, col);
 			}
-			float thold = _options->threshold / 512;
-			for (int col = (FC(row, 0) & 1) + 1; col < _info->width - 1; col += 2)
+			float thold = _options->_threshold / 512;
+			for (int col = (FC(row, 0) & 1) + 1; col < _info->_width - 1; col += 2)
 			{
 				float avg = (window[0][col - 1] + window[0][col + 1] +
 					window[2][col - 1] + window[2][col + 1] - blk[~row & 1] * 4)
@@ -4321,7 +4236,7 @@ void CImageLoader::wavelet_denoise()
 	}
 }
 
-void CImageLoader::hat_transform(float *temp, float *base, int st, int size, int sc)
+void CImageLoader::HatTransform(float *temp, float *base, int st, int size, int sc)
 {
 	int i;
 	for (i = 0; i < sc; i++)
@@ -4332,28 +4247,28 @@ void CImageLoader::hat_transform(float *temp, float *base, int st, int size, int
 		temp[i] = 2 * base[st*i] + base[st*(i - sc)] + base[st*(2 * size - 2 - (i + sc))];
 }
 
-void CImageLoader::pre_interpolate()
+void CImageLoader::PreInterpolate()
 {
-	if (_info->shrink)
+	if (_info->_shrink)
 	{
-		if (_options->half_size)
+		if (_options->_halfSize)
 		{
-			_info->height = _info->iheight;
-			_info->width = _info->iwidth;
-			if (_info->filters == 9)
+			_info->_height = _info->_iheight;
+			_info->_width = _info->_iwidth;
+			if (_info->_filters == 9)
 			{
 				int row;
 				int col;
 				for (row = 0; row < 3; row++)
 					for (col = 1; col < 4; col++)
-						if (!(_info->image[row*_info->width + col][0] | _info->image[row*_info->width + col][2]))
+						if (!(_info->_image[row*_info->_width + col][0] | _info->_image[row*_info->_width + col][2]))
 							goto break2;
 			break2:
-				for (; row < _info->height; row += 3)
+				for (; row < _info->_height; row += 3)
 				{
-					for (col = (col - 1) % 3 + 1; col < _info->width - 1; col += 3)
+					for (col = (col - 1) % 3 + 1; col < _info->_width - 1; col += 3)
 					{
-						unsigned short(*img)[4] = _info->image + row*_info->width + col;
+						unsigned short(*img)[4] = _info->_image + row*_info->_width + col;
 						for (size_t c = 0; c < 3; c += 2)
 							img[0][c] = (img[-1][c] + img[1][c]) >> 1;
 					}
@@ -4362,55 +4277,55 @@ void CImageLoader::pre_interpolate()
 		}
 		else
 		{
-			unsigned short(*img)[4] = (unsigned short(*)[4]) calloc(_info->height, _info->width * sizeof *img);
+			unsigned short(*img)[4] = (unsigned short(*)[4]) calloc(_info->_height, _info->_width * sizeof *img);
 			CAutoFreeMemory autoFree(img);
-			for (int row = 0; row < _info->height; row++)
+			for (int row = 0; row < _info->_height; row++)
 			{
-				for (int col = 0; col < _info->width; col++)
+				for (int col = 0; col < _info->_width; col++)
 				{
-					int c = fcol(row, col);
-					img[row*_info->width + col][c] = _info->image[(row >> 1)*_info->iwidth + (col >> 1)][c];
+					int c = FCol(row, col);
+					img[row*_info->_width + col][c] = _info->_image[(row >> 1)*_info->_iwidth + (col >> 1)][c];
 				}
 			}
-			free(_info->image);
-			_info->image = img;
-			_info->shrink = 0;
+			free(_info->_image);
+			_info->_image = img;
+			_info->_shrink = 0;
 		}
 	}
-	if (_info->filters > 1000 && _info->colors == 3)
+	if (_info->_filters > 1000 && _info->_colors == 3)
 	{
-		_info->mix_green = _options->four_color_rgb ^ _info->half_size;
-		if (_options->four_color_rgb | _info->half_size)
+		_info->_mixGreen = _options->_fourColorRGB ^ _info->_halfSize;
+		if (_options->_fourColorRGB | _info->_halfSize)
 		{
-			_info->colors++;
+			_info->_colors++;
 		}
 		else
 		{
-			for (int row = FC(1, 0) >> 1; row < _info->height; row += 2)
-				for (int col = FC(row, 1) & 1; col < _info->width; col += 2)
-					_info->image[row*_info->width + col][1] = _info->image[row*_info->width + col][3];
-			_info->filters &= ~((_info->filters & 0x55555555) << 1);
+			for (int row = FC(1, 0) >> 1; row < _info->_height; row += 2)
+				for (int col = FC(row, 1) & 1; col < _info->_width; col += 2)
+					_info->_image[row*_info->_width + col][1] = _info->_image[row*_info->_width + col][3];
+			_info->_filters &= ~((_info->_filters & 0x55555555) << 1);
 		}
 	}
-	if (_info->half_size)
-		_info->filters = 0;
+	if (_info->_halfSize)
+		_info->_filters = 0;
 }
 
-void CImageLoader::lin_interpolate()
+void CImageLoader::LinInterpolate()
 {
 	int code[16][16][32];
 	int sum[4];
 
 	int size = 16;
-	if (_info->filters == 9)
+	if (_info->_filters == 9)
 		size = 6;
-	border_interpolate(1);
+	BorderInterpolate(1);
 	for (int row = 0; row < size; row++)
 	{
 		for (int col = 0; col < size; col++)
 		{
 			int* ip = code[row][col] + 1;
-			int f = fcol(row, col);
+			int f = FCol(row, col);
 			int color;
 			memset(sum, 0, sizeof sum);
 			for (int y = -1; y <= 1; y++)
@@ -4418,17 +4333,17 @@ void CImageLoader::lin_interpolate()
 				for (int x = -1; x <= 1; x++)
 				{
 					int shift = (y == 0) + (x == 0);
-					color = fcol(row + y, col + x);
+					color = FCol(row + y, col + x);
 					if (color == f)
 						continue;
-					*ip++ = (_info->width*y + x) * 4 + color;
+					*ip++ = (_info->_width*y + x) * 4 + color;
 					*ip++ = shift;
 					*ip++ = color;
 					sum[color] += 1 << shift;
 				}
 			}
 			code[row][col][0] = (ip - code[row][col]) / 3;
-			for (int c = 0; c < _info->colors; c++)
+			for (int c = 0; c < _info->_colors; c++)
 			{
 				if (c != f)
 				{
@@ -4438,16 +4353,16 @@ void CImageLoader::lin_interpolate()
 			}
 		}
 	}
-	for (int row = 1; row < _info->height - 1; row++)
+	for (int row = 1; row < _info->_height - 1; row++)
 	{
-		for (int col = 1; col < _info->width - 1; col++)
+		for (int col = 1; col < _info->_width - 1; col++)
 		{
-			unsigned short* pix = _info->image[row*_info->width + col];
+			unsigned short* pix = _info->_image[row*_info->_width + col];
 			int* ip = code[row % size][col % size];
 			memset(sum, 0, sizeof sum);
 			for (int i = *ip++; i--; ip += 3)
 				sum[ip[2]] += pix[ip[0]] << ip[1];
-			for (int i = _info->colors; --i; ip += 2)
+			for (int i = _info->_colors; --i; ip += 2)
 				pix[ip[0]] = sum[ip[0]] * ip[1] >> 8;
 		}
 	}
@@ -4463,7 +4378,7 @@ described in http://scien.stanford.edu/pages/labsite/1999/psych221/projects/99/t
 I've extended the basic idea to work with non-Bayer filter arrays.
 Gradients are numbered clockwise from NW=0 to W=7.
 */
-void CImageLoader::vng_interpolate()
+void CImageLoader::VngInterpolate()
 {
 	static const signed char* cp;
 	static const signed char terms[] =
@@ -4501,16 +4416,16 @@ void CImageLoader::vng_interpolate()
 	int col;
 	int g;
 
-	lin_interpolate();
+	LinInterpolate();
 
 	int prow = 8;
 	int pcol = 2;
-	if (_info->filters == 1)
+	if (_info->_filters == 1)
 	{
 		prow = 16;
 		pcol = 16;
 	}
-	if (_info->filters == 9)
+	if (_info->_filters == 9)
 	{
 		prow = 6;
 		pcol = 6;
@@ -4532,14 +4447,14 @@ void CImageLoader::vng_interpolate()
 				int x2 = *cp++;
 				int weight = *cp++;
 				int grads = *cp++;
-				int color = fcol(row + y1, col + x1);
-				if (fcol(row + y2, col + x2) != color)
+				int color = FCol(row + y1, col + x1);
+				if (FCol(row + y2, col + x2) != color)
 					continue;
-				int diag = (fcol(row, col + 1) == color && fcol(row + 1, col) == color) ? 2 : 1;
+				int diag = (FCol(row, col + 1) == color && FCol(row + 1, col) == color) ? 2 : 1;
 				if (abs(y1 - y2) == diag && abs(x1 - x2) == diag)
 					continue;
-				*ip++ = (y1*_info->width + x1) * 4 + color;
-				*ip++ = (y2*_info->width + x2) * 4 + color;
+				*ip++ = (y1*_info->_width + x1) * 4 + color;
+				*ip++ = (y2*_info->_width + x2) * 4 + color;
 				*ip++ = weight;
 				for (g = 0; g < 8; g++)
 					if (grads & 1 << g) *ip++ = g;
@@ -4551,24 +4466,24 @@ void CImageLoader::vng_interpolate()
 			{
 				int y = *cp++;
 				int x = *cp++;
-				*ip++ = (y*_info->width + x) * 4;
-				int color = fcol(row, col);
-				if (fcol(row + y, col + x) != color && fcol(row + y * 2, col + x * 2) == color)
-					*ip++ = (y*_info->width + x) * 8 + color;
+				*ip++ = (y*_info->_width + x) * 4;
+				int color = FCol(row, col);
+				if (FCol(row + y, col + x) != color && FCol(row + y * 2, col + x * 2) == color)
+					*ip++ = (y*_info->_width + x) * 8 + color;
 				else
 					*ip++ = 0;
 			}
 		}
 	}
-	brow[4] = (unsigned short(*)[4]) calloc(_info->width * 3, sizeof **brow);
+	brow[4] = (unsigned short(*)[4]) calloc(_info->_width * 3, sizeof **brow);
 	CAutoFreeMemory autoFreeBrow(brow[4]);
 	for (row = 0; row < 3; row++)
-		brow[row] = brow[4] + row*_info->width;
-	for (row = 2; row < _info->height - 2; row++)			/* Do VNG interpolation */
+		brow[row] = brow[4] + row*_info->_width;
+	for (row = 2; row < _info->_height - 2; row++)			/* Do VNG interpolation */
 	{
-		for (col = 2; col < _info->width - 2; col++)
+		for (col = 2; col < _info->_width - 2; col++)
 		{
-			pix = _info->image[row*_info->width + col];
+			pix = _info->_image[row*_info->_width + col];
 			ip = code[row % prow][col % pcol];
 			memset(gval, 0, sizeof gval);
 			while ((g = ip[0]) != INT_MAX)			/* Calculate gradients */
@@ -4593,18 +4508,18 @@ void CImageLoader::vng_interpolate()
 					gmax = gval[g];
 			}
 			if (gmax == 0) {
-				memcpy(brow[2][col], pix, sizeof *_info->image);
+				memcpy(brow[2][col], pix, sizeof *_info->_image);
 				continue;
 			}
 			int thold = gmin + (gmax >> 1);
 			memset(sum, 0, sizeof sum);
-			int color = fcol(row, col);
+			int color = FCol(row, col);
 			int num = 0;
 			for (g = 0; g < 8; g++, ip += 2)
 			{		/* Average the neighbors */
 				if (gval[g] <= thold)
 				{
-					for (size_t c = 0; c < _info->colors; c++)
+					for (size_t c = 0; c < _info->_colors; c++)
 					{
 						if (c == color && ip[1])
 							sum[c] += (pix[c] + pix[ip[1]]) >> 1;
@@ -4614,7 +4529,7 @@ void CImageLoader::vng_interpolate()
 					num++;
 				}
 			}
-			for (size_t c = 0; c < _info->colors; c++)					/* Save to buffer */
+			for (size_t c = 0; c < _info->_colors; c++)					/* Save to buffer */
 			{
 				int t = pix[color];
 				if (c != color)
@@ -4623,35 +4538,34 @@ void CImageLoader::vng_interpolate()
 			}
 		}
 		if (row > 3)				/* Write buffer to image */
-			memcpy(_info->image[(row - 2)*_info->width + 2], brow[0] + 2, (_info->width - 4) * sizeof *_info->image);
+			memcpy(_info->_image[(row - 2)*_info->_width + 2], brow[0] + 2, (_info->_width - 4) * sizeof *_info->_image);
 		for (g = 0; g < 4; g++)
 			brow[(g - 1) & 3] = brow[g];
 	}
-	memcpy(_info->image[(row - 2)*_info->width + 2], brow[0] + 2, (_info->width - 4) * sizeof *_info->image);
-	memcpy(_info->image[(row - 1)*_info->width + 2], brow[1] + 2, (_info->width - 4) * sizeof *_info->image);
+	memcpy(_info->_image[(row - 2)*_info->_width + 2], brow[0] + 2, (_info->_width - 4) * sizeof *_info->_image);
+	memcpy(_info->_image[(row - 1)*_info->_width + 2], brow[1] + 2, (_info->_width - 4) * sizeof *_info->_image);
 }
 
 /*
 Patterned Pixel Grouping Interpolation by Alain Desbiolles
 */
-void CImageLoader::ppg_interpolate()
+void CImageLoader::PpgInterpolate()
 {
-	int dir[5] = { 1, _info->width, -1, -_info->width, 1 };
+	int dir[5] = { 1, _info->_width, -1, -_info->_width, 1 };
 	int diff[2];
 	int guess[2];
-	int c;
 	int d;
 	int i;
 	unsigned short(*pix)[4];
 
-	border_interpolate(3);
+	BorderInterpolate(3);
 
 	/*  Fill in the green layer with gradients and pattern recognition: */
-	for (int row = 3; row < _info->height - 3; row++)
+	for (int row = 3; row < _info->_height - 3; row++)
 	{
-		for (int col = 3 + (FC(row, 3) & 1), c = FC(row, col); col < _info->width - 3; col += 2)
+		for (int col = 3 + (FC(row, 3) & 1), c = FC(row, col); col < _info->_width - 3; col += 2)
 		{
-			pix = _info->image + row*_info->width + col;
+			pix = _info->_image + row*_info->_width + col;
 			for (i = 0; (d = dir[i]) > 0; i++)
 			{
 				guess[i] = (pix[-d][1] + pix[0][c] + pix[d][1]) * 2
@@ -4667,20 +4581,20 @@ void CImageLoader::ppg_interpolate()
 		}
 	}
 	/*  Calculate red and blue for each green pixel:		*/
-	for (int row = 1; row < _info->height - 1; row++)
-		for (int col = 1 + (FC(row, 2) & 1), c = FC(row, col + 1); col < _info->width - 1; col += 2)
+	for (int row = 1; row < _info->_height - 1; row++)
+		for (int col = 1 + (FC(row, 2) & 1), c = FC(row, col + 1); col < _info->_width - 1; col += 2)
 		{
-			pix = _info->image + row*_info->width + col;
+			pix = _info->_image + row*_info->_width + col;
 			for (i = 0; (d = dir[i]) > 0; c = 2 - c, i++)
 				pix[0][c] = CLIP((pix[-d][c] + pix[d][c] + 2 * pix[0][1]
 					- pix[-d][1] - pix[d][1]) >> 1);
 		}
 	/*  Calculate blue for red pixels and vice versa:		*/
-	for (int row = 1; row < _info->height - 1; row++)
+	for (int row = 1; row < _info->_height - 1; row++)
 	{
-		for (int col = 1 + (FC(row, 1) & 1), c = 2 - FC(row, col); col < _info->width - 1; col += 2)
+		for (int col = 1 + (FC(row, 1) & 1), c = 2 - FC(row, col); col < _info->_width - 1; col += 2)
 		{
-			pix = _info->image + row*_info->width + col;
+			pix = _info->_image + row*_info->_width + col;
 			for (i = 0; (d = dir[i] + dir[i + 1]) > 0; i++)
 			{
 				diff[i] = ABS(pix[-d][c] - pix[d][c]) +
@@ -4697,43 +4611,43 @@ void CImageLoader::ppg_interpolate()
 	}
 }
 
-void CImageLoader::border_interpolate(int border)
+void CImageLoader::BorderInterpolate(int border)
 {
 	unsigned sum[8];
 
-	for (unsigned row = 0; row < _info->height; row++)
+	for (unsigned row = 0; row < _info->_height; row++)
 	{
-		for (unsigned col = 0; col < _info->width; col++)
+		for (unsigned col = 0; col < _info->_width; col++)
 		{
-			if (col == border && row >= border && row < _info->height - border)
-				col = _info->width - border;
+			if (col == border && row >= border && row < _info->_height - border)
+				col = _info->_width - border;
 			memset(sum, 0, sizeof sum);
 			for (unsigned y = row - 1; y != row + 2; y++)
 			{
 				for (unsigned x = col - 1; x != col + 2; x++)
 				{
-					if (y < _info->height && x < _info->width)
+					if (y < _info->_height && x < _info->_width)
 					{
-						unsigned f = fcol(y, x);
-						sum[f] += _info->image[y*_info->width + x][f];
+						unsigned f = FCol(y, x);
+						sum[f] += _info->_image[y*_info->_width + x][f];
 						sum[f + 4]++;
 					}
 				}
 			}
-			unsigned f = fcol(row, col);
-			for (size_t c = 0; c < _info->colors; c++)
+			unsigned f = FCol(row, col);
+			for (size_t c = 0; c < _info->_colors; c++)
 				if (c != f && sum[c + 4])
-					_info->image[row*_info->width + col][c] = sum[c] / sum[c + 4];
+					_info->_image[row*_info->_width + col][c] = sum[c] / sum[c + 4];
 		}
 	}
 }
 
 #define TS 512		/* Tile Size */
-#define fcol(row,col) _info->xtrans[(row+6) % 6][(col+6) % 6]
+#define FCol(row,col) _info->_xtrans[(row+6) % 6][(col+6) % 6]
 /*
 Frank Markesteijn's algorithm for Fuji X-Trans sensors
 */
-void CImageLoader::xtrans_interpolate(int passes)
+void CImageLoader::XtransInterpolate(int passes)
 {
 	static const short orth[12] = { 1,0,0,1,-1,0,0,-1,1,0,0,1 };
 	static const short patt[2][16] =
@@ -4759,7 +4673,7 @@ void CImageLoader::xtrans_interpolate(int passes)
 	float diff[6];
 	char(*homo)[TS][TS];
 
-	cielab(0, 0);
+	Cielab(0, 0);
 	int ndir = 4 << (passes > 1);
 	char* buffer = (char *)malloc(TS*TS*(ndir * 11 + 6));
 	CAutoFreeMemory autoFree(buffer);
@@ -4776,8 +4690,8 @@ void CImageLoader::xtrans_interpolate(int passes)
 			int ng = 0;
 			for (int d = 0; d < 10; d += 2)
 			{
-				int g = fcol(row, col) == 1;
-				if (fcol(row + orth[d], col + orth[d + 2]) == 1)
+				int g = FCol(row, col) == 1;
+				if (FCol(row + orth[d], col + orth[d + 2]) == 1)
 					ng = 0;
 				else
 					ng++;
@@ -4792,7 +4706,7 @@ void CImageLoader::xtrans_interpolate(int passes)
 					{
 						int v = orth[d] * patt[g][c * 2] + orth[d + 1] * patt[g][c * 2 + 1];
 						int h = orth[d + 2] * patt[g][c * 2] + orth[d + 3] * patt[g][c * 2 + 1];
-						allhex[row][col][0][c ^ (g * 2 & d)] = h + v*_info->width;
+						allhex[row][col][0][c ^ (g * 2 & d)] = h + v*_info->_width;
 						allhex[row][col][1][c ^ (g * 2 & d)] = h + v*TS;
 					}
 				}
@@ -4801,15 +4715,15 @@ void CImageLoader::xtrans_interpolate(int passes)
 	}
 
 	/* Set green1 and green3 to the minimum and maximum allowed values:	*/
-	for (int row = 2; row < _info->height - 2; row++)
+	for (int row = 2; row < _info->_height - 2; row++)
 	{
 		unsigned short max = 0;
 		unsigned short min = ~max;
-		for (int col = 2; col < _info->width - 2; col++)
+		for (int col = 2; col < _info->_width - 2; col++)
 		{
-			if (fcol(row, col) == 1 && (min = ~(max = 0)))
+			if (FCol(row, col) == 1 && (min = ~(max = 0)))
 				continue;
-			pix = _info->image + row*_info->width + col;
+			pix = _info->_image + row*_info->_width + col;
 			short* hex = allhex[row % 3][col % 3][0];
 			if (!max)
 			{
@@ -4827,28 +4741,28 @@ void CImageLoader::xtrans_interpolate(int passes)
 			switch ((row - sgrow) % 3)
 			{
 			case 1:
-				if (row < _info->height - 3)
+				if (row < _info->_height - 3)
 				{
 					row++;
 					col--;
 				}
 				break;
 			case 2:
-				if ((min = ~(max = 0)) && (col += 2) < _info->width - 3 && row > 2)
+				if ((min = ~(max = 0)) && (col += 2) < _info->_width - 3 && row > 2)
 					row--;
 			}
 		}
 	}
 
-	for (int top = 3; top < _info->height - 19; top += TS - 16)
+	for (int top = 3; top < _info->_height - 19; top += TS - 16)
 	{
-		for (int left = 3; left < _info->width - 19; left += TS - 16)
+		for (int left = 3; left < _info->_width - 19; left += TS - 16)
 		{
-			int mrow = MIN(top + TS, _info->height - 3);
-			int mcol = MIN(left + TS, _info->width - 3);
+			int mrow = MIN(top + TS, _info->_height - 3);
+			int mcol = MIN(left + TS, _info->_width - 3);
 			for (int row = top; row < mrow; row++)
 				for (int col = left; col < mcol; col++)
-					memcpy(rgb[0][row - top][col - left], _info->image[row*_info->width + col], 6);
+					memcpy(rgb[0][row - top][col - left], _info->_image[row*_info->_width + col], 6);
 			for (int c = 0; c < 3; c++)
 				memcpy(rgb[c + 1], rgb[0], sizeof *rgb);
 
@@ -4857,10 +4771,10 @@ void CImageLoader::xtrans_interpolate(int passes)
 			{
 				for (int col = left; col < mcol; col++)
 				{
-					int f = fcol(row, col);
+					int f = FCol(row, col);
 					if (f == 1)
 						continue;
-					pix = _info->image + row*_info->width + col;
+					pix = _info->_image + row*_info->_width + col;
 					short* hex = allhex[row % 3][col % 3][0];
 					color[1][0] = 174 * (pix[hex[1]][1] + pix[hex[0]][1]) -
 						46 * (pix[2 * hex[1]][1] + pix[2 * hex[0]][1]);
@@ -4888,10 +4802,10 @@ void CImageLoader::xtrans_interpolate(int passes)
 					{
 						for (int col = left + 2; col < mcol - 2; col++)
 						{
-							int f = fcol(row, col);
+							int f = FCol(row, col);
 							if (f == 1)
 								continue;
-							pix = _info->image + row*_info->width + col;
+							pix = _info->_image + row*_info->_width + col;
 							short* hex = allhex[row % 3][col % 3][1];
 							for (int d = 3; d < 6; d++)
 							{
@@ -4910,7 +4824,7 @@ void CImageLoader::xtrans_interpolate(int passes)
 					for (int col = (left - sgcol + 4) / 3 * 3 + sgcol; col < mcol - 2; col += 3)
 					{
 						rix = &rgb[0][row - top][col - left];
-						int h = fcol(row, col + 1);
+						int h = FCol(row, col + 1);
 						memset(diff, 0, sizeof diff);
 						int i = 1;
 						for (int d = 0; d < 6; d++, i ^= TS ^ 1, h ^= 2)
@@ -4942,7 +4856,7 @@ void CImageLoader::xtrans_interpolate(int passes)
 				{
 					for (int col = left + 3; col < mcol - 3; col++)
 					{
-						int f = 2 - fcol(row, col);
+						int f = 2 - FCol(row, col);
 						if ((f) == 1)
 							continue;
 						rix = &rgb[0][row - top][col - left];
@@ -4999,7 +4913,7 @@ void CImageLoader::xtrans_interpolate(int passes)
 			{
 				for (int row = 2; row < mrow - 2; row++)
 					for (int col = 2; col < mcol - 2; col++)
-						cielab(rgb[d][row][col], lab[row][col]);
+						Cielab(rgb[d][row][col], lab[row][col]);
 				int f = dir[d & 3];
 				for (int row = 3; row < mrow - 3; row++)
 				{
@@ -5034,10 +4948,10 @@ void CImageLoader::xtrans_interpolate(int passes)
 			}
 
 			/* Average the most homogenous pixels for the final result:	*/
-			if (_info->height - top < TS + 4)
-				mrow = _info->height - top + 2;
-			if (_info->width - left < TS + 4)
-				mcol = _info->width - left + 2;
+			if (_info->_height - top < TS + 4)
+				mrow = _info->_height - top + 2;
+			if (_info->_width - left < TS + 4)
+				mcol = _info->_width - left + 2;
 			for (int row = MIN(top, 8); row < mrow - 8; row++)
 			{
 				for (int col = MIN(left, 8); col < mcol - 8; col++)
@@ -5069,61 +4983,61 @@ void CImageLoader::xtrans_interpolate(int passes)
 							avg[3]++;
 						}
 					for (int c = 0; c < 3; c++)
-						_info->image[(row + top)*_info->width + col + left][c] = avg[c] / avg[3];
+						_info->_image[(row + top)*_info->_width + col + left][c] = avg[c] / avg[3];
 				}
 			}
 		}
 	}
-	border_interpolate(8);
+	BorderInterpolate(8);
 }
-#undef fcol
+#undef FCol
 
 /*
 Adaptive Homogeneity-Directed interpolation is based on
 the work of Keigo Hirakawa, Thomas Parks, and Paul Lee.
 */
-void CImageLoader::ahd_interpolate()
+void CImageLoader::AhdInterpolate()
 {
 	static const int dir[4] = { -1, 1, -TS, TS };
 	int hm[2];
 	unsigned ldiff[2][4];
 	unsigned abdiff[2][4];
 
-	cielab(0, 0);
-	border_interpolate(5);
+	Cielab(0, 0);
+	BorderInterpolate(5);
 	char* buffer = (char *)malloc(26 * TS*TS);
 	CAutoFreeMemory autoFree(buffer);
 	unsigned short(*rgb)[TS][TS][3] = (unsigned short(*)[TS][TS][3]) buffer;
 	short(*lab)[TS][TS][3] = (short(*)[TS][TS][3]) (buffer + 12 * TS*TS);
 	char(*homo)[TS][TS] = (char(*)[TS][TS]) (buffer + 24 * TS*TS);
 
-	for (int top = 2; top < _info->height - 5; top += TS - 6)
+	for (int top = 2; top < _info->_height - 5; top += TS - 6)
 	{
-		for (int left = 2; left < _info->width - 5; left += TS - 6)
+		for (int left = 2; left < _info->_width - 5; left += TS - 6)
 		{
 			/*  Interpolate green horizontally and vertically:		*/
-			for (int row = top; row < top + TS && row < _info->height - 2; row++)
+			for (int row = top; row < top + TS && row < _info->_height - 2; row++)
 			{
 				int col = left + (FC(row, left) & 1);
-				for (int c = FC(row, col); col < left + TS && col < _info->width - 2; col += 2)
+				for (int c = FC(row, col); col < left + TS && col < _info->_width - 2; col += 2)
 				{
-					unsigned short(*pix)[4] = _info->image + row*_info->width + col;
+					unsigned short(*pix)[4] = _info->_image + row*_info->_width + col;
 					int val = ((pix[-1][1] + pix[0][c] + pix[1][1]) * 2
 						- pix[-2][c] - pix[2][c]) >> 2;
 					rgb[0][row - top][col - left][1] = ULIM(val, pix[-1][1], pix[1][1]);
-					val = ((pix[-_info->width][1] + pix[0][c] + pix[_info->width][1]) * 2
-						- pix[-2 * _info->width][c] - pix[2 * _info->width][c]) >> 2;
-					rgb[1][row - top][col - left][1] = ULIM(val, pix[-_info->width][1], pix[_info->width][1]);
+					val = ((pix[-_info->_width][1] + pix[0][c] + pix[_info->_width][1]) * 2
+						- pix[-2 * _info->_width][c] - pix[2 * _info->_width][c]) >> 2;
+					rgb[1][row - top][col - left][1] = ULIM(val, pix[-_info->_width][1], pix[_info->_width][1]);
 				}
 			}
 			/*  Interpolate red and blue, and convert to CIELab:		*/
 			for (int d = 0; d < 2; d++)
 			{
-				for (int row = top + 1; row < top + TS - 1 && row < _info->height - 3; row++)
+				for (int row = top + 1; row < top + TS - 1 && row < _info->_height - 3; row++)
 				{
-					for (int col = left + 1; col < left + TS - 1 && col < _info->width - 3; col++)
+					for (int col = left + 1; col < left + TS - 1 && col < _info->_width - 3; col++)
 					{
-						unsigned short(*pix)[4] = _info->image + row*_info->width + col;
+						unsigned short(*pix)[4] = _info->_image + row*_info->_width + col;
 						unsigned short(*rix)[3] = &rgb[d][row - top][col - left];
 						short(*lix)[3] = &lab[d][row - top][col - left];
 						int c = 2 - FC(row, col);
@@ -5134,29 +5048,29 @@ void CImageLoader::ahd_interpolate()
 							val = pix[0][1] + ((pix[-1][2 - c] + pix[1][2 - c]
 								- rix[-1][1] - rix[1][1]) >> 1);
 							rix[0][2 - c] = CLIP(val);
-							val = pix[0][1] + ((pix[-_info->width][c] + pix[_info->width][c]
+							val = pix[0][1] + ((pix[-_info->_width][c] + pix[_info->_width][c]
 								- rix[-TS][1] - rix[TS][1]) >> 1);
 						}
 						else
 						{
-							val = rix[0][1] + ((pix[-_info->width - 1][c] + pix[-_info->width + 1][c]
-								+ pix[+_info->width - 1][c] + pix[+_info->width + 1][c]
+							val = rix[0][1] + ((pix[-_info->_width - 1][c] + pix[-_info->_width + 1][c]
+								+ pix[+_info->_width - 1][c] + pix[+_info->_width + 1][c]
 								- rix[-TS - 1][1] - rix[-TS + 1][1]
 								- rix[+TS - 1][1] - rix[+TS + 1][1] + 1) >> 2);
 						}
 						rix[0][c] = CLIP(val);
 						c = FC(row, col);
 						rix[0][c] = pix[0][c];
-						cielab(rix[0], lix[0]);
+						Cielab(rix[0], lix[0]);
 					}
 				}
 			}
 			/*  Build homogeneity maps from the CIELab images:		*/
 			memset(homo, 0, 2 * TS*TS);
-			for (int row = top + 2; row < top + TS - 2 && row < _info->height - 4; row++)
+			for (int row = top + 2; row < top + TS - 2 && row < _info->_height - 4; row++)
 			{
 				int tr = row - top;
-				for (int col = left + 2; col < left + TS - 2 && col < _info->width - 4; col++)
+				for (int col = left + 2; col < left + TS - 2 && col < _info->_width - 4; col++)
 				{
 					int tc = col - left;
 					for (int d = 0; d < 2; d++)
@@ -5180,10 +5094,10 @@ void CImageLoader::ahd_interpolate()
 				}
 			}
 			/*  Combine the most homogenous pixels for the final result:	*/
-			for (int row = top + 3; row < top + TS - 3 && row < _info->height - 5; row++)
+			for (int row = top + 3; row < top + TS - 3 && row < _info->_height - 5; row++)
 			{
 				int tr = row - top;
-				for (int col = left + 3; col < left + TS - 3 && col < _info->width - 5; col++)
+				for (int col = left + 3; col < left + TS - 3 && col < _info->_width - 5; col++)
 				{
 					int tc = col - left;
 					for (int d = 0; d < 2; d++)
@@ -5196,12 +5110,12 @@ void CImageLoader::ahd_interpolate()
 					if (hm[0] != hm[1])
 					{
 						for (int c = 0; c < 3; c++)
-							_info->image[row*_info->width + col][c] = rgb[hm[1] > hm[0]][tr][tc][c];
+							_info->_image[row*_info->_width + col][c] = rgb[hm[1] > hm[0]][tr][tc][c];
 					}
 					else
 					{
 						for (int c = 0; c < 3; c++)
-							_info->image[row*_info->width + col][c] = (rgb[0][tr][tc][c] + rgb[1][tr][tc][c]) >> 1;
+							_info->_image[row*_info->_width + col][c] = (rgb[0][tr][tc][c] + rgb[1][tr][tc][c]) >> 1;
 					}
 				}
 			}
@@ -5210,7 +5124,7 @@ void CImageLoader::ahd_interpolate()
 }
 #undef TS
 
-void CImageLoader::cielab(unsigned short rgb[3], short lab[3])
+void CImageLoader::Cielab(unsigned short rgb[3], short lab[3])
 {
 	float r, xyz[3];
 	static float cbrt[0x10000], xyz_cam[3][4];
@@ -5224,19 +5138,19 @@ void CImageLoader::cielab(unsigned short rgb[3], short lab[3])
 		}
 		for (int i = 0; i < 3; i++)
 		{
-			for (int j = 0; j < _info->colors; j++)
+			for (int j = 0; j < _info->_colors; j++)
 			{
 				xyz_cam[i][j] = 0;
 				for (int k = 0; k < 3; k++)
 				{
-					xyz_cam[i][j] += _info->xyz_rgb[i][k] * _info->rgb_cam[k][j] / _info->d65_white[i];
+					xyz_cam[i][j] += _info->xyzRGB[i][k] * _info->_rgbCam[k][j] / _info->d65White[i];
 				}
 			}
 		}
 		return;
 	}
 	xyz[0] = xyz[1] = xyz[2] = 0.5;
-	for (size_t c = 0; c < _info->colors; c++)
+	for (size_t c = 0; c < _info->_colors; c++)
 	{
 		xyz[0] += xyz_cam[0][c] * rgb[c];
 		xyz[1] += xyz_cam[1][c] * rgb[c];
@@ -5254,19 +5168,19 @@ void CImageLoader::cielab(unsigned short rgb[3], short lab[3])
 
 /* RESTRICTED code starts here */
 
-void CImageLoader::foveon_decoder(unsigned size, unsigned code)
+void CImageLoader::FoveonDecoder(unsigned size, unsigned code)
 {
 	static unsigned huff[1024];
 
 	if (!code)
 	{
 		for (int i = 0; i < size; i++)
-			huff[i] = _reader->get4();
-		memset(first_decode, 0, sizeof first_decode);
-		free_decode = first_decode;
+			huff[i] = _reader->GetUInt();
+		memset(_firstDecode, 0, sizeof _firstDecode);
+		_freeDecode = _firstDecode;
 	}
-	decode* cur = free_decode++;
-	if (free_decode > first_decode + 2048)
+	decode* cur = _freeDecode++;
+	if (_freeDecode > _firstDecode + 2048)
 		throw CExceptionDecoderTableOverflow();
 
 	if (code)
@@ -5285,13 +5199,13 @@ void CImageLoader::foveon_decoder(unsigned size, unsigned code)
 		return;
 	code = (len + 1) << 27 | (code & 0x3ffffff) << 1;
 
-	cur->branch[0] = free_decode;
-	foveon_decoder(size, code);
-	cur->branch[1] = free_decode;
-	foveon_decoder(size, code + 1);
+	cur->branch[0] = _freeDecode;
+	FoveonDecoder(size, code);
+	cur->branch[1] = _freeDecode;
+	FoveonDecoder(size, code + 1);
 }
 
-void CImageLoader::foveon_sd_load_raw()
+void CImageLoader::FoveonSdLoadRaw()
 {
 	decode* dindex;
 	short diff[1024];
@@ -5299,21 +5213,21 @@ void CImageLoader::foveon_sd_load_raw()
 	int pred[3];
 	int bit = -1;
 
-	_reader->read_shorts((unsigned short *)diff, 1024);
-	if (!_info->load_flags)
-		foveon_decoder(1024, 0);
+	_reader->ReadShorts((unsigned short *)diff, 1024);
+	if (!_info->_loadFlags)
+		FoveonDecoder(1024, 0);
 
-	for (int row = 0; row < _info->height; row++)
+	for (int row = 0; row < _info->_height; row++)
 	{
 		memset(pred, 0, sizeof pred);
-		if (!bit && !_info->load_flags && atoi(_info->model + 2) < 14)
-			_reader->get4();
+		if (!bit && !_info->_loadFlags && atoi(_info->_model + 2) < 14)
+			_reader->GetUInt();
 		bit = 0;
-		for (int col = 0; col < _info->width; col++)
+		for (int col = 0; col < _info->_width; col++)
 		{
-			if (_info->load_flags)
+			if (_info->_loadFlags)
 			{
-				bitbuf = _reader->get4();
+				bitbuf = _reader->GetUInt();
 				for (size_t c = 0; c < 3; c++)
 					pred[2 - c] += diff[bitbuf >> c * 10 & 0x3ff];
 			}
@@ -5321,7 +5235,7 @@ void CImageLoader::foveon_sd_load_raw()
 			{
 				for (size_t c = 0; c < 3; c++)
 				{
-					for (dindex = first_decode; dindex->branch[0]; )
+					for (dindex = _firstDecode; dindex->branch[0]; )
 					{
 						bit = (bit - 1) & 31;
 						if (bit == 31)
@@ -5335,12 +5249,12 @@ void CImageLoader::foveon_sd_load_raw()
 				}
 			}
 			for (size_t c = 0; c < 3; c++)
-				_info->image[row*_info->width + col][c] = pred[c];
+				_info->_image[row*_info->_width + col][c] = pred[c];
 		}
 	}
 }
 
-void CImageLoader::foveon_huff(unsigned short *huff)
+void CImageLoader::FoveonHuff(unsigned short *huff)
 {
 	huff[0] = 8;
 	for (int i = 0; i < 13; i++)
@@ -5350,10 +5264,10 @@ void CImageLoader::foveon_huff(unsigned short *huff)
 		for (int j = 0; j < 256 >> clen; )
 			huff[code + ++j] = clen << 8 | i;
 	}
-	_reader->get2();
+	_reader->GetUShort();
 }
 
-void CImageLoader::foveon_dp_load_raw()
+void CImageLoader::FoveonDpLoadRaw()
 {
 	unsigned roff[4];
 	unsigned short huff[512];
@@ -5361,75 +5275,75 @@ void CImageLoader::foveon_dp_load_raw()
 	unsigned short hpred[2];
 
 	_reader->Seek(8, SEEK_CUR);
-	foveon_huff(huff);
+	FoveonHuff(huff);
 	roff[0] = 48;
 	for (size_t c = 0; c < 3; c++)
-		roff[c + 1] = -(-(roff[c] + _reader->get4()) & -16);
+		roff[c + 1] = -(-(roff[c] + _reader->GetUInt()) & -16);
 	for (size_t c = 0; c < 3; c++)
 	{
-		_reader->Seek(_info->data_offset + roff[c], SEEK_SET);
+		_reader->Seek(_info->_dataOffset + roff[c], SEEK_SET);
 		_info->getbits(-1);
 		vpred[0][0] = vpred[0][1] = vpred[1][0] = vpred[1][1] = 512;
-		for (unsigned row = 0; row < _info->height; row++)
+		for (unsigned row = 0; row < _info->_height; row++)
 		{
-			for (unsigned col = 0; col < _info->width; col++)
+			for (unsigned col = 0; col < _info->_width; col++)
 			{
-				unsigned diff = jhead::ljpeg_diff(huff, *_info);
+				unsigned diff = JHead::LJpegDiff(huff, *_info);
 				if (col < 2) hpred[col] = vpred[row & 1][col] += diff;
 				else hpred[col & 1] += diff;
-				_info->image[row*_info->width + col][c] = hpred[col & 1];
+				_info->_image[row*_info->_width + col][c] = hpred[col & 1];
 			}
 		}
 	}
 }
 
-void CImageLoader::foveon_load_camf()
+void CImageLoader::FoveonLoadCamf()
 {
 	unsigned short huff[258];
 	unsigned short vpred[2][2] = { { 512,512 },{ 512,512 } };
 	unsigned short hpred[2];
 
-	_reader->Seek(_info->meta_offset, SEEK_SET);
-	unsigned type = _reader->get4();
-	_reader->get4();
-	_reader->get4();
-	unsigned wide = _reader->get4();
-	unsigned high = _reader->get4();
+	_reader->Seek(_info->_metaOffset, SEEK_SET);
+	unsigned type = _reader->GetUInt();
+	_reader->GetUInt();
+	_reader->GetUInt();
+	unsigned wide = _reader->GetUInt();
+	unsigned high = _reader->GetUInt();
 	if (type == 2)
 	{
-		_reader->Read(_info->meta_data, 1, _info->meta_length);
-		for (size_t i = 0; i < _info->meta_length; i++)
+		_reader->Read(_info->_metaData, 1, _info->_metaLength);
+		for (size_t i = 0; i < _info->_metaLength; i++)
 		{
 			high = (high * 1597 + 51749) % 244944;
 			wide = high * (INT64)301593171 >> 24;
-			_info->meta_data[i] ^= ((((high << 8) - wide) >> 1) + wide) >> 17;
+			_info->_metaData[i] ^= ((((high << 8) - wide) >> 1) + wide) >> 17;
 		}
 	}
 	else if (type == 4)
 	{
-		free(_info->meta_data);
-		_info->meta_data = (char *)malloc(_info->meta_length = wide*high * 3 / 2);
-		if (!_info->meta_data)
+		free(_info->_metaData);
+		_info->_metaData = (char *)malloc(_info->_metaLength = wide*high * 3 / 2);
+		if (!_info->_metaData)
 			throw CExceptionMemory();
 
-		foveon_huff(huff);
-		_reader->get4();
+		FoveonHuff(huff);
+		_reader->GetUInt();
 		_info->getbits(-1);
 		unsigned j = 0;
 		for (unsigned row = 0; row < high; row++)
 		{
 			for (unsigned col = 0; col < wide; col++)
 			{
-				unsigned diff = jhead::ljpeg_diff(huff, *_info);
+				unsigned diff = JHead::LJpegDiff(huff, *_info);
 				if (col < 2)
 					hpred[col] = vpred[row & 1][col] += diff;
 				else
 					hpred[col & 1] += diff;
 				if (col & 1)
 				{
-					_info->meta_data[j++] = hpred[0] >> 4;
-					_info->meta_data[j++] = hpred[0] << 4 | hpred[1] >> 8;
-					_info->meta_data[j++] = hpred[1];
+					_info->_metaData[j++] = hpred[0] >> 4;
+					_info->_metaData[j++] = hpred[0] << 4 | hpred[1] >> 8;
+					_info->_metaData[j++] = hpred[1];
 				}
 			}
 		}
@@ -5440,58 +5354,58 @@ void CImageLoader::foveon_load_camf()
 #endif // DEBUG
 }
 
-#define sget4(s) sget4((unsigned char *)s)
-const char* CImageLoader::foveon_camf_param(const char *block, const char *param)
+#define GetUInt(s) GetUInt((unsigned char *)s)
+const char* CImageLoader::FoveonCamfParam(const char *block, const char *param)
 {
 	char* pos;
-	for (unsigned idx = 0; idx < _info->meta_length; idx += _reader->sget4(pos + 8))
+	for (unsigned idx = 0; idx < _info->_metaLength; idx += _reader->GetUInt(pos + 8))
 	{
-		pos = _info->meta_data + idx;
+		pos = _info->_metaData + idx;
 		if (strncmp(pos, "CMb", 3))
 			break;
 		if (pos[3] != 'P')
 			continue;
-		if (strcmp(block, pos + _reader->sget4(pos + 12)))
+		if (strcmp(block, pos + _reader->GetUInt(pos + 12)))
 			continue;
-		char* cp = pos + _reader->sget4(pos + 16);
-		unsigned num = _reader->sget4(cp);
-		char* dp = pos + _reader->sget4(cp + 4);
+		char* cp = pos + _reader->GetUInt(pos + 16);
+		unsigned num = _reader->GetUInt(cp);
+		char* dp = pos + _reader->GetUInt(cp + 4);
 		while (num--)
 		{
 			cp += 8;
-			if (!strcmp(param, dp + _reader->sget4(cp)))
-				return dp + _reader->sget4(cp + 4);
+			if (!strcmp(param, dp + _reader->GetUInt(cp)))
+				return dp + _reader->GetUInt(cp + 4);
 		}
 	}
 	return nullptr;
 }
 
-void* CImageLoader::foveon_camf_matrix(unsigned dim[3], const char *name)
+void* CImageLoader::FoveonCamfMatrix(unsigned dim[3], const char *name)
 {
 	char* pos;
-	for (unsigned idx = 0; idx < _info->meta_length; idx += _reader->sget4(pos + 8))
+	for (unsigned idx = 0; idx < _info->_metaLength; idx += _reader->GetUInt(pos + 8))
 	{
-		pos = _info->meta_data + idx;
+		pos = _info->_metaData + idx;
 		if (strncmp(pos, "CMb", 3))
 			break;
 		if (pos[3] != 'M')
 			continue;
-		if (strcmp(name, pos + _reader->sget4(pos + 12)))
+		if (strcmp(name, pos + _reader->GetUInt(pos + 12)))
 			continue;
 		dim[0] = dim[1] = dim[2] = 1;
-		char* cp = pos + _reader->sget4(pos + 16);
-		unsigned type = _reader->sget4(cp);
-		unsigned ndim = _reader->sget4(cp + 4);
+		char* cp = pos + _reader->GetUInt(pos + 16);
+		unsigned type = _reader->GetUInt(cp);
+		unsigned ndim = _reader->GetUInt(cp + 4);
 		if (ndim > 3)
 			break;
-		char* dp = pos + _reader->sget4(cp + 8);
+		char* dp = pos + _reader->GetUInt(cp + 8);
 		for (unsigned i = ndim; i--; )
 		{
 			cp += 12;
-			dim[i] = _reader->sget4(cp);
+			dim[i] = _reader->GetUInt(cp);
 		}
 		double dsize = (double)dim[0] * dim[1] * dim[2];
-		if (dsize > _info->meta_length / 4)
+		if (dsize > _info->_metaLength / 4)
 			break;
 		unsigned size = dsize;
 		unsigned* mat = (unsigned *)malloc((size) * 4);
@@ -5501,9 +5415,9 @@ void* CImageLoader::foveon_camf_matrix(unsigned dim[3], const char *name)
 		for (unsigned i = 0; i < size; i++)
 		{
 			if (type && type != 6)
-				mat[i] = _reader->sget4(dp + i * 4);
+				mat[i] = _reader->GetUInt(dp + i * 4);
 			else
-				mat[i] = _reader->sget4(dp + i * 2) & 0xffff;
+				mat[i] = _reader->GetUInt(dp + i * 2) & 0xffff;
 		}
 		return mat;
 	}
@@ -5512,15 +5426,15 @@ void* CImageLoader::foveon_camf_matrix(unsigned dim[3], const char *name)
 #endif // DEBUG
 	return nullptr;
 }
-#undef sget4
+#undef GetUInt
 
-int CImageLoader::foveon_fixed(void *ptr, int size, const char *name)
+int CImageLoader::FoveonFixed(void *ptr, int size, const char *name)
 {
 	if (!name)
 		return 0;
 
 	unsigned dim[3];
-	void *dp = foveon_camf_matrix(dim, name);
+	void *dp = FoveonCamfMatrix(dim, name);
 	if (!dp)
 		return 0;
 	CAutoFreeMemory autoFree(dp);
@@ -5528,7 +5442,7 @@ int CImageLoader::foveon_fixed(void *ptr, int size, const char *name)
 	return 1;
 }
 
-float CImageLoader::foveon_avg(short *pix, int range[2], float cfilt)
+float CImageLoader::FoveonAvg(short *pix, int range[2], float cfilt)
 {
 	float min = FLT_MAX;
 	float max = -FLT_MAX;
@@ -5546,7 +5460,7 @@ float CImageLoader::foveon_avg(short *pix, int range[2], float cfilt)
 	return (sum - min - max) / (range[1] - range[0] - 1);
 }
 
-short* CImageLoader::foveon_make_curve(double max, double mul, double filt)
+short* CImageLoader::FoveonMakeCurve(double max, double mul, double filt)
 {
 	if (!filt)
 		filt = 0.8;
@@ -5566,7 +5480,7 @@ short* CImageLoader::foveon_make_curve(double max, double mul, double filt)
 	return curve;
 }
 
-void CImageLoader::foveon_make_curves(short **curvep, float dq[3], float div[3], float filt)
+void CImageLoader::FoveonMakeCurves(short **curvep, float dq[3], float div[3], float filt)
 {
 	double mul[3];
 	double max = 0;
@@ -5577,18 +5491,18 @@ void CImageLoader::foveon_make_curves(short **curvep, float dq[3], float div[3],
 		if (max < mul[c])
 			max = mul[c];
 	for (size_t c = 0; c < 3; c++)
-		curvep[c] = foveon_make_curve(max, mul[c], filt);
+		curvep[c] = FoveonMakeCurve(max, mul[c], filt);
 }
 
-int CImageLoader::foveon_apply_curve(short *curve, int i)
+int CImageLoader::FoveonApplyCurve(short *curve, int i)
 {
 	if (abs(i) >= curve[0])
 		return 0;
 	return i < 0 ? -curve[1 - i] : curve[1 + i];
 }
 
-#define image ((short (*)[4]) _info->image)
-void CImageLoader::foveon_interpolate()
+#define _image ((short (*)[4]) _info->_image)
+void CImageLoader::FoveonInterpolate()
 {
 	static const short hood[] = { -1,-1, -1,0, -1,1, 0,-1, 0,1, 1,-1, 1,0, 1,1 };
 
@@ -5623,45 +5537,45 @@ void CImageLoader::foveon_interpolate()
 	double trsum[3];
 	char str[128];
 
-	foveon_load_camf();
-	foveon_fixed(dscr, 4, "DarkShieldColRange");
-	foveon_fixed(ppm[0][0], 27, "PostPolyMatrix");
-	foveon_fixed(satlev, 3, "SaturationLevel");
-	foveon_fixed(keep, 4, "KeepImageArea");
-	foveon_fixed(active, 4, "ActiveImageArea");
-	foveon_fixed(chroma_dq, 3, "ChromaDQ");
-	foveon_fixed(color_dq, 3,
-		foveon_camf_param("IncludeBlocks", "ColorDQ") ?
+	FoveonLoadCamf();
+	FoveonFixed(dscr, 4, "DarkShieldColRange");
+	FoveonFixed(ppm[0][0], 27, "PostPolyMatrix");
+	FoveonFixed(satlev, 3, "SaturationLevel");
+	FoveonFixed(keep, 4, "KeepImageArea");
+	FoveonFixed(active, 4, "ActiveImageArea");
+	FoveonFixed(chroma_dq, 3, "ChromaDQ");
+	FoveonFixed(color_dq, 3,
+		FoveonCamfParam("IncludeBlocks", "ColorDQ") ?
 		"ColorDQ" : "ColorDQCamRGB");
-	if (foveon_camf_param("IncludeBlocks", "ColumnFilter"))
-		foveon_fixed(&cfilt, 1, "ColumnFilter");
+	if (FoveonCamfParam("IncludeBlocks", "ColumnFilter"))
+		FoveonFixed(&cfilt, 1, "ColumnFilter");
 
 	memset(ddft, 0, sizeof ddft);
-	if (!foveon_camf_param("IncludeBlocks", "DarkDrift")
-		|| !foveon_fixed(ddft[1][0], 12, "DarkDrift"))
+	if (!FoveonCamfParam("IncludeBlocks", "DarkDrift")
+		|| !FoveonFixed(ddft[1][0], 12, "DarkDrift"))
 	{
 		for (int i = 0; i < 2; i++)
 		{
-			foveon_fixed(dstb, 4, i ? "DarkShieldBottom" : "DarkShieldTop");
+			FoveonFixed(dstb, 4, i ? "DarkShieldBottom" : "DarkShieldTop");
 			for (row = dstb[1]; row <= dstb[3]; row++)
 				for (col = dstb[0]; col <= dstb[2]; col++)
 					for (size_t c = 0; c < 3; c++)
-						ddft[i + 1][c][1] += (short)image[row*_info->width + col][c];
+						ddft[i + 1][c][1] += (short)_image[row*_info->_width + col][c];
 			for (size_t c = 0; c < 3; c++)
 				ddft[i + 1][c][1] /= (dstb[3] - dstb[1] + 1) * (dstb[2] - dstb[0] + 1);
 		}
 	}
 
-	const char* cp = foveon_camf_param("WhiteBalanceIlluminants", _info->model2);
+	const char* cp = FoveonCamfParam("WhiteBalanceIlluminants", _info->_model2);
 	if (!cp)
 	{
 #ifdef _DEBUG
-		fprintf(stderr, ("%s: Invalid white balance \"%s\"\n"), _reader->GetFileName(), _info->model2);
+		fprintf(stderr, ("%s: Invalid white balance \"%s\"\n"), _reader->GetFileName(), _info->_model2);
 #endif // DEBUG
 		return;
 	}
-	foveon_fixed(cam_xyz, 9, cp);
-	foveon_fixed(correct, 9, foveon_camf_param("WhiteBalanceCorrections", _info->model2));
+	FoveonFixed(cam_xyz, 9, cp);
+	FoveonFixed(correct, 9, FoveonCamfParam("WhiteBalanceCorrections", _info->_model2));
 	memset(last, 0, sizeof last);
 	for (int i = 0; i < 3; i++)
 		for (int j = 0; j < 3; j++)
@@ -5675,9 +5589,9 @@ void CImageLoader::foveon_interpolate()
 #undef LAST
 	for (size_t c = 0; c < 3; c++)
 		div[c] = diag[c][0] * 0.3127 + diag[c][1] * 0.329 + diag[c][2] * 0.3583;
-	sprintf(str, "%sRGBNeutral", _info->model2);
-	if (foveon_camf_param("IncludeBlocks", str))
-		foveon_fixed(div, 3, str);
+	sprintf(str, "%sRGBNeutral", _info->_model2);
+	if (FoveonCamfParam("IncludeBlocks", str))
+		FoveonFixed(div, 3, str);
 	float num = 0;
 	for (size_t c = 0; c < 3; c++)
 		if (num < div[c])
@@ -5689,7 +5603,7 @@ void CImageLoader::foveon_interpolate()
 	for (int i = 0; i < 3; i++)
 		for (int j = 0; j < 3; j++)
 			for (size_t c = 0; c < 3; c++)
-				trans[i][j] += _info->rgb_cam[i][c] * last[c][j] * div[j];
+				trans[i][j] += _info->_rgbCam[i][c] * last[c][j] * div[j];
 	for (size_t c = 0; c < 3; c++)
 		trsum[c] = trans[c][0] + trans[c][1] + trans[c][2];
 	dsum = (6 * trsum[0] + 11 * trsum[1] + 3 * trsum[2]) / 20;
@@ -5713,39 +5627,39 @@ void CImageLoader::foveon_interpolate()
 	CAutoFreeMemory autoFreeCurve5(curve[5]);
 	CAutoFreeMemory autoFreeCurve6(curve[6]);
 	CAutoFreeMemory autoFreeCurve7(curve[7]);
-	foveon_make_curves(curve, color_dq, div, cfilt);
+	FoveonMakeCurves(curve, color_dq, div, cfilt);
 	for (size_t c = 0; c < 3; c++)
 		chroma_dq[c] /= 3;
-	foveon_make_curves(curve + 3, chroma_dq, div, cfilt);
+	FoveonMakeCurves(curve + 3, chroma_dq, div, cfilt);
 	for (size_t c = 0; c < 3; c++)
 		dsum += chroma_dq[c] / div[c];
-	curve[6] = foveon_make_curve(dsum, dsum, cfilt);
-	curve[7] = foveon_make_curve(dsum * 2, dsum * 2, cfilt);
+	curve[6] = FoveonMakeCurve(dsum, dsum, cfilt);
+	curve[7] = FoveonMakeCurve(dsum * 2, dsum * 2, cfilt);
 
-	float(*sgain)[3] = (float(*)[3]) foveon_camf_matrix(dim, "SpatialGain");
+	float(*sgain)[3] = (float(*)[3]) FoveonCamfMatrix(dim, "SpatialGain");
 	if (!sgain)
 		return;
 	CAutoFreeMemory autoFreeSgain(sgain);
 	float(*sgrow)[3] = (float(*)[3]) calloc(dim[1], sizeof *sgrow);
 	CAutoFreeMemory autoFreeSgrow(sgrow);
-	int sgx = (_info->width + dim[1] - 2) / (dim[1] - 1);
+	int sgx = (_info->_width + dim[1] - 2) / (dim[1] - 1);
 
-	float(*black)[3] = (float(*)[3]) calloc(_info->height, sizeof *black);
+	float(*black)[3] = (float(*)[3]) calloc(_info->_height, sizeof *black);
 	CAutoFreeMemory autoFreeBlack(black);
-	for (row = 0; row < _info->height; row++)
+	for (row = 0; row < _info->_height; row++)
 	{
 		for (int i = 0; i < 6; i++)
-			((float *)ddft[0])[i] = ((float *)ddft[1])[i] + row / (_info->height - 1.0) * (((float *)ddft[2])[i] - ((float *)ddft[1])[i]);
+			((float *)ddft[0])[i] = ((float *)ddft[1])[i] + row / (_info->_height - 1.0) * (((float *)ddft[2])[i] - ((float *)ddft[1])[i]);
 		for (size_t c = 0; c < 3; c++)
-			black[row][c] = (foveon_avg(image[row*_info->width] + c, dscr[0], cfilt) +
-				foveon_avg(image[row*_info->width] + c, dscr[1], cfilt) * 3
+			black[row][c] = (FoveonAvg(_image[row*_info->_width] + c, dscr[0], cfilt) +
+				FoveonAvg(_image[row*_info->_width] + c, dscr[1], cfilt) * 3
 				- ddft[0][c][0]) / 4 - ddft[0][c][1];
 	}
 	memcpy(black, black + 8, sizeof *black * 8);
-	memcpy(black + _info->height - 11, black + _info->height - 22, 11 * sizeof *black);
+	memcpy(black + _info->_height - 11, black + _info->_height - 22, 11 * sizeof *black);
 	memcpy(last, black, sizeof last);
 
-	for (row = 1; row < _info->height - 1; row++)
+	for (row = 1; row < _info->_height - 1; row++)
 	{
 		for (size_t c = 0; c < 3; c++)
 		{
@@ -5770,38 +5684,38 @@ void CImageLoader::foveon_interpolate()
 
 	float val = 1 - exp(-1 / 24.0);
 	memcpy(fsum, black, sizeof fsum);
-	for (row = 1; row < _info->height; row++)
+	for (row = 1; row < _info->_height; row++)
 		for (size_t c = 0; c < 3; c++)
 			fsum[c] += black[row][c] = (black[row][c] - black[row - 1][c])*val + black[row - 1][c];
-	memcpy(last[0], black[_info->height - 1], sizeof last[0]);
+	memcpy(last[0], black[_info->_height - 1], sizeof last[0]);
 	for (size_t c = 0; c < 3; c++)
-		fsum[c] /= _info->height;
-	for (row = _info->height; row--; )
+		fsum[c] /= _info->_height;
+	for (row = _info->_height; row--; )
 		for (size_t c = 0; c < 3; c++)
 			last[0][c] = black[row][c] = (black[row][c] - fsum[c] - last[0][c])*val + last[0][c];
 
 	memset(total, 0, sizeof total);
-	for (row = 2; row < _info->height; row += 4)
+	for (row = 2; row < _info->_height; row += 4)
 	{
-		for (col = 2; col < _info->width; col += 4)
+		for (col = 2; col < _info->_width; col += 4)
 		{
 			for (size_t c = 0; c < 3; c++)
-				total[c] += (short)image[row*_info->width + col][c];
+				total[c] += (short)_image[row*_info->_width + col][c];
 			total[3]++;
 		}
 	}
-	for (row = 0; row < _info->height; row++)
+	for (row = 0; row < _info->_height; row++)
 		for (size_t c = 0; c < 3; c++)
 			black[row][c] += fsum[c] / 2 + total[c] / (total[3] * 100.0);
 
-	for (row = 0; row < _info->height; row++)
+	for (row = 0; row < _info->_height; row++)
 	{
 		for (int i = 0; i < 6; i++)
 			((float *)ddft[0])[i] = ((float *)ddft[1])[i] +
-			row / (_info->height - 1.0) * (((float *)ddft[2])[i] - ((float *)ddft[1])[i]);
-		short* pix = image[row*_info->width];
+			row / (_info->_height - 1.0) * (((float *)ddft[2])[i] - ((float *)ddft[1])[i]);
+		short* pix = _image[row*_info->_width];
 		memcpy(prev, pix, sizeof prev);
-		float frow = row / (_info->height - 1.0) * (dim[2] - 1);
+		float frow = row / (_info->_height - 1.0) * (dim[2] - 1);
 		int irow = frow;
 		if (irow == dim[2] - 1)
 			irow--;
@@ -5809,14 +5723,14 @@ void CImageLoader::foveon_interpolate()
 		for (int i = 0; i < dim[1]; i++)
 			for (size_t c = 0; c < 3; c++)
 				sgrow[i][c] = sgain[irow   *dim[1] + i][c] * (1 - frow) + sgain[(irow + 1)*dim[1] + i][c] * frow;
-		for (col = 0; col < _info->width; col++)
+		for (col = 0; col < _info->_width; col++)
 		{
 			for (size_t c = 0; c < 3; c++)
 			{
 				int diff = pix[c] - prev[c];
 				prev[c] = pix[c];
 				ipix[c] = pix[c] + floor((diff + (diff*diff >> 14)) * cfilt
-					- ddft[0][c][1] - ddft[0][c][0] * ((float)col / _info->width - 0.5)
+					- ddft[0][c][1] - ddft[0][c][0] * ((float)col / _info->_width - 0.5)
 					- black[row][c]);
 			}
 			for (size_t c = 0; c < 3; c++)
@@ -5843,7 +5757,7 @@ void CImageLoader::foveon_interpolate()
 	autoFreeSgrow.Release();
 	autoFreeSgain.Release();
 
-	unsigned* badpix = (unsigned *)foveon_camf_matrix(dim, "BadPixels");
+	unsigned* badpix = (unsigned *)FoveonCamfMatrix(dim, "BadPixels");
 	if (badpix)
 	{
 		CAutoFreeMemory autoFreeBadPix(badpix);
@@ -5851,7 +5765,7 @@ void CImageLoader::foveon_interpolate()
 		{
 			col = (badpix[i] >> 8 & 0xfff) - keep[0];
 			row = (badpix[i] >> 20) - keep[1];
-			if ((unsigned)(row - 1) > _info->height - 3 || (unsigned)(col - 1) > _info->width - 3)
+			if ((unsigned)(row - 1) > _info->_height - 3 || (unsigned)(col - 1) > _info->_width - 3)
 				continue;
 			memset(fsum, 0, sizeof fsum);
 			int sum = 0;
@@ -5860,40 +5774,40 @@ void CImageLoader::foveon_interpolate()
 				if (badpix[i] & (1 << j))
 				{
 					for (size_t c = 0; c < 3; c++)
-						fsum[c] += (short)image[(row + hood[j * 2])*_info->width + col + hood[j * 2 + 1]][c];
+						fsum[c] += (short)_image[(row + hood[j * 2])*_info->_width + col + hood[j * 2 + 1]][c];
 					sum++;
 				}
 			}
 			if (sum)
 				for (size_t c = 0; c < 3; c++)
-					image[row*_info->width + col][c] = fsum[c] / sum;
+					_image[row*_info->_width + col][c] = fsum[c] / sum;
 		}
 	}
 
 	/* Array for 5x5 Gaussian averaging of red values */
-	smrow[6] = (int(*)[3]) calloc(_info->width * 5, sizeof **smrow);
+	smrow[6] = (int(*)[3]) calloc(_info->_width * 5, sizeof **smrow);
 	CAutoFreeMemory autoFreeSmrow(smrow[6]);
 	for (int i = 0; i < 5; i++)
-		smrow[i] = smrow[6] + i*_info->width;
+		smrow[i] = smrow[6] + i*_info->_width;
 
 	/* Sharpen the reds against these Gaussian averages */
 	int smlast = -1;
-	for (row = 2; row < _info->height - 2; row++)
+	for (row = 2; row < _info->_height - 2; row++)
 	{
 		while (smlast < row + 2)
 		{
 			for (int i = 0; i < 6; i++)
 				smrow[(i + 5) % 6] = smrow[i];
-			short* pix = image[++smlast*_info->width + 2];
-			for (col = 2; col < _info->width - 2; col++)
+			short* pix = _image[++smlast*_info->_width + 2];
+			for (col = 2; col < _info->_width - 2; col++)
 			{
 				smrow[4][col][0] =
 					(pix[0] * 6 + (pix[-4] + pix[4]) * 4 + pix[-8] + pix[8] + 8) >> 4;
 				pix += 4;
 			}
 		}
-		short* pix = image[row*_info->width + 2];
-		for (col = 2; col < _info->width - 2; col++)
+		short* pix = _image[row*_info->_width + 2];
+		for (col = 2; col < _info->_width - 2; col++)
 		{
 			int smred = (6 * smrow[2][col][0]
 				+ 4 * (smrow[1][col][0] + smrow[3][col][0])
@@ -5918,7 +5832,7 @@ void CImageLoader::foveon_interpolate()
 			min = i;
 	}
 	int limit = min * 9 >> 4;
-	for (short* pix = image[0]; pix < image[_info->height*_info->width]; pix += 4)
+	for (short* pix = _image[0]; pix < _image[_info->_height*_info->_width]; pix += 4)
 	{
 		if (pix[0] <= limit || pix[1] <= limit || pix[2] <= limit)
 			continue;
@@ -5950,25 +5864,25 @@ void CImageLoader::foveon_interpolate()
 	So smooth the hues without smoothing the total.
 	*/
 	smlast = -1;
-	for (row = 2; row < _info->height - 2; row++)
+	for (row = 2; row < _info->_height - 2; row++)
 	{
 		while (smlast < row + 2)
 		{
 			for (int i = 0; i < 6; i++)
 				smrow[(i + 5) % 6] = smrow[i];
-			short* pix = image[++smlast*_info->width + 2];
-			for (col = 2; col < _info->width - 2; col++)
+			short* pix = _image[++smlast*_info->_width + 2];
+			for (col = 2; col < _info->_width - 2; col++)
 			{
 				for (size_t c = 0; c < 3; c++)
 					smrow[4][col][c] = (pix[c - 4] + 2 * pix[c] + pix[c + 4] + 2) >> 2;
 				pix += 4;
 			}
 		}
-		short* pix = image[row*_info->width + 2];
-		for (col = 2; col < _info->width - 2; col++)
+		short* pix = _image[row*_info->_width + 2];
+		for (col = 2; col < _info->_width - 2; col++)
 		{
 			for (size_t c = 0; c < 3; c++)
-				dev[c] = -foveon_apply_curve(curve[7], pix[c] - ((smrow[1][col][c] + 2 * smrow[2][col][c] + smrow[3][col][c]) >> 2));
+				dev[c] = -FoveonApplyCurve(curve[7], pix[c] - ((smrow[1][col][c] + 2 * smrow[2][col][c] + smrow[3][col][c]) >> 2));
 			int sum = (dev[0] + dev[1] + dev[2]) >> 3;
 			for (size_t c = 0; c < 3; c++)
 				pix[c] += dev[c] - sum;
@@ -5977,22 +5891,22 @@ void CImageLoader::foveon_interpolate()
 	}
 
 	smlast = -1;
-	for (row = 2; row < _info->height - 2; row++)
+	for (row = 2; row < _info->_height - 2; row++)
 	{
 		while (smlast < row + 2)
 		{
 			for (int i = 0; i < 6; i++)
 				smrow[(i + 5) % 6] = smrow[i];
-			short* pix = image[++smlast*_info->width + 2];
-			for (col = 2; col < _info->width - 2; col++)
+			short* pix = _image[++smlast*_info->_width + 2];
+			for (col = 2; col < _info->_width - 2; col++)
 			{
 				for (size_t c = 0; c < 3; c++)
 					smrow[4][col][c] = (pix[c - 8] + pix[c - 4] + pix[c] + pix[c + 4] + pix[c + 8] + 2) >> 2;
 				pix += 4;
 			}
 		}
-		short* pix = image[row*_info->width + 2];
-		for (col = 2; col < _info->width - 2; col++)
+		short* pix = _image[row*_info->_width + 2];
+		for (col = 2; col < _info->_width - 2; col++)
 		{
 			total[3] = 375;
 			int sum = 60;
@@ -6008,19 +5922,19 @@ void CImageLoader::foveon_interpolate()
 				sum = 0;
 			int j = total[3] > 375 ? (sum << 16) / total[3] : sum * 174;
 			for (size_t c = 0; c < 3; c++)
-				pix[c] += foveon_apply_curve(curve[6], ((j*total[c] + 0x8000) >> 16) - pix[c]);
+				pix[c] += FoveonApplyCurve(curve[6], ((j*total[c] + 0x8000) >> 16) - pix[c]);
 			pix += 4;
 		}
 	}
 
 	/* Transform the image to a different colorspace */
-	for (short* pix = image[0]; pix < image[_info->height*_info->width]; pix += 4)
+	for (short* pix = _image[0]; pix < _image[_info->_height*_info->_width]; pix += 4)
 	{
 		for (size_t c = 0; c < 3; c++)
-			pix[c] -= foveon_apply_curve(curve[c], pix[c]);
+			pix[c] -= FoveonApplyCurve(curve[c], pix[c]);
 		int sum = (pix[0] + pix[1] + pix[1] + pix[2]) >> 2;
 		for (size_t c = 0; c < 3; c++)
-			pix[c] -= foveon_apply_curve(curve[c], pix[c] - sum);
+			pix[c] -= FoveonApplyCurve(curve[c], pix[c] - sum);
 		for (size_t c = 0; c < 3; c++) 
 		{
 			dsum = 0;
@@ -6037,71 +5951,71 @@ void CImageLoader::foveon_interpolate()
 	}
 
 	/* Smooth the image bottom-to-top and save at 1/4 scale */
-	short(*shrink)[3] = (short(*)[3]) calloc((_info->height / 4), (_info->width / 4) * sizeof *shrink);
+	short(*shrink)[3] = (short(*)[3]) calloc((_info->_height / 4), (_info->_width / 4) * sizeof *shrink);
 	CAutoFreeMemory autoFreeShrink(shrink);
-	for (row = _info->height / 4; row--; )
-		for (col = 0; col < _info->width / 4; col++)
+	for (row = _info->_height / 4; row--; )
+		for (col = 0; col < _info->_width / 4; col++)
 		{
 			ipix[0] = ipix[1] = ipix[2] = 0;
 			for (int i = 0; i < 4; i++)
 				for (int j = 0; j < 4; j++)
 					for (size_t c = 0; c < 3; c++)
-						ipix[c] += image[(row * 4 + i)*_info->width + col * 4 + j][c];
+						ipix[c] += _image[(row * 4 + i)*_info->_width + col * 4 + j][c];
 			for (size_t c = 0; c < 3; c++)
 			{
-				if (row + 2 > _info->height / 4)
-					shrink[row*(_info->width / 4) + col][c] = ipix[c] >> 4;
+				if (row + 2 > _info->_height / 4)
+					shrink[row*(_info->_width / 4) + col][c] = ipix[c] >> 4;
 				else
-					shrink[row*(_info->width / 4) + col][c] = (shrink[(row + 1)*(_info->width / 4) + col][c] * 1840 + ipix[c] * 141 + 2048) >> 12;
+					shrink[row*(_info->_width / 4) + col][c] = (shrink[(row + 1)*(_info->_width / 4) + col][c] * 1840 + ipix[c] * 141 + 2048) >> 12;
 			}
 		}
 	/* From the 1/4-scale image, smooth right-to-left */
-	for (row = 0; row < (_info->height & ~3); row++)
+	for (row = 0; row < (_info->_height & ~3); row++)
 	{
 		ipix[0] = ipix[1] = ipix[2] = 0;
 		if ((row & 3) == 0)
-			for (col = _info->width & ~3; col--; )
+			for (col = _info->_width & ~3; col--; )
 				for (size_t c = 0; c < 3; c++)
-					smrow[0][col][c] = ipix[c] = (shrink[(row / 4)*(_info->width / 4) + col / 4][c] * 1485 + ipix[c] * 6707 + 4096) >> 13;
+					smrow[0][col][c] = ipix[c] = (shrink[(row / 4)*(_info->_width / 4) + col / 4][c] * 1485 + ipix[c] * 6707 + 4096) >> 13;
 
 		/* Then smooth left-to-right */
 		ipix[0] = ipix[1] = ipix[2] = 0;
-		for (col = 0; col < (_info->width & ~3); col++)
+		for (col = 0; col < (_info->_width & ~3); col++)
 			for (size_t c = 0; c < 3; c++)
 				smrow[1][col][c] = ipix[c] = (smrow[0][col][c] * 1485 + ipix[c] * 6707 + 4096) >> 13;
 
 		/* Smooth top-to-bottom */
 		if (row == 0)
-			memcpy(smrow[2], smrow[1], sizeof **smrow * _info->width);
+			memcpy(smrow[2], smrow[1], sizeof **smrow * _info->_width);
 		else
-			for (col = 0; col < (_info->width & ~3); col++)
+			for (col = 0; col < (_info->_width & ~3); col++)
 				for (size_t c = 0; c < 3; c++)
 					smrow[2][col][c] = (smrow[2][col][c] * 6707 + smrow[1][col][c] * 1485 + 4096) >> 13;
 
 		/* Adjust the chroma toward the smooth values */
-		for (col = 0; col < (_info->width & ~3); col++)
+		for (col = 0; col < (_info->_width & ~3); col++)
 		{
 			int j = 30;
 			int i = 30;
 			for (size_t c = 0; c < 3; c++)
 			{
 				i += smrow[2][col][c];
-				j += image[row*_info->width + col][c];
+				j += _image[row*_info->_width + col][c];
 			}
 			j = (j << 16) / i;
 			int sum = 0;
 			for (size_t c = 0; c < 3; c++) {
-				ipix[c] = foveon_apply_curve(curve[c + 3],
-					((smrow[2][col][c] * j + 0x8000) >> 16) - image[row*_info->width + col][c]);
+				ipix[c] = FoveonApplyCurve(curve[c + 3],
+					((smrow[2][col][c] * j + 0x8000) >> 16) - _image[row*_info->_width + col][c]);
 				sum += ipix[c];
 			}
 			sum >>= 3;
 			for (size_t c = 0; c < 3; c++)
 			{
-				i = image[row*_info->width + col][c] + ipix[c] - sum;
+				i = _image[row*_info->_width + col][c] + ipix[c] - sum;
 				if (i < 0)
 					i = 0;
-				image[row*_info->width + col][c] = i;
+				_image[row*_info->_width + col][c] = i;
 			}
 		}
 	}
@@ -6111,47 +6025,47 @@ void CImageLoader::foveon_interpolate()
 	active[3] -= 2;
 	int i = active[2] - active[0];
 	for (row = 0; row < active[3] - active[1]; row++)
-		memcpy(image[row*i], image[(row + active[1])*_info->width + active[0]],
-			i * sizeof *image);
-	_info->width = i;
-	_info->height = row;
+		memcpy(_image[row*i], _image[(row + active[1])*_info->_width + active[0]],
+			i * sizeof *_image);
+	_info->_width = i;
+	_info->_height = row;
 }
-#undef image
+#undef _image
 
-void CImageLoader::foveon_thumb()
+void CImageLoader::FoveonThumb()
 {
-	unsigned bwide = _reader->get4();
-	_writer->Print("P6\n%d %d\n255\n", _info->thumb_width, _info->thumb_height);
+	unsigned bwide = _reader->GetUInt();
+	_writer->Print("P6\n%d %d\n255\n", _info->_thumbWidth, _info->_thumbHeight);
 	if (bwide > 0)
 	{
-		if (bwide < _info->thumb_width * 3)
+		if (bwide < _info->_thumbWidth * 3)
 			return;
 		char* buf = (char *)malloc(bwide);
 		CAutoFreeMemory autoFree(buf);
-		for (unsigned row = 0; row < _info->thumb_height; row++)
+		for (unsigned row = 0; row < _info->_thumbHeight; row++)
 		{
 			_reader->Read(buf, 1, bwide);
-			_writer->Write(buf, 3, _info->thumb_width);
+			_writer->Write(buf, 3, _info->_thumbWidth);
 		}
 		return;
 	}
-	foveon_decoder(256, 0);
+	FoveonDecoder(256, 0);
 
 	unsigned bitbuf = 0;
 	unsigned bit = 1;
 	decode* dindex;
 	short pred[3];
-	for (unsigned row = 0; row < _info->thumb_height; row++)
+	for (unsigned row = 0; row < _info->_thumbHeight; row++)
 	{
 		memset(pred, 0, sizeof pred);
 		if (!bit)
-			_reader->get4();
+			_reader->GetUInt();
 		bit = 0;
-		for (unsigned col = 0; col < _info->thumb_width; col++)
+		for (unsigned col = 0; col < _info->_thumbWidth; col++)
 		{
 			for (size_t c = 0; c < 3; c++)
 			{
-				for (dindex = first_decode; dindex->branch[0]; )
+				for (dindex = _firstDecode; dindex->branch[0]; )
 				{
 					if ((bit = (bit - 1) & 31) == 31)
 						for (size_t i = 0; i < 4; i++)
@@ -6187,51 +6101,51 @@ void CImageLoader::foveon_thumb()
 
 
 
-void CImageLoader::ppm_thumb()
+void CImageLoader::PpmThumb()
 {
-	_info->thumb_length = _info->thumb_width*_info->thumb_height * 3;
-	char* thumb = (char *)malloc(_info->thumb_length);
+	_info->_thumbLength = _info->_thumbWidth*_info->_thumbHeight * 3;
+	char* thumb = (char *)malloc(_info->_thumbLength);
 	CAutoFreeMemory autoFree(thumb);
-	_writer->Print("P6\n%d %d\n255\n", _info->thumb_width, _info->thumb_height);
-	_reader->Read(thumb, 1, _info->thumb_length);
-	_writer->Write(thumb, 1, _info->thumb_length);
+	_writer->Print("P6\n%d %d\n255\n", _info->_thumbWidth, _info->_thumbHeight);
+	_reader->Read(thumb, 1, _info->_thumbLength);
+	_writer->Write(thumb, 1, _info->_thumbLength);
 }
 
-void CImageLoader::ppm16_thumb()
+void CImageLoader::Ppm16Thumb()
 {
-	_info->thumb_length = _info->thumb_width*_info->thumb_height * 3;
-	char* thumb = (char *)calloc(_info->thumb_length, 2);
+	_info->_thumbLength = _info->_thumbWidth*_info->_thumbHeight * 3;
+	char* thumb = (char *)calloc(_info->_thumbLength, 2);
 	CAutoFreeMemory autoFree(thumb);
-	_reader->read_shorts((unsigned short *)thumb, _info->thumb_length);
-	for (int i = 0; i < _info->thumb_length; i++)
+	_reader->ReadShorts((unsigned short *)thumb, _info->_thumbLength);
+	for (int i = 0; i < _info->_thumbLength; i++)
 		thumb[i] = ((unsigned short *)thumb)[i] >> 8;
-	_writer->Print("P6\n%d %d\n255\n", _info->thumb_width, _info->thumb_height);
-	_writer->Write(thumb, 1, _info->thumb_length);
+	_writer->Print("P6\n%d %d\n255\n", _info->_thumbWidth, _info->_thumbHeight);
+	_writer->Write(thumb, 1, _info->_thumbLength);
 }
 
-void CImageLoader::layer_thumb()
+void CImageLoader::LayerThumb()
 {
 	char map[][4] = { "012","102" };
 
-	_info->colors = _info->thumb_misc >> 5 & 7;
-	_info->thumb_length = _info->thumb_width*_info->thumb_height;
-	char* thumb = (char *)calloc(_info->colors, _info->thumb_length);
+	_info->_colors = _info->_thumbMisc >> 5 & 7;
+	_info->_thumbLength = _info->_thumbWidth*_info->_thumbHeight;
+	char* thumb = (char *)calloc(_info->_colors, _info->_thumbLength);
 	CAutoFreeMemory autoFree(thumb);
-	_writer->Print("P%d\n%d %d\n255\n", 5 + (_info->colors >> 1), _info->thumb_width, _info->thumb_height);
-	_reader->Read(thumb, _info->thumb_length, _info->colors);
-	for (int i = 0; i < _info->thumb_length; i++)
-		for (size_t c = 0; c < _info->colors; c++)
-			_writer->PutChar(thumb[i + _info->thumb_length*(map[_info->thumb_misc >> 8][c] - '0')]);
+	_writer->Print("P%d\n%d %d\n255\n", 5 + (_info->_colors >> 1), _info->_thumbWidth, _info->_thumbHeight);
+	_reader->Read(thumb, _info->_thumbLength, _info->_colors);
+	for (int i = 0; i < _info->_thumbLength; i++)
+		for (size_t c = 0; c < _info->_colors; c++)
+			_writer->PutChar(thumb[i + _info->_thumbLength*(map[_info->_thumbMisc >> 8][c] - '0')]);
 }
 
-void CImageLoader::rollei_thumb()
+void CImageLoader::RolleiThumb()
 {
-	_info->thumb_length = _info->thumb_width * _info->thumb_height;
-	unsigned short* thumb = (unsigned short *)calloc(_info->thumb_length, 2);
+	_info->_thumbLength = _info->_thumbWidth * _info->_thumbHeight;
+	unsigned short* thumb = (unsigned short *)calloc(_info->_thumbLength, 2);
 	CAutoFreeMemory autoFree(thumb);
-	_writer->Print("P6\n%d %d\n255\n", _info->thumb_width, _info->thumb_height);
-	_reader->read_shorts(thumb, _info->thumb_length);
-	for (size_t i = 0; i < _info->thumb_length; i++)
+	_writer->Print("P6\n%d %d\n255\n", _info->_thumbWidth, _info->_thumbHeight);
+	_reader->ReadShorts(thumb, _info->_thumbLength);
+	for (size_t i = 0; i < _info->_thumbLength; i++)
 	{
 		_writer->PutChar(thumb[i] << 3);
 		_writer->PutChar(thumb[i] >> 5 << 2);
@@ -6273,7 +6187,7 @@ void CImageLoader::rollei_thumb()
 
 
 
-void CImageLoader::median_filter()
+void CImageLoader::MedianFilter()
 {
 	unsigned short(*pix)[4];
 	int pass, c, i, j, k, med[9];
@@ -6281,17 +6195,17 @@ void CImageLoader::median_filter()
 	{ 1,2, 4,5, 7,8, 0,1, 3,4, 6,7, 1,2, 4,5, 7,8,
 		0,3, 5,8, 4,7, 3,6, 1,4, 2,5, 4,7, 4,2, 6,4, 4,2 };
 
-	for (pass = 1; pass <= _options->med_passes; pass++)
+	for (pass = 1; pass <= _options->_medianPasses; pass++)
 	{
 		for (c = 0; c < 3; c += 2)
 		{
-			for (pix = _info->image; pix < _info->image + _info->width*_info->height; pix++)
+			for (pix = _info->_image; pix < _info->_image + _info->_width*_info->_height; pix++)
 				pix[0][3] = pix[0][c];
-			for (pix = _info->image + _info->width; pix < _info->image + _info->width*(_info->height - 1); pix++)
+			for (pix = _info->_image + _info->_width; pix < _info->_image + _info->_width*(_info->_height - 1); pix++)
 			{
-				if ((pix - _info->image + 1) % _info->width < 2)
+				if ((pix - _info->_image + 1) % _info->_width < 2)
 					continue;
-				for (k = 0, i = -_info->width; i <= _info->width; i += _info->width)
+				for (k = 0, i = -_info->_width; i <= _info->_width; i += _info->_width)
 					for (j = i - 1; j <= i + 1; j++)
 						med[k++] = pix[j][3] - pix[j][1];
 				for (i = 0; i < sizeof opt; i += 2)
@@ -6303,7 +6217,7 @@ void CImageLoader::median_filter()
 	}
 }
 
-void CImageLoader::blend_highlights()
+void CImageLoader::BlendHighlights()
 {
 	int clip = INT_MAX, row, col, i, j;
 	static const float trans[2][4][4] =
@@ -6314,85 +6228,81 @@ void CImageLoader::blend_highlights()
 	{ { 1,1,1,1 },{ 1,-1,1,-1 },{ 1,1,-1,-1 },{ 1,-1,-1,1 } } };
 	float cam[2][4], lab[2][4], sum[2], chratio;
 
-	if ((unsigned)(_info->colors - 3) > 1)
+	if ((unsigned)(_info->_colors - 3) > 1)
 		return;
-	for (size_t c = 0; c < _info->colors; c++)
-		if (clip > (i = 65535 * _info->pre_mul[c]))
+	for (size_t c = 0; c < _info->_colors; c++)
+		if (clip > (i = 65535 * _info->_preMul[c]))
 			clip = i;
-	for (row = 0; row < _info->height; row++)
+	for (row = 0; row < _info->_height; row++)
 	{
-		for (col = 0; col < _info->width; col++)
+		for (col = 0; col < _info->_width; col++)
 		{
 			int c;
-			for (c = 0; c < _info->colors; c++)
-				if (_info->image[row*_info->width + col][c] > clip)
+			for (c = 0; c < _info->_colors; c++)
+				if (_info->_image[row*_info->_width + col][c] > clip)
 					break;
-			if (c == _info->colors)
+			if (c == _info->_colors)
 				continue;
-			for (size_t c = 0; c < _info->colors; c++)
+			for (size_t c = 0; c < _info->_colors; c++)
 			{
-				cam[0][c] = _info->image[row*_info->width + col][c];
+				cam[0][c] = _info->_image[row*_info->_width + col][c];
 				cam[1][c] = MIN(cam[0][c], clip);
 			}
 			for (i = 0; i < 2; i++)
 			{
-				for (size_t c = 0; c < _info->colors; c++)
-					for (lab[i][c] = j = 0; j < _info->colors; j++)
-						lab[i][c] += trans[_info->colors - 3][c][j] * cam[i][j];
+				for (size_t c = 0; c < _info->_colors; c++)
+					for (lab[i][c] = j = 0; j < _info->_colors; j++)
+						lab[i][c] += trans[_info->_colors - 3][c][j] * cam[i][j];
 				sum[i] = 0;
-				for (size_t c = 1; c < _info->colors; c++)
+				for (size_t c = 1; c < _info->_colors; c++)
 					sum[i] += SQR(lab[i][c]);
 			}
 			chratio = sqrt(sum[1] / sum[0]);
-			for (c = 1; c < _info->colors; c++)
+			for (c = 1; c < _info->_colors; c++)
 				lab[0][c] *= chratio;
-			for (size_t c = 0; c < _info->colors; c++)
-				for (cam[0][c] = j = 0; j < _info->colors; j++)
-					cam[0][c] += itrans[_info->colors - 3][c][j] * lab[0][j];
-			for (size_t c = 0; c < _info->colors; c++)
-				_info->image[row*_info->width + col][c] = cam[0][c] / _info->colors;
+			for (size_t c = 0; c < _info->_colors; c++)
+				for (cam[0][c] = j = 0; j < _info->_colors; j++)
+					cam[0][c] += itrans[_info->_colors - 3][c][j] * lab[0][j];
+			for (size_t c = 0; c < _info->_colors; c++)
+				_info->_image[row*_info->_width + col][c] = cam[0][c] / _info->_colors;
 		}
 	}
 }
 
-#define SCALE (4 >> _info->shrink)
-void CImageLoader::recover_highlights()
+#define SCALE (4 >> _info->_shrink)
+void CImageLoader::RecoverHighlights()
 {
-	float sum, wgt, grow;
-	int hsat[4], count, spread, change, val, i;
-	unsigned high, wide, mrow, mcol, row, col, kc, c, d, y, x;
-	unsigned short *pixel;
-	static const signed char dir[8][2] =
-	{ { -1,-1 },{ -1,0 },{ -1,1 },{ 0,1 },{ 1,1 },{ 1,0 },{ 1,-1 },{ 0,-1 } };
+	static const signed char dir[8][2] = { { -1,-1 },{ -1,0 },{ -1,1 },{ 0,1 },{ 1,1 },{ 1,0 },{ 1,-1 },{ 0,-1 } };
 
-	grow = pow(2, 4 - _options->highlight);
-	for (size_t c = 0; c < _info->colors; c++)
-		hsat[c] = 32000 * _info->pre_mul[c];
-	kc = 0;
-	for (size_t c = 1; c < _info->colors; c++)
-		if (_info->pre_mul[kc] < _info->pre_mul[c])
+	float grow = pow(2, 4 - _options->_highlight);
+	int hsat[4];
+	for (size_t c = 0; c < _info->_colors; c++)
+		hsat[c] = 32000 * _info->_preMul[c];
+	unsigned kc = 0;
+	for (size_t c = 1; c < _info->_colors; c++)
+		if (_info->_preMul[kc] < _info->_preMul[c])
 			kc = c;
-	high = _info->height / SCALE;
-	wide = _info->width / SCALE;
+	unsigned high = _info->_height / SCALE;
+	unsigned wide = _info->_width / SCALE;
 	float* map = (float *)calloc(high, wide * sizeof *map);
 	CAutoFreeMemory autoFree(map);
-	for (size_t c = 0; c < _info->colors; c++)
+	for (size_t c = 0; c < _info->_colors; c++)
 	{
 		if (c != kc)
 		{
 			memset(map, 0, high*wide * sizeof *map);
-			for (mrow = 0; mrow < high; mrow++)
+			for (unsigned mrow = 0; mrow < high; mrow++)
 			{
-				for (mcol = 0; mcol < wide; mcol++)
+				for (unsigned mcol = 0; mcol < wide; mcol++)
 				{
-					count = 0;
-					wgt = 0;
-					sum = 0;
-					for (row = mrow*SCALE; row < (mrow + 1)*SCALE; row++)
+					int count = 0;
+					float wgt = 0;
+					float sum = 0;
+					for (unsigned row = mrow*SCALE; row < (mrow + 1)*SCALE; row++)
 					{
-						for (col = mcol*SCALE; col < (mcol + 1)*SCALE; col++)
+						for (unsigned col = mcol*SCALE; col < (mcol + 1)*SCALE; col++)
 						{
-							pixel = _info->image[row*_info->width + col];
+							unsigned short* pixel = _info->_image[row*_info->_width + col];
 							if (pixel[c] / hsat[c] == 1 && pixel[kc] > 24000)
 							{
 								sum += pixel[c];
@@ -6405,20 +6315,20 @@ void CImageLoader::recover_highlights()
 						map[mrow*wide + mcol] = sum / wgt;
 				}
 			}
-			for (spread = 32 / grow; spread--; )
+			for (int spread = 32 / grow; spread--; )
 			{
-				for (mrow = 0; mrow < high; mrow++)
+				for (unsigned mrow = 0; mrow < high; mrow++)
 				{
-					for (mcol = 0; mcol < wide; mcol++)
+					for (unsigned mcol = 0; mcol < wide; mcol++)
 					{
 						if (map[mrow*wide + mcol])
 							continue;
-						count = 0;
-						sum = 0;
-						for (d = 0; d < 8; d++)
+						int count = 0;
+						float sum = 0;
+						for (unsigned d = 0; d < 8; d++)
 						{
-							y = mrow + dir[d][0];
-							x = mcol + dir[d][1];
+							unsigned y = mrow + dir[d][0];
+							unsigned x = mcol + dir[d][1];
 							if (y < high && x < wide && map[y*wide + x] > 0)
 							{
 								sum += (1 + (d & 1)) * map[y*wide + x];
@@ -6429,31 +6339,32 @@ void CImageLoader::recover_highlights()
 							map[mrow*wide + mcol] = -(sum + grow) / (count + grow);
 					}
 				}
-				for (change = i = 0; i < high*wide; i++)
+				bool change = false;
+				for (int i = 0; i < high*wide; i++)
 				{
 					if (map[i] < 0)
 					{
 						map[i] = -map[i];
-						change = 1;
+						change = true;
 					}
 				}
 				if (!change)
 					break;
 			}
-			for (i = 0; i < high*wide; i++)
+			for (int i = 0; i < high*wide; i++)
 				if (map[i] == 0) map[i] = 1;
-			for (mrow = 0; mrow < high; mrow++)
+			for (unsigned mrow = 0; mrow < high; mrow++)
 			{
-				for (mcol = 0; mcol < wide; mcol++)
+				for (unsigned mcol = 0; mcol < wide; mcol++)
 				{
-					for (row = mrow*SCALE; row < (mrow + 1)*SCALE; row++)
+					for (unsigned row = mrow*SCALE; row < (mrow + 1)*SCALE; row++)
 					{
-						for (col = mcol*SCALE; col < (mcol + 1)*SCALE; col++)
+						for (unsigned col = mcol*SCALE; col < (mcol + 1)*SCALE; col++)
 						{
-							pixel = _info->image[row*_info->width + col];
+							unsigned short* pixel = _info->_image[row*_info->_width + col];
 							if (pixel[c] / hsat[c] > 1)
 							{
-								val = pixel[kc] * map[mrow*wide + mcol];
+								int val = pixel[kc] * map[mrow*wide + mcol];
 								if (pixel[c] < val) pixel[c] = CLIP(val);
 							}
 						}
@@ -6466,7 +6377,7 @@ void CImageLoader::recover_highlights()
 #undef SCALE
 
 #ifndef NO_LCMS
-void CImageLoader::apply_profile(const char *input, const char *output)
+void CImageLoader::ApplyProfile(const char *input, const char *output)
 {
 	char *prof;
 	cmsHPROFILE hInProfile = 0;
@@ -6479,13 +6390,13 @@ void CImageLoader::apply_profile(const char *input, const char *output)
 	{
 		hInProfile = cmsOpenProfileFromFile(input, "r");
 	}
-	else if (_info->profile_length)
+	else if (_info->_profileLength)
 	{
-		prof = (char *)malloc(_info->profile_length);
+		prof = (char *)malloc(_info->_profileLength);
 		CAutoFreeMemory autoFree(prof);
-		_reader->Seek(_info->profile_offset, SEEK_SET);
-		_reader->Read(prof, 1, _info->profile_length);
-		hInProfile = cmsOpenProfileFromMem(prof, _info->profile_length);
+		_reader->Seek(_info->_profileOffset, SEEK_SET);
+		_reader->Read(prof, 1, _info->_profileLength);
+		hInProfile = cmsOpenProfileFromMem(prof, _info->_profileLength);
 	}
 	else
 	{
@@ -6499,15 +6410,15 @@ void CImageLoader::apply_profile(const char *input, const char *output)
 	{
 		fread(&size, 4, 1, fp);
 		fseek(fp, 0, SEEK_SET);
-		_info->oprof = (unsigned *)malloc(size = ntohl(size));
-		if (!_info->oprof)
+		_info->_profile = (unsigned *)malloc(size = ntohl(size));
+		if (!_info->_profile)
 			throw CExceptionMemory();
-		fread(_info->oprof, 1, size, fp);
+		fread(_info->_profile, 1, size, fp);
 		fclose(fp);
-		if (!(hOutProfile = cmsOpenProfileFromMem(_info->oprof, size)))
+		if (!(hOutProfile = cmsOpenProfileFromMem(_info->_profile, size)))
 		{
-			free(_info->oprof);
-			_info->oprof = nullptr;
+			free(_info->_profile);
+			_info->_profile = nullptr;
 		}
 	}
 	else
@@ -6517,8 +6428,8 @@ void CImageLoader::apply_profile(const char *input, const char *output)
 	if (!hOutProfile)
 		goto quit;
 	hTransform = cmsCreateTransform(hInProfile, TYPE_RGBA_16, hOutProfile, TYPE_RGBA_16, INTENT_PERCEPTUAL, 0);
-	cmsDoTransform(hTransform, _info->image, _info->image, _info->width*_info->height);
-	_info->raw_color = 1;		/* Don't use rgb_cam with a profile */
+	cmsDoTransform(hTransform, _info->_image, _info->_image, _info->_width*_info->_height);
+	_info->_rawColor = 1;		/* Don't use _rgbCam with a profile */
 	cmsDeleteTransform(hTransform);
 	cmsCloseProfile(hOutProfile);
 quit:
@@ -6526,7 +6437,7 @@ quit:
 }
 #endif
 
-void CImageLoader::convert_to_rgb()
+void CImageLoader::ConvertToRGB()
 {
 	static const double xyzd50_srgb[3][3] =
 	{
@@ -6563,7 +6474,7 @@ void CImageLoader::convert_to_rgb()
 		{ 0.019165, 0.118150, 0.941914 }
 	};
 	static const double(*out_rgb[])[3] =
-	{ rgb_rgb, adobe_rgb, wide_rgb, prophoto_rgb, _info->xyz_rgb, aces_rgb };
+	{ rgb_rgb, adobe_rgb, wide_rgb, prophoto_rgb, _info->xyzRGB, aces_rgb };
 	static const char *name[] =
 	{ "sRGB", "Adobe RGB (1998)", "WideGamut D65", "ProPhoto D65", "XYZ", "ACES" };
 	static const unsigned phead[] =
@@ -6591,61 +6502,61 @@ void CImageLoader::convert_to_rgb()
 	float out[3], out_cam[3][4];
 	double num, inverse[3][3];
 
-	_info->gamma_curve(_info->gamm[0], _info->gamm[1], 0, 0);
-	memcpy(out_cam, _info->rgb_cam, sizeof out_cam);
-	_info->raw_color |= _info->colors == 1 || _options->document_mode ||
-		_options->output_color < 1 || _options->output_color > 6;
-	if (!_info->raw_color)
+	_info->GammaCurve(_info->_gamma[0], _info->_gamma[1], 0, 0);
+	memcpy(out_cam, _info->_rgbCam, sizeof out_cam);
+	_info->_rawColor |= _info->_colors == 1 || _options->_documentMode ||
+		_options->_outputColor < 1 || _options->_outputColor > 6;
+	if (!_info->_rawColor)
 	{
-		_info->oprof = (unsigned *)calloc(phead[0], 1);
-		if (!_info->oprof)
+		_info->_profile = (unsigned *)calloc(phead[0], 1);
+		if (!_info->_profile)
 			throw CExceptionMemory();
 
-		memcpy(_info->oprof, phead, sizeof phead);
-		if (_options->output_color == 5)
-			_info->oprof[4] = _info->oprof[5];
-		_info->oprof[0] = 132 + 12 * pbody[0];
+		memcpy(_info->_profile, phead, sizeof phead);
+		if (_options->_outputColor == 5)
+			_info->_profile[4] = _info->_profile[5];
+		_info->_profile[0] = 132 + 12 * pbody[0];
 		for (i = 0; i < pbody[0]; i++)
 		{
-			_info->oprof[_info->oprof[0] / 4] = i ? (i > 1 ? 0x58595a20 : 0x64657363) : 0x74657874;
-			pbody[i * 3 + 2] = _info->oprof[0];
-			_info->oprof[0] += (pbody[i * 3 + 3] + 3) & -4;
+			_info->_profile[_info->_profile[0] / 4] = i ? (i > 1 ? 0x58595a20 : 0x64657363) : 0x74657874;
+			pbody[i * 3 + 2] = _info->_profile[0];
+			_info->_profile[0] += (pbody[i * 3 + 3] + 3) & -4;
 		}
-		memcpy(_info->oprof + 32, pbody, sizeof pbody);
-		_info->oprof[pbody[5] / 4 + 2] = strlen(name[_options->output_color - 1]) + 1;
-		memcpy((char *)_info->oprof + pbody[8] + 8, pwhite, sizeof pwhite);
-		pcurve[3] = (short)(256 / _info->gamm[5] + 0.5) << 16;
+		memcpy(_info->_profile + 32, pbody, sizeof pbody);
+		_info->_profile[pbody[5] / 4 + 2] = strlen(name[_options->_outputColor - 1]) + 1;
+		memcpy((char *)_info->_profile + pbody[8] + 8, pwhite, sizeof pwhite);
+		pcurve[3] = (short)(256 / _info->_gamma[5] + 0.5) << 16;
 		for (i = 4; i < 7; i++)
-			memcpy((char *)_info->oprof + pbody[i * 3 + 2], pcurve, sizeof pcurve);
-		pseudoinverse((double(*)[3]) out_rgb[_options->output_color - 1], inverse, 3);
+			memcpy((char *)_info->_profile + pbody[i * 3 + 2], pcurve, sizeof pcurve);
+		_info->PseudoInverse((double(*)[3]) out_rgb[_options->_outputColor - 1], inverse, 3);
 		for (i = 0; i < 3; i++)
 		{
 			for (j = 0; j < 3; j++)
 			{
 				for (num = k = 0; k < 3; k++)
 					num += xyzd50_srgb[i][k] * inverse[j][k];
-				_info->oprof[pbody[j * 3 + 23] / 4 + i + 2] = num * 0x10000 + 0.5;
+				_info->_profile[pbody[j * 3 + 23] / 4 + i + 2] = num * 0x10000 + 0.5;
 			}
 		}
 		for (i = 0; i < phead[0] / 4; i++)
-			_info->oprof[i] = htonl(_info->oprof[i]);
-		strcpy((char *)_info->oprof + pbody[2] + 8, "auto-generated by dcraw");
-		strcpy((char *)_info->oprof + pbody[5] + 12, name[_options->output_color - 1]);
+			_info->_profile[i] = htonl(_info->_profile[i]);
+		strcpy((char *)_info->_profile + pbody[2] + 8, "auto-generated by dcraw");
+		strcpy((char *)_info->_profile + pbody[5] + 12, name[_options->_outputColor - 1]);
 		for (i = 0; i < 3; i++)
-			for (j = 0; j < _info->colors; j++)
+			for (j = 0; j < _info->_colors; j++)
 				for (out_cam[i][j] = k = 0; k < 3; k++)
-					out_cam[i][j] += out_rgb[_options->output_color - 1][i][k] * _info->rgb_cam[k][j];
+					out_cam[i][j] += out_rgb[_options->_outputColor - 1][i][k] * _info->_rgbCam[k][j];
 	}
 
-	memset(_info->histogram, 0, sizeof _info->histogram);
-	for (img = _info->image[0], row = 0; row < _info->height; row++)
+	memset(_info->_histogram, 0, sizeof _info->_histogram);
+	for (img = _info->_image[0], row = 0; row < _info->_height; row++)
 	{
-		for (col = 0; col < _info->width; col++, img += 4)
+		for (col = 0; col < _info->_width; col++, img += 4)
 		{
-			if (!_info->raw_color)
+			if (!_info->_rawColor)
 			{
 				out[0] = out[1] = out[2] = 0;
-				for (size_t c = 0; c < _info->colors; c++)
+				for (size_t c = 0; c < _info->_colors; c++)
 				{
 					out[0] += out_cam[0][c] * img[c];
 					out[1] += out_cam[1][c] * img[c];
@@ -6654,21 +6565,21 @@ void CImageLoader::convert_to_rgb()
 				for (size_t c = 0; c < 3; c++)
 					img[c] = CLIP((int)out[c]);
 			}
-			else if (_options->document_mode)
+			else if (_options->_documentMode)
 			{
-				img[0] = img[fcol(row, col)];
+				img[0] = img[FCol(row, col)];
 			}
-			for (size_t c = 0; c < _info->colors; c++)
-				_info->histogram[c][img[c] >> 3]++;
+			for (size_t c = 0; c < _info->_colors; c++)
+				_info->_histogram[c][img[c] >> 3]++;
 		}
 	}
-	if (_info->colors == 4 && _options->output_color)
-		_info->colors = 3;
-	if (_options->document_mode && _info->filters)
-		_info->colors = 1;
+	if (_info->_colors == 4 && _options->_outputColor)
+		_info->_colors = 3;
+	if (_options->_documentMode && _info->_filters)
+		_info->_colors = 1;
 }
 
-void CImageLoader::fuji_rotate()
+void CImageLoader::FujiRotate()
 {
 	int i, row, col;
 	double step;
@@ -6676,12 +6587,12 @@ void CImageLoader::fuji_rotate()
 	unsigned ur, uc;
 	unsigned short wide, high, (*img)[4], (*pix)[4];
 
-	if (!_info->fuji_width)
+	if (!_info->_fujiWidth)
 		return;
-	_info->fuji_width = (_info->fuji_width - 1 + _info->shrink) >> _info->shrink;
+	_info->_fujiWidth = (_info->_fujiWidth - 1 + _info->_shrink) >> _info->_shrink;
 	step = sqrt(0.5);
-	wide = _info->fuji_width / step;
-	high = (_info->height - _info->fuji_width) / step;
+	wide = _info->_fujiWidth / step;
+	high = (_info->_height - _info->_fujiWidth) / step;
 	img = (unsigned short(*)[4]) calloc(high, wide * sizeof *img);
 	if (!img)
 		throw CExceptionMemory();
@@ -6690,88 +6601,88 @@ void CImageLoader::fuji_rotate()
 	{
 		for (col = 0; col < wide; col++)
 		{
-			ur = r = _info->fuji_width + (row - col)*step;
+			ur = r = _info->_fujiWidth + (row - col)*step;
 			uc = c = (row + col)*step;
-			if (ur > _info->height - 2 || uc > _info->width - 2)
+			if (ur > _info->_height - 2 || uc > _info->_width - 2)
 				continue;
 			fr = r - ur;
 			fc = c - uc;
-			pix = _info->image + ur*_info->width + uc;
-			for (i = 0; i < _info->colors; i++)
-				img[row*wide + col][i] = (pix[0][i] * (1 - fc) + pix[1][i] * fc) * (1 - fr) + (pix[_info->width][i] * (1 - fc) + pix[_info->width + 1][i] * fc) * fr;
+			pix = _info->_image + ur*_info->_width + uc;
+			for (i = 0; i < _info->_colors; i++)
+				img[row*wide + col][i] = (pix[0][i] * (1 - fc) + pix[1][i] * fc) * (1 - fr) + (pix[_info->_width][i] * (1 - fc) + pix[_info->_width + 1][i] * fc) * fr;
 		}
 	}
-	free(_info->image);
-	_info->width = wide;
-	_info->height = high;
-	_info->image = img;
-	_info->fuji_width = 0;
+	free(_info->_image);
+	_info->_width = wide;
+	_info->_height = high;
+	_info->_image = img;
+	_info->_fujiWidth = 0;
 }
 
-void CImageLoader::stretch()
+void CImageLoader::Stretch()
 {
 	unsigned short newdim, (*img)[4], *pix0, *pix1;
 	int row, col;
 	double rc, frac;
 
-	if (_info->pixel_aspect == 1)
+	if (_info->_pixelAspect == 1)
 		return;
-	if (_info->pixel_aspect < 1)
+	if (_info->_pixelAspect < 1)
 	{
-		newdim = _info->height / _info->pixel_aspect + 0.5;
-		img = (unsigned short(*)[4]) calloc(_info->width, newdim * sizeof *img);
+		newdim = _info->_height / _info->_pixelAspect + 0.5;
+		img = (unsigned short(*)[4]) calloc(_info->_width, newdim * sizeof *img);
 		if (!img)
 			throw CExceptionMemory();
 		rc = 0;
-		for (row = 0; row < newdim; row++, rc += _info->pixel_aspect)
+		for (row = 0; row < newdim; row++, rc += _info->_pixelAspect)
 		{
 			int c = rc;
 			frac = rc - c;
-			pix0 = pix1 = _info->image[c*_info->width];
-			if (c + 1 < _info->height)
-				pix1 += _info->width * 4;
-			for (col = 0; col < _info->width; col++, pix0 += 4, pix1 += 4)
-				for (size_t c = 0; c < _info->colors; c++)
-					img[row*_info->width + col][c] = pix0[c] * (1 - frac) + pix1[c] * frac + 0.5;
+			pix0 = pix1 = _info->_image[c*_info->_width];
+			if (c + 1 < _info->_height)
+				pix1 += _info->_width * 4;
+			for (col = 0; col < _info->_width; col++, pix0 += 4, pix1 += 4)
+				for (size_t c = 0; c < _info->_colors; c++)
+					img[row*_info->_width + col][c] = pix0[c] * (1 - frac) + pix1[c] * frac + 0.5;
 		}
-		_info->height = newdim;
+		_info->_height = newdim;
 	}
 	else
 	{
-		newdim = _info->width * _info->pixel_aspect + 0.5;
-		img = (unsigned short(*)[4]) calloc(_info->height, newdim * sizeof *img);
+		newdim = _info->_width * _info->_pixelAspect + 0.5;
+		img = (unsigned short(*)[4]) calloc(_info->_height, newdim * sizeof *img);
 		if (!img)
 			throw CExceptionMemory();
-		for (rc = col = 0; col < newdim; col++, rc += 1 / _info->pixel_aspect)
+		for (rc = col = 0; col < newdim; col++, rc += 1 / _info->_pixelAspect)
 		{
 			int c = rc;
 			frac = rc - c;
-			pix0 = pix1 = _info->image[c];
-			if (c + 1 < _info->width) pix1 += 4;
-			for (row = 0; row < _info->height; row++, pix0 += _info->width * 4, pix1 += _info->width * 4)
-				for (size_t c = 0; c < _info->colors; c++)
+			pix0 = pix1 = _info->_image[c];
+			if (c + 1 < _info->_width) pix1 += 4;
+			for (row = 0; row < _info->_height; row++, pix0 += _info->_width * 4, pix1 += _info->_width * 4)
+				for (size_t c = 0; c < _info->_colors; c++)
 					img[row*newdim + col][c] = pix0[c] * (1 - frac) + pix1[c] * frac + 0.5;
 		}
-		_info->width = newdim;
+		_info->_width = newdim;
 	}
-	free(_info->image);
-	_info->image = img;
+	free(_info->_image);
+	_info->_image = img;
 }
 
-int CImageLoader::flip_index(int row, int col)
+int CImageLoader::FlipIndex(int row, int col)
 {
-	if (_info->flip & 4)
+	if (_info->_flip & 4)
 		SWAP(row, col);
-	if (_info->flip & 2)
-		row = _info->iheight - 1 - row;
-	if (_info->flip & 1)
-		col = _info->iwidth - 1 - col;
-	return row * _info->iwidth + col;
+	if (_info->_flip & 2)
+		row = _info->_iheight - 1 - row;
+	if (_info->_flip & 1)
+		col = _info->_iwidth - 1 - col;
+	return row * _info->_iwidth + col;
 }
 
-void CImageLoader::tiff_set(tiff_hdr *th, unsigned short *ntag, unsigned short tag, unsigned short type, int count, int val)
+void CImageLoader::TiffSet(TiffHDR *th, unsigned short *ntag, unsigned short tag, unsigned short type, int count, int val)
 {
-	tiff_tag* tt = (tiff_tag *)(ntag + 1) + (*ntag)++;
+	TiffTAG* tt = (TiffTAG *)(ntag + 1) + (*ntag)++;
 	tt->val.i = val;
 	if (type == 1 && count <= 4)
 		for (int c = 0; c < 4; c++)
@@ -6794,7 +6705,7 @@ void CImageLoader::tiff_set(tiff_hdr *th, unsigned short *ntag, unsigned short t
 }
 
 #define TOFF(ptr) ((char *)(&(ptr)) - (char *)th)
-void CImageLoader::tiff_head(tiff_hdr *th, int full)
+void CImageLoader::TiffHead(TiffHDR *th, int full)
 {
 	int psize = 0;
 
@@ -6806,86 +6717,86 @@ void CImageLoader::tiff_head(tiff_hdr *th, int full)
 	th->rat[1] = th->rat[3] = 1;
 	for (size_t c = 0; c < 6; c++)
 		th->rat[4 + c] = 1000000;
-	th->rat[4] *= _info->shutter;
-	th->rat[6] *= _info->aperture;
-	th->rat[8] *= _info->focal_len;
-	strncpy(th->desc, _info->desc, 512);
-	strncpy(th->make, _info->make, 64);
-	strncpy(th->model, _info->model, 64);
+	th->rat[4] *= _info->_shutter;
+	th->rat[6] *= _info->_aperture;
+	th->rat[8] *= _info->_focalLen;
+	strncpy_s(th->desc, 512, _info->_desc, 512);
+	strncpy_s(th->make, 64, _info->_make, 64);
+	strncpy_s(th->model, 64, _info->_model, 64);
 	//strcpy(th->soft, "CRL v""1.0.0.0");
-	strcpy(th->soft, "dcraw v9.27");
-	tm* t = localtime(&_info->timestamp);
+	strcpy_s(th->soft, 32, "dcraw v9.27");
+	tm* t = localtime(&_info->_timestamp);
 	sprintf(th->date, "%04d:%02d:%02d %02d:%02d:%02d",
 		t->tm_year + 1900, t->tm_mon + 1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
-	strncpy(th->artist, _info->artist, 64);
+	strncpy_s(th->artist, 64, _info->_artist, 64);
 	if (full) {
-		tiff_set(th, &th->ntag, 254, 4, 1, 0);
-		tiff_set(th, &th->ntag, 256, 4, 1, _info->width);
-		tiff_set(th, &th->ntag, 257, 4, 1, _info->height);
-		tiff_set(th, &th->ntag, 258, 3, _info->colors, _options->output_bps);
-		if (_info->colors > 2)
+		TiffSet(th, &th->ntag, 254, 4, 1, 0);
+		TiffSet(th, &th->ntag, 256, 4, 1, _info->_width);
+		TiffSet(th, &th->ntag, 257, 4, 1, _info->_height);
+		TiffSet(th, &th->ntag, 258, 3, _info->_colors, _options->_outputBps);
+		if (_info->_colors > 2)
 			th->tag[th->ntag - 1].val.i = TOFF(th->bps);
 		for (size_t c = 0; c < 4; c++)
-			th->bps[c] = _options->output_bps;
-		tiff_set(th, &th->ntag, 259, 3, 1, 1);
-		tiff_set(th, &th->ntag, 262, 3, 1, 1 + (_info->colors > 1));
+			th->bps[c] = _options->_outputBps;
+		TiffSet(th, &th->ntag, 259, 3, 1, 1);
+		TiffSet(th, &th->ntag, 262, 3, 1, 1 + (_info->_colors > 1));
 	}
-	tiff_set(th, &th->ntag, 270, 2, 512, TOFF(th->desc));
-	tiff_set(th, &th->ntag, 271, 2, 64, TOFF(th->make));
-	tiff_set(th, &th->ntag, 272, 2, 64, TOFF(th->model));
+	TiffSet(th, &th->ntag, 270, 2, 512, TOFF(th->desc));
+	TiffSet(th, &th->ntag, 271, 2, 64, TOFF(th->make));
+	TiffSet(th, &th->ntag, 272, 2, 64, TOFF(th->model));
 	if (full)
 	{
-		if (_info->oprof)
-			psize = ntohl(_info->oprof[0]);
-		tiff_set(th, &th->ntag, 273, 4, 1, sizeof *th + psize);
-		tiff_set(th, &th->ntag, 277, 3, 1, _info->colors);
-		tiff_set(th, &th->ntag, 278, 4, 1, _info->height);
-		tiff_set(th, &th->ntag, 279, 4, 1, _info->height*_info->width*_info->colors*_options->output_bps / 8);
+		if (_info->_profile)
+			psize = ntohl(_info->_profile[0]);
+		TiffSet(th, &th->ntag, 273, 4, 1, sizeof *th + psize);
+		TiffSet(th, &th->ntag, 277, 3, 1, _info->_colors);
+		TiffSet(th, &th->ntag, 278, 4, 1, _info->_height);
+		TiffSet(th, &th->ntag, 279, 4, 1, _info->_height*_info->_width*_info->_colors*_options->_outputBps / 8);
 	}
 	else
 	{
-		tiff_set(th, &th->ntag, 274, 3, 1, "12435867"[_info->flip] - '0');
+		TiffSet(th, &th->ntag, 274, 3, 1, "12435867"[_info->_flip] - '0');
 	}
-	tiff_set(th, &th->ntag, 282, 5, 1, TOFF(th->rat[0]));
-	tiff_set(th, &th->ntag, 283, 5, 1, TOFF(th->rat[2]));
-	tiff_set(th, &th->ntag, 284, 3, 1, 1);
-	tiff_set(th, &th->ntag, 296, 3, 1, 2);
-	tiff_set(th, &th->ntag, 305, 2, 32, TOFF(th->soft));
-	tiff_set(th, &th->ntag, 306, 2, 20, TOFF(th->date));
-	tiff_set(th, &th->ntag, 315, 2, 64, TOFF(th->artist));
-	tiff_set(th, &th->ntag, 34665, 4, 1, TOFF(th->nexif));
+	TiffSet(th, &th->ntag, 282, 5, 1, TOFF(th->rat[0]));
+	TiffSet(th, &th->ntag, 283, 5, 1, TOFF(th->rat[2]));
+	TiffSet(th, &th->ntag, 284, 3, 1, 1);
+	TiffSet(th, &th->ntag, 296, 3, 1, 2);
+	TiffSet(th, &th->ntag, 305, 2, 32, TOFF(th->soft));
+	TiffSet(th, &th->ntag, 306, 2, 20, TOFF(th->date));
+	TiffSet(th, &th->ntag, 315, 2, 64, TOFF(th->artist));
+	TiffSet(th, &th->ntag, 34665, 4, 1, TOFF(th->nexif));
 	if (psize)
-		tiff_set(th, &th->ntag, 34675, 7, psize, sizeof *th);
-	tiff_set(th, &th->nexif, 33434, 5, 1, TOFF(th->rat[4]));
-	tiff_set(th, &th->nexif, 33437, 5, 1, TOFF(th->rat[6]));
-	tiff_set(th, &th->nexif, 34855, 3, 1, _info->iso_speed);
-	tiff_set(th, &th->nexif, 37386, 5, 1, TOFF(th->rat[8]));
-	if (_info->gpsdata[1])
+		TiffSet(th, &th->ntag, 34675, 7, psize, sizeof *th);
+	TiffSet(th, &th->nexif, 33434, 5, 1, TOFF(th->rat[4]));
+	TiffSet(th, &th->nexif, 33437, 5, 1, TOFF(th->rat[6]));
+	TiffSet(th, &th->nexif, 34855, 3, 1, _info->_isoSpeed);
+	TiffSet(th, &th->nexif, 37386, 5, 1, TOFF(th->rat[8]));
+	if (_info->_gpsData[1])
 	{
-		tiff_set(th, &th->ntag, 34853, 4, 1, TOFF(th->ngps));
-		tiff_set(th, &th->ngps, 0, 1, 4, 0x202);
-		tiff_set(th, &th->ngps, 1, 2, 2, _info->gpsdata[29]);
-		tiff_set(th, &th->ngps, 2, 5, 3, TOFF(th->gps[0]));
-		tiff_set(th, &th->ngps, 3, 2, 2, _info->gpsdata[30]);
-		tiff_set(th, &th->ngps, 4, 5, 3, TOFF(th->gps[6]));
-		tiff_set(th, &th->ngps, 5, 1, 1, _info->gpsdata[31]);
-		tiff_set(th, &th->ngps, 6, 5, 1, TOFF(th->gps[18]));
-		tiff_set(th, &th->ngps, 7, 5, 3, TOFF(th->gps[12]));
-		tiff_set(th, &th->ngps, 18, 2, 12, TOFF(th->gps[20]));
-		tiff_set(th, &th->ngps, 29, 2, 12, TOFF(th->gps[23]));
-		memcpy(th->gps, _info->gpsdata, sizeof th->gps);
+		TiffSet(th, &th->ntag, 34853, 4, 1, TOFF(th->ngps));
+		TiffSet(th, &th->ngps, 0, 1, 4, 0x202);
+		TiffSet(th, &th->ngps, 1, 2, 2, _info->_gpsData[29]);
+		TiffSet(th, &th->ngps, 2, 5, 3, TOFF(th->gps[0]));
+		TiffSet(th, &th->ngps, 3, 2, 2, _info->_gpsData[30]);
+		TiffSet(th, &th->ngps, 4, 5, 3, TOFF(th->gps[6]));
+		TiffSet(th, &th->ngps, 5, 1, 1, _info->_gpsData[31]);
+		TiffSet(th, &th->ngps, 6, 5, 1, TOFF(th->gps[18]));
+		TiffSet(th, &th->ngps, 7, 5, 3, TOFF(th->gps[12]));
+		TiffSet(th, &th->ngps, 18, 2, 12, TOFF(th->gps[20]));
+		TiffSet(th, &th->ngps, 29, 2, 12, TOFF(th->gps[23]));
+		memcpy(th->gps, _info->_gpsData, sizeof th->gps);
 	}
 }
 #undef TOFF
-void CImageLoader::jpeg_thumb()
+void CImageLoader::JpegThumb()
 {
 	unsigned short exif[5];
-	tiff_hdr th;
+	TiffHDR th;
 
-	char* thumb = (char *)malloc(_info->thumb_length);
+	char* thumb = (char *)malloc(_info->_thumbLength);
 	CAutoFreeMemory autoFree(thumb);
 
-	_reader->Read(thumb, 1, _info->thumb_length);
+	_reader->Read(thumb, 1, _info->_thumbLength);
 	_writer->PutChar(0xff);
 	_writer->PutChar(0xd8);
 	if (strcmp(thumb + 6, "Exif"))
@@ -6893,71 +6804,73 @@ void CImageLoader::jpeg_thumb()
 		memcpy(exif, "\xff\xe1  Exif\0\0", 10);
 		exif[1] = htons(8 + sizeof th);
 		_writer->Write(exif, 1, sizeof exif);
-		tiff_head(&th, 0);
+		TiffHead(&th, 0);
 		_writer->Write(&th, 1, sizeof th);
 	}
-	_writer->Write(thumb + 2, 1, _info->thumb_length - 2);
+	_writer->Write(thumb + 2, 1, _info->_thumbLength - 2);
 }
 
-void CImageLoader::write_ppm_tiff()
+void CImageLoader::WritePpmTiff()
 {
-	tiff_hdr th;
-	int row, col, soff, rstep, cstep;
-	int perc, val, total, white = 0x2000;
+	int white = 0x2000;
 
-	perc = _info->width * _info->height * 0.01;		/* 99th percentile white level */
-	if (_info->fuji_width)
+	int perc = _info->_width * _info->_height * 0.01;		/* 99th percentile _white level */
+	if (_info->_fujiWidth)
 		perc /= 2;
-	if (!((_options->highlight & ~2) || _options->no_auto_bright))
+	if (!((_options->_highlight & ~2) || _options->_noAutoBright))
 	{
 		white = 0;
-		for (size_t c = 0; c < _info->colors; c++)
+		for (size_t c = 0; c < _info->_colors; c++)
 		{
+			int val, total;
 			for (val = 0x2000, total = 0; --val > 32; )
-				if ((total += _info->histogram[c][val]) > perc)
+				if ((total += _info->_histogram[c][val]) > perc)
 					break;
 			if (white < val)
 				white = val;
 		}
 	}
-	_info->gamma_curve(_info->gamm[0], _info->gamm[1], 2, (white << 3) / _options->bright);
-	_info->iheight = _info->height;
-	_info->iwidth = _info->width;
-	if (_info->flip & 4) SWAP(_info->height, _info->width);
-	unsigned char* ppm = (unsigned char *)calloc(_info->width, _info->colors*_options->output_bps / 8);
+	_info->GammaCurve(_info->_gamma[0], _info->_gamma[1], 2, (white << 3) / _options->_bright);
+	_info->_iheight = _info->_height;
+	_info->_iwidth = _info->_width;
+	if (_info->_flip & 4) SWAP(_info->_height, _info->_width);
+	unsigned char* ppm = (unsigned char *)calloc(_info->_width, _info->_colors*_options->_outputBps / 8);
 	CAutoFreeMemory autoFree(ppm);
 	unsigned short* ppm2 = (unsigned short *)ppm;
-	if (_options->output_tiff)
+	if (_options->_outputTiff)
 	{
-		tiff_head(&th, 1);
+		TiffHDR th;
+		TiffHead(&th, 1);
 		_writer->Write(&th, sizeof th, 1);
-		if (_info->oprof)
-			_writer->Write(_info->oprof, ntohl(_info->oprof[0]), 1);
+		if (_info->_profile)
+			_writer->Write(_info->_profile, ntohl(_info->_profile[0]), 1);
 	}
-	else if (_info->colors > 3)
+	else if (_info->_colors > 3)
 	{
 		_writer->Print("P7\nWIDTH %d\nHEIGHT %d\nDEPTH %d\nMAXVAL %d\nTUPLTYPE %s\nENDHDR\n",
-			_info->width, _info->height, _info->colors, (1 << _options->output_bps) - 1, _info->cdesc);
+			_info->_width, _info->_height, _info->_colors, (1 << _options->_outputBps) - 1, _info->_cdesc);
 	}
 	else
 	{
 		_writer->Print("P%d\n%d %d\n%d\n",
-			_info->colors / 2 + 5, _info->width, _info->height, (1 << _options->output_bps) - 1);
+			_info->_colors / 2 + 5, _info->_width, _info->_height, (1 << _options->_outputBps) - 1);
 	}
-	soff = flip_index(0, 0);
-	cstep = flip_index(0, 1) - soff;
-	rstep = flip_index(1, 0) - flip_index(0, _info->width);
-	for (row = 0; row < _info->height; row++, soff += rstep)
+	int soff = FlipIndex(0, 0);
+	int cstep = FlipIndex(0, 1) - soff;
+	int rstep = FlipIndex(1, 0) - FlipIndex(0, _info->_width);
+	for (int row = 0; row < _info->_height; row++, soff += rstep)
 	{
-		for (col = 0; col < _info->width; col++, soff += cstep)
-			if (_options->output_bps == 8)
-				for (size_t c = 0; c < _info->colors; c++)
-					ppm[col*_info->colors + c] = _info->curve[_info->image[soff][c]] >> 8;
+		for (int col = 0; col < _info->_width; col++, soff += cstep)
+		{
+			if (_options->_outputBps == 8)
+				for (size_t c = 0; c < _info->_colors; c++)
+					ppm[col*_info->_colors + c] = _info->_curve[_info->_image[soff][c]] >> 8;
 			else
-				for (size_t c = 0; c < _info->colors; c++)
-					ppm2[col*_info->colors + c] = _info->curve[_info->image[soff][c]];
-			if (_options->output_bps == 16 && !_options->output_tiff && htons(0x55aa) != 0x55aa)
-				swab((char*)ppm2, (char*)ppm2, _info->width*_info->colors * 2);
-			_writer->Write(ppm, _info->colors*_options->output_bps / 8, _info->width);
+				for (size_t c = 0; c < _info->_colors; c++)
+					ppm2[col*_info->_colors + c] = _info->_curve[_info->_image[soff][c]];
+			if (_options->_outputBps == 16 && !_options->_outputTiff && htons(0x55aa) != 0x55aa)
+				_swab((char*)ppm2, (char*)ppm2, _info->_width*_info->_colors * 2);
+			_writer->Write(ppm, _info->_colors*_options->_outputBps / 8, _info->_width);
+		}
 	}
 }

@@ -22,11 +22,11 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 
 namespace Unmanaged
 {
-	class jhead
+	class JHead
 	{
 	public:
-		jhead(CReader& reader, CSimpleInfo& info, bool info_only);
-		~jhead();
+		JHead(CReader& reader, CSimpleInfo& info, bool info_only);
+		~JHead();
 
 		CReader& _reader;
 		CSimpleInfo& _info;
@@ -47,13 +47,13 @@ namespace Unmanaged
 			unsigned short* huff[20];
 			unsigned short* free[20];
 			unsigned short* row;
-		} jdata;
+		} _jdata;
 
 		bool _success;
 
-		unsigned short* jhead::ljpeg_row(int jrow);
-		void ljpeg_idct();
+		unsigned short* JHead::LJpegRow(int jrow);
+		void LJpegIdct();
 
-		static int ljpeg_diff(unsigned short *huff, CSimpleInfo& info);
+		static int LJpegDiff(unsigned short *huff, CSimpleInfo& info);
 	};
 }

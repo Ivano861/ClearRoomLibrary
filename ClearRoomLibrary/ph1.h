@@ -17,7 +17,7 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 
 #pragma once
 
-struct ph1
+struct Ph1
 {
 	int format;
 	int key_off;
