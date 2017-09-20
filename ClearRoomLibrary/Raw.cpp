@@ -17,6 +17,7 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "stdafx.h"
 #include "Raw.h"
+#include "CException.h"
 
 using namespace ClearRoomLibrary;
 using namespace msclr::interop;
@@ -39,28 +40,55 @@ Raw::~Raw()
 
 SimpleInfo^ Raw::GetInfo()
 {
-	CSimpleInfo& info = _raw->GetInfo();
-
-	SimpleInfo^ simple = gcnew SimpleInfo(&info);
-
-	return simple;
+	try
+	{
+		CSimpleInfo& info = _raw->GetInfo();
+		SimpleInfo^ simple = gcnew SimpleInfo(&info);
+		return simple;
+	}
+	catch (CException& e)
+	{
+		throw gcnew Exception(marshal_as<String^>(e.what()));
+	}
+	catch (...)
+	{
+		throw;
+	}
 }
 
 ImageLoader^ Raw::GetImageRaw()
 {
-	CImageLoader& loadRaw = _raw->GetLoadRaw();
-
-	ImageLoader^ simple = gcnew ImageLoader(&loadRaw);
-
-	return simple;
+	try
+	{
+		CImageLoader& loadRaw = _raw->GetLoadRaw();
+		ImageLoader^ simple = gcnew ImageLoader(&loadRaw);
+		return simple;
+	}
+	catch (CException& e)
+	{
+		throw gcnew Exception(marshal_as<String^>(e.what()));
+	}
+	catch (...)
+	{
+		throw;
+	}
 }
 
 array<System::Byte>^ Raw::GetImage()
 {
-	CSimpleInfo& s = _raw->Info();
+	CImageLoader& l = _raw->Load();
 
-	int len = s._iheight * s._iwidth * sizeof s._image * 2; //strlen(buf);
+	int len = l._iheight * l._iwidth * sizeof l._image * 2; //strlen(buf);
 	array<Byte>^ byteArray = gcnew array<Byte>(len);
-	System::Runtime::InteropServices::Marshal::Copy((IntPtr)s._image, byteArray, 0, len);
+	System::Runtime::InteropServices::Marshal::Copy((IntPtr)l._image, byteArray, 0, len);
 	return byteArray;
+}
+
+Options^ Raw::Options::get()
+{
+	COptions& options = _raw->Options();
+
+	ClearRoomLibrary::Options^ result = gcnew ClearRoomLibrary::Options(&options);
+
+	return result;
 }

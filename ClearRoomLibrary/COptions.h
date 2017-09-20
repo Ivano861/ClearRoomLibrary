@@ -25,146 +25,155 @@ namespace Unmanaged
 		COptions();
 		~COptions();
 
-		// TODO: implementation
-		/*
 		// Set threshold for wavelet denoising
 		// <num>
 		float& Threshold();
+
 		// Adjust brightness (default = 1.0)
 		// <num>
 		float& Bright();
 
+		// Set custom white balance
+		// <r g b g>
+		float& CustomWhiteBalance();
+
+		// Average a grey box for white balance
+		// <x y w h>
+		unsigned& AverageAreaWhiteBalance();
+
+		// Average the whole image for white balance
+		bool& AutoWhiteBalance();
+
+		// Use camera white balance, if possible
+		bool& CameraWhiteBalance();
+
+		// Use/don't use an embedded color matrix
+		bool& UseCameraMatrix();
+
 		// Set custom gamma curve (default = 2.222 4.5)
 		// <p ts>
-		void SetGammaCurveCustom(double g0, double g1);
+		double& GammaCurveCustom();
 
-		// Select one raw image
-		// [0..N - 1]
-		void SelectRawImage(unsigned select);
-		// Select all raw image
-		void SelectAllRawImage();
+		// Correct chromatic aberration"));
+		// <r b>
+		double GetCorrectAberration0();
+		double GetCorrectAberration2();
+		void SetCorrectAberration0(double value);
+		void SetCorrectAberration2(double value);
 
-		// Half-size color image (twice as fast as SetInterpolationQuality(0))
-		void SetHalfSize(bool halfSize);
+		// Set the darkness level
+		// <num>
+		int& Darkness();
+
+		// Set the saturation level
+		// <num>
+		int& Saturation();
+
+		// Apply a 3x3 median filter to R-G and B-G
+		// <num>
+		int& MedianPasses();
+
+		// Flip image (0=none, 3=180, 5=90CCW, 6=90CW)
+		// [0-7]
+		int& Flip();
 
 		// Set the interpolation quality
 		// [0-3]
-		void SetInterpolationQuality(int quality);
+		int& Quality();
 
-		// Average a grey box for _white balance
-		// <x y w h>
-		void SetWhiteBalanceAverageBox(unsigned int x, unsigned int y, unsigned int w, unsigned int h);
+		//  Highlight mode (0=clip, 1=unclip, 2=blend, 3+=rebuild)
+		// [0-9]
+		int& Highlight();
 
-		// Average the whole image for _white balance
-		void SetWhiteBalanceAverageWholeImage(bool whole);
+		// Select one raw image (-1 Select all raw image)
+		// [0..N - 1 | -1]
+		int GetSelectRawImage();
+		void SetSelectRawImage(int value);
 
-		// Use camera _white balance, if possible
-		void SetWhiteBalanceCamera(bool camera);
+		// Output colorspace (raw,sRGB,Adobe,Wide,ProPhoto,XYZ,ACES)
+		// [0-6]
+		int& ColorSpace();
 
-		// Use/don't use an embedded color matrix
-		void UseCameraMatrix(bool useEmbedded);
-	private:
-	*/
-		float _threshold = 0;
+		// Apply output ICC profile from file
+		// <file>
+		const char* COptions::GetProfileICC();
+		void SetProfileICC(const char* value);
 
-		float _bright = 1;
+		// Apply camera ICC profile from file or "embed"
+		// <file>
+		const char* COptions::GetCameraProfileICC();
+		void SetCameraProfileICC(const char* value);
 
-		float _userMul[4] = { 0,0,0,0 };
-		// puts(_("-r <r g b g> Set custom _white balance"));
+		// Fix the dead pixels listed in this file
+		// <file>
+		const char* COptions::GetDeadPixel();
+		void SetDeadPixel(const char* value);
 
-		double _aber[4] = { 1,1,1,1 };
-		//	puts(_("-C <r b>  Correct chromatic aberration"));
-		//double _aber[4]; // _aber[0] = 1 / atof(argv[arg++]);     _aber[2] = 1 / atof(argv[arg++]);
+		// Subtract dark frame (16-bit raw PGM)
+		// <file>
+		const char* COptions::GetDarkFrame();
+		void SetDarkFrame(const char* value);
 
-		double _gamma[6] = { 0.45,4.5,0,0,0,0 };	// TODO: defined in CSimpleInfo.h
+		// Extract embedded thumbnail image
+		bool& ThumbnailOnly();
 
-		int _userBlack = -1;
-		// puts(_("-k <num>  Set the darkness level"));
+		// Half-size color image (twice as fast as SetInterpolationQuality(0))
+		bool& HalfSize();
 
-		int _userSaturation = -1;
-		//puts(_("-S <num>  Set the saturation level"));
+		// Interpolate RGGB as four colors
+		bool& FourColorRGB();
 
-		int _userFlip = -1;
-		// puts(_("-t [0-7]  Flip image (0=none, 3=180, 5=90CCW, 6=90CW)"));
+		// Don't stretch or rotate raw pixels
+		bool& UseFujiRotate();
 
-		int _userQuality = -1;
+		// Don't automatically brighten the image
+		bool& NoAutoBright();
 
-		int _medianPasses = 0;
-		// puts(_("-m <num>  Apply a 3x3 median filter to R-G and B-G"));
+		// Write TIFF instead of PPM
+		bool& OutputTiff();
 
-		int _highlight = 0;
-		// puts(_("-H [0-9]  Highlight mode (0=clip, 1=unclip, 2=blend, 3+=rebuild)"));
+		// Select output 8 or 16 bit
+		int& OutputBps();
 
-		unsigned _shotSelect = 0;	// TODO: defined in CSimpleInfo.h
-		bool _multiOut = false;
+		// Document mode (0-None,1-Document mode,2-Document mode without scaling,3-Document mode with no color and no interpolation)
+		// [0-3]
+		int& DocumentMode();
 
-		int _outputColor = 1;
-		const char* _outProfile;
-		// puts(_("-o [0-6]  Output colorspace (raw,sRGB,Adobe,Wide,ProPhoto,XYZ,ACES)"));
-		// puts(_("-o <file> Apply output ICC profile from file"));
-		//int _outputColor;
-		//if (isdigit(argv[arg][0]) && !argv[arg][1])
-		//	_outputColor = atoi(argv[arg++]);
-		//else     _outProfile = argv[arg++];
-
-		const char* _cameraProfile = nullptr;
-		// puts(_("-p <file> Apply camera ICC profile from file or \"embed\""));
-
-		const char* _bpFile = nullptr;
-		// puts(_("-P <file> Fix the dead pixels listed in this file"));
-
-		const char* _darkFrame = nullptr;
-		// puts(_("-K <file> Subtract dark frame (16-bit raw PGM)"));
-
-		bool _thumbnailOnly = false;
-		// puts(_("-e        Extract embedded thumbnail image"));
-		//_thumbnailOnly = true;
-		//bool ExtractEmbeddedThumbnail;
-
-		bool _halfSize = false;	// TODO: defined in CSimpleInfo.h
-
-		bool _fourColorRGB = false;
-		// puts(_("-f        Interpolate RGGB as four colors"));
-		//_fourColorRGB = true;
-
-		unsigned _greybox[4] = { 0, 0, UINT_MAX, UINT_MAX };
-
-		bool _useAutoWB = false;
-
-		bool _useCameraWB = false;	// TODO: defined in CSimpleInfo.h
-
-		bool _useCameraMatrix = true;	// TODO: defined in CSimpleInfo.h
-
-		int _documentMode = 0;
-		// puts(_("-E        Document mode (???)"));
-		//int _documentMode++;
-
-		// puts(_("-D        Document mode without scaling (totally raw)"));
-		//int _documentMode++;
-
-		// puts(_("-d        Document mode (no color, no interpolation)"));
-		//int _documentMode++;
-
-		bool _useFujiRotate = true;
-		// puts(_("-j        Don't stretch or rotate raw pixels"));
-		//_useFujiRotate = false;
-
-		bool _noAutoBright = false;
-		// puts(_("-W        Don't automatically brighten the image"));
-		//_noAutoBright = true;
-
-		//bool _outputTiff = false;
-		bool _outputTiff = true;
-		// puts(_("-T        Write TIFF instead of PPM"));
-		//_outputTiff = true;
+	//private:
+		float _threshold;
+		float _bright;
+		float _userMul[4];
+		unsigned _greybox[4];
+		bool _useAutoWB;
+		bool _useCameraWB;
+		bool _useCameraMatrix;
+		double _gamma[6];
+		double _aber[4];
+		int _userBlack;
+		int _userSaturation;
+		int _medianPasses;
+		int _userFlip;
+		int _userQuality;
+		int _highlight;
+		bool _multiOut;
+		unsigned _shotSelect;
+		int _outputColor;
+		char* _outProfile;
+		char* _cameraProfile;
+		char* _bpFile;
+		char* _darkFrame;
+		bool _thumbnailOnly;
+		bool _halfSize;
+		bool _fourColorRGB;
+		bool _useFujiRotate;
+		bool _noAutoBright;
+		bool _outputTiff;
+		int _outputBps;
+		int _documentMode;
 
 		// puts(_("-4        Linear 16-bit, same as \"-6 -W -g 1 1\""));
 		//_gamma[0] = _gamma[1] = 1;
 		//_noAutoBright = true;
-		//_outputBps = 16;
-
-		int _outputBps = 8;
-		// puts(_("-6        Write 16-bit instead of 8-bit"));
 		//_outputBps = 16;
 	};
 }

@@ -31,6 +31,7 @@ namespace Unmanaged
 
 		COptions& Options();
 		CSimpleInfo& Info();
+		CImageLoader& Load();
 		CSimpleInfo& GetInfo();
 		CImageLoader& GetLoadRaw();
 

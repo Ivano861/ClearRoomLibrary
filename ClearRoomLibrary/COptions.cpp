@@ -20,17 +20,38 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 
 using namespace Unmanaged;
 
-COptions::COptions()
+COptions::COptions() : _threshold(0), _bright(1.0f), _userBlack(-1), _aber{ 1, 1, 1, 1 }, _gamma{ 0.45, 4.5, 0, 0, 0, 0 },
+_userSaturation(-1), _userFlip(-1), _userQuality(-1), _medianPasses(0), _highlight(0), _shotSelect(0), _multiOut(false), _outputColor(1),
+_outProfile(nullptr), _cameraProfile(nullptr), _bpFile(nullptr), _darkFrame(nullptr), _halfSize(false), _fourColorRGB(false),
+_userMul{ 0, 0, 0, 0 }, _greybox{ 0, 0, UINT_MAX, UINT_MAX }, _useAutoWB(false), _useCameraWB(false),
+_useCameraMatrix(true), _documentMode(0), _useFujiRotate(true),
+_noAutoBright(false), _outputTiff(true), _outputBps(8), _thumbnailOnly(false)
 {
 }
-
 
 COptions::~COptions()
 {
+	if (_outProfile != nullptr)
+	{
+		delete[] _outProfile;
+		_outProfile = nullptr;
+	}
+	if (_cameraProfile != nullptr)
+	{
+		delete[] _cameraProfile;
+		_cameraProfile = nullptr;
+	}
+	if (_bpFile != nullptr)
+	{
+		delete[] _bpFile;
+		_bpFile = nullptr;
+	}
+	if (_darkFrame != nullptr)
+	{
+		delete[] _darkFrame;
+		_darkFrame = nullptr;
+	}
 }
-
-// TODO: implementation
-/*
 
 float& COptions::Threshold()
 {
@@ -42,56 +63,212 @@ float& COptions::Bright()
 	return _bright;
 }
 
-void COptions::SetGammaCurveCustom(double g0, double g1)
+float& COptions::CustomWhiteBalance()
 {
-	gamm[0] = g0;
-	gamm[1] = g1;
-	if (gamm[0])
-		gamm[0] = 1 / gamm[0];
+	return _userMul[0];
 }
 
-void COptions::SelectRawImage(unsigned select)
+unsigned& COptions::AverageAreaWhiteBalance()
 {
-	shot_select = select;
-	_multiOut = false;
-}
-void COptions::SelectAllRawImage()
-{
-	shot_select = 0;
-	_multiOut = true;
+	return _greybox[0];
 }
 
-void COptions::SetHalfSize(bool halfSize)
+bool& COptions::AutoWhiteBalance()
 {
-	_halfSize = halfSize;
+	return _useAutoWB;
 }
 
-void COptions::SetInterpolationQuality(int quality)
+bool& COptions::CameraWhiteBalance()
 {
-	_userQuality = quality;
+	return _useCameraWB;
 }
 
-void COptions::SetWhiteBalanceAverageBox(unsigned int x, unsigned int y, unsigned int w, unsigned int h)
+bool& COptions::UseCameraMatrix()
 {
-	_greybox[0] = x;
-	_greybox[1] = y;
-	_greybox[2] = w;
-	_greybox[3] = h;
+	return _useCameraMatrix;
 }
 
-void COptions::SetWhiteBalanceAverageWholeImage(bool whole)
+double& COptions::GammaCurveCustom()
 {
-	_useAutoWB = whole;
+	return _gamma[0];
 }
 
-void COptions::SetWhiteBalanceCamera(bool camera)
+double COptions::GetCorrectAberration0()
 {
-	_useCameraWB = camera;
+	return 1.0 / _aber[0];
+}
+double COptions::GetCorrectAberration2()
+{
+	return 1.0 / _aber[2];
+}
+void COptions::SetCorrectAberration0(double value)
+{
+	if (value != 0.0)
+		_aber[0] = 1.0 / value;
+}
+void COptions::SetCorrectAberration2(double value)
+{
+	if (value != 0.0)
+		_aber[2] = 1.0 / value;
 }
 
-void COptions::UseCameraMatrix(bool useEmbedded)
+int& COptions::Darkness()
 {
-	_useCameraMatrix = useEmbedded;
-	//int _useCameraMatrix = 3 * (opm == '+');
+	return _userBlack;
 }
-*/
+
+int& COptions::Saturation()
+{
+	return _userSaturation;
+}
+
+int& COptions::MedianPasses()
+{
+	return _medianPasses;
+}
+
+int& COptions::Flip()
+{
+	return _userFlip;
+}
+
+int& COptions::Quality()
+{
+	return _userQuality;
+}
+
+int& COptions::Highlight()
+{
+	return _highlight;
+}
+
+int COptions::GetSelectRawImage()
+{
+	if (_multiOut)
+		return -1;
+
+	return _shotSelect;
+}
+void COptions::SetSelectRawImage(int value)
+{
+	if (value == -1)
+	{
+		_multiOut = true;
+		_shotSelect = 0;
+	}
+	else
+	{
+		_multiOut = false;
+		_shotSelect = value;
+	}
+}
+
+int& COptions::ColorSpace()
+{
+	return _outputColor;
+}
+
+const char* COptions::GetProfileICC()
+{
+	return _outProfile;
+}
+void COptions::SetProfileICC(const char* value)
+{
+	if (_outProfile != nullptr)
+	{
+		delete[] _outProfile;
+		_outProfile = nullptr;
+	}
+	int len = strlen(value) + 1;
+	_outProfile = new char[len];
+	strcpy_s(_outProfile, len, value);
+}
+
+const char* COptions::GetCameraProfileICC()
+{
+	return _cameraProfile;
+}
+void COptions::SetCameraProfileICC(const char* value)
+{
+	if (_cameraProfile != nullptr)
+	{
+		delete[] _cameraProfile;
+		_cameraProfile = nullptr;
+	}
+	int len = strlen(value) + 1;
+	_cameraProfile = new char[len];
+	strcpy_s(_cameraProfile, len, value);
+}
+
+const char* COptions::GetDeadPixel()
+{
+	return _bpFile;
+}
+void COptions::SetDeadPixel(const char* value)
+{
+	if (_bpFile != nullptr)
+	{
+		delete[] _bpFile;
+		_bpFile = nullptr;
+	}
+	int len = strlen(value) + 1;
+	_bpFile = new char[len];
+	strcpy_s(_bpFile, len, value);
+}
+
+const char* COptions::GetDarkFrame()
+{
+	return _darkFrame;
+}
+void COptions::SetDarkFrame(const char* value)
+{
+	if (_darkFrame != nullptr)
+	{
+		delete[] _darkFrame;
+		_darkFrame = nullptr;
+	}
+	int len = strlen(value) + 1;
+	_darkFrame = new char[len];
+	strcpy_s(_darkFrame, len, value);
+}
+
+bool& COptions::ThumbnailOnly()
+{
+	return _thumbnailOnly;
+}
+
+bool& COptions::HalfSize()
+{
+	return _halfSize;
+}
+
+bool& COptions::FourColorRGB()
+{
+	return _fourColorRGB;
+}
+
+bool& COptions::UseFujiRotate()
+{
+	return _useFujiRotate;
+}
+
+bool& COptions::NoAutoBright()
+{
+	return _noAutoBright;
+}
+
+bool& COptions::OutputTiff()
+{
+	return _outputTiff;
+}
+
+int& COptions::OutputBps()
+{
+	return _outputBps;
+}
+
+int& COptions::DocumentMode()
+{
+	return _documentMode;
+}
+

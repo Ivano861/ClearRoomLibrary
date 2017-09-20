@@ -26,7 +26,7 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 using namespace Unmanaged;
 
 #pragma region Costructors
-CSimpleInfo::CSimpleInfo(CReader* reader) : _reader(reader), _metaData(nullptr), _rawImage(nullptr), _image(nullptr), _profile(nullptr)
+CSimpleInfo::CSimpleInfo(CReader* reader, COptions* options) : _reader(reader), _options(options)
 {
 }
 #pragma endregion
@@ -34,26 +34,6 @@ CSimpleInfo::CSimpleInfo(CReader* reader) : _reader(reader), _metaData(nullptr),
 #pragma region Destructor
 CSimpleInfo::~CSimpleInfo()
 {
-	if (_metaData)
-	{
-		free(_metaData);
-		_metaData = nullptr;
-	}
-	if (_rawImage)
-	{
-		free(_rawImage);
-		_rawImage = nullptr;
-	}
-	if (_image)
-	{
-		free(_image);
-		_image = nullptr;
-	}
-	if (_profile)
-	{
-		free(_profile);
-		_profile = nullptr;
-	}
 	_reader = nullptr;
 }
 #pragma endregion
@@ -327,7 +307,7 @@ void CSimpleInfo::GetInfo()
 	_dataOffset = _metaOffset = _metaLength = _tiffBps = _tiffCompress = 0;
 	_kodakCbpp = _zeroAfterFF = _dngVersion = _loadFlags = 0;
 	_timestamp = _shotOrder = _tiffSamples = _black = _isFoveon = 0;
-	_mixGreen = _profileLength = _dataError = _zeroIsBad = 0;
+	_profileLength = _dataError = _zeroIsBad = 0;
 	_pixelAspect = _isRaw = _rawColor = 1;
 	_tileWidth = _tileLength = 0;
 	for (size_t i = 0; i < 4; i++)
@@ -423,11 +403,11 @@ void CSimpleInfo::GetInfo()
 			int i;
 			_reader->Seek(120, SEEK_SET);
 			_isRaw += (i = _reader->GetUInt()) && 1;
-			if (_isRaw == 2 && _shotSelect)
+			if (_isRaw == 2 && _options->_shotSelect)
 				ParseFuji(i);
 		}
 		_loadRaw = LoadRawType::UnpackedLoadRaw;
-		_reader->Seek(100 + 28 * (_shotSelect > 0), SEEK_SET);
+		_reader->Seek(100 + 28 * (_options->_shotSelect > 0), SEEK_SET);
 		ParseTiff(_dataOffset = _reader->GetUInt());
 		ParseTiff(_thumbOffset + 12);
 		ApplyTiff();
@@ -1019,7 +999,7 @@ void CSimpleInfo::GetInfo()
 			_flip = 6;
 		}
 		else if (_loadRaw != LoadRawType::PackedLoadRaw)
-			_maximum = (_isRaw == 2 && _shotSelect) ? 0x2f00 : 0x3e00;
+			_maximum = (_isRaw == 2 && _options->_shotSelect) ? 0x2f00 : 0x3e00;
 		_topMargin = (_rawHeight - _height) >> 2 << 1;
 		_leftMargin = (_rawWidth - _width) >> 2 << 1;
 		if (_width == 2848 || _width == 3664) _filters = 0x16161616;
@@ -1227,14 +1207,14 @@ void CSimpleInfo::GetInfo()
 		if (_tiffSamples > 1)
 		{
 			_isRaw = _tiffSamples + 1;
-			if (!_shotSelect && !_halfSize)
+			if (!_options->_shotSelect && !_options->_halfSize)
 				_filters = 0;
 		}
 	}
 	else if (!strcmp(_make, "Sinar"))
 	{
 		if (!_loadRaw) _loadRaw = LoadRawType::UnpackedLoadRaw;
-		if (_isRaw > 1 && !_shotSelect && !_halfSize)
+		if (_isRaw > 1 && !_options->_shotSelect && !_options->_halfSize)
 			_filters = 0;
 		_maximum = 0x3fff;
 	}
@@ -1627,13 +1607,13 @@ void CSimpleInfo::GetInfo()
 		}
 	}
 dng_skip:
-	if ((_useCameraMatrix & (_useCameraWB || _dngVersion))
-		&& _cMatrix[0][0] > 0.125)
+	if ((_options->_useCameraMatrix & (_options->_useCameraWB || _dngVersion)) && _cMatrix[0][0] > 0.125)
 	{
 		memcpy(_rgbCam, _cMatrix, sizeof _cMatrix);
 		_rawColor = 0;
 	}
-	if (_rawColor) AdobeCoeff(_make, _model);
+	if (_rawColor)
+		AdobeCoeff(_make, _model);
 	if (_loadRaw == LoadRawType::KodakRadcLoadRaw)
 		if (_rawColor) AdobeCoeff("Apple", "Quicktake");
 	if (_fujiWidth)
@@ -1646,21 +1626,48 @@ dng_skip:
 	}
 	else
 	{
-		if (_rawHeight < _height) _rawHeight = _height;
-		if (_rawWidth  < _width) _rawWidth = _width;
+		if (_rawHeight < _height)
+			_rawHeight = _height;
+		if (_rawWidth  < _width)
+			_rawWidth = _width;
 	}
-	if (!_tiffBps) _tiffBps = 12;
-	if (!_maximum) _maximum = (1 << _tiffBps) - 1;
-	if (!_loadRaw || _height < 22 || _width < 22 ||
-		_tiffBps > 16 || _tiffSamples > 6 || _colors > 4)
+	if (!_tiffBps)
+		_tiffBps = 12;
+	if (!_maximum)
+		_maximum = (1 << _tiffBps) - 1;
+	if (!_loadRaw || _height < 22 || _width < 22 || _tiffBps > 16 || _tiffSamples > 6 || _colors > 4)
 		_isRaw = 0;
+
+#ifdef NO_JASPER
+	if (_loadRaw == LoadRawType::RedcineLoadRaw)
+	{
+		throw CExceptionFile("libjasper not included");
+	}
+#endif
+#ifdef NO_JPEG
+	if (_loadRaw == LoadRawType::KodakJpegLoadRaw ||
+		_loadRaw == LoadRawType::LossyDngLoadRaw)
+	{
+		throw CExceptionFile("libjpeg not included");
+	}
+#endif
+#ifndef NO_RESTRICTED_DCRAW
+	if (_writeFun == WriteThumbType::FoveonThumb ||
+		_loadRaw == LoadRawType::FoveonDpLoadRaw ||
+		_loadRaw == LoadRawType::FoveonSdLoadRaw)
+	{
+		throw CExceptionFile("Dave Coffin's license required (https://cybercom.net/~dcoffin/dcraw/).");
+	}
+#endif // NO_RESTRICTED_DCRAW
+
 	if (!_cdesc[0])
 		strcpy_s(_cdesc, LenCDesc, _colors == 3 ? "RGBG" : "GMCY");
-	if (!_rawHeight) _rawHeight = _height;
-	if (!_rawWidth) _rawWidth = _width;
+	if (!_rawHeight)
+		_rawHeight = _height;
+	if (!_rawWidth)
+		_rawWidth = _width;
 	if (_filters > 999 && _colors == 3)
-		_filters |= ((_filters >> 2 & 0x22222222) |
-		(_filters << 2 & 0x88888888)) & _filters << 1;
+		_filters |= ((_filters >> 2 & 0x22222222) | (_filters << 2 & 0x88888888)) & _filters << 1;
 
 notraw:
 	if (_flip == UINT_MAX)
@@ -1979,7 +1986,7 @@ int CSimpleInfo::ParseTiffIFD(int base)
 			{
 				for (size_t c = 0; c < 4; c++)
 					_reader->GetScanf("%f", &_rgbCam[i][c ^ 1]);
-				if (!_useCameraWB)
+				if (!_options->_useCameraWB)
 					continue;
 				num = 0;
 				for (size_t c = 0; c < 4; c++)
@@ -2828,7 +2835,7 @@ void CSimpleInfo::ApplyTiff()
 		if ((_tiffIfd[i].comp != 6 || _tiffIfd[i].samples != 3) &&
 			(_tiffIfd[i].width | _tiffIfd[i].height) < 0x10000 &&
 			ns && ((ns > os && (ties = 1)) ||
-			(ns == os && _shotSelect == ties++)))
+			(ns == os && _options->_shotSelect == ties++)))
 		{
 			_rawWidth = _tiffIfd[i].width;
 			_rawHeight = _tiffIfd[i].height;
@@ -4929,8 +4936,8 @@ void CSimpleInfo::ParseCine()
 	_reader->Seek(668, SEEK_CUR);
 	_shutter = _reader->GetUInt() / 1000000000.0;
 	_reader->Seek(off_image, SEEK_SET);
-	if (_shotSelect < _isRaw)
-		_reader->Seek(_shotSelect * 8, SEEK_CUR);
+	if (_options->_shotSelect < _isRaw)
+		_reader->Seek(_options->_shotSelect * 8, SEEK_CUR);
 	_dataOffset = (INT64)_reader->GetUInt() + 8;
 	_dataOffset += (INT64)_reader->GetUInt() << 32;
 }
@@ -4953,7 +4960,7 @@ void CSimpleInfo::ParseRedcine()
 		while ((len = _reader->GetUInt()) != EOF)
 		{
 			if (_reader->GetUInt() == 0x52454456)
-				if (_isRaw++ == _shotSelect)
+				if (_isRaw++ == _options->_shotSelect)
 					_dataOffset = _reader->GetPosition() - 8;
 			_reader->Seek(len - 8, SEEK_CUR);
 		}
@@ -4963,7 +4970,7 @@ void CSimpleInfo::ParseRedcine()
 		unsigned rdvo = _reader->GetUInt();
 		_reader->Seek(12, SEEK_CUR);
 		_isRaw = _reader->GetUInt();
-		_reader->Seek(rdvo + 8 + _shotSelect * 4, SEEK_SET);
+		_reader->Seek(rdvo + 8 + _options->_shotSelect * 4, SEEK_SET);
 		_dataOffset = _reader->GetUInt();
 	}
 }

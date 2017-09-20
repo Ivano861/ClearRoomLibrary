@@ -34,7 +34,7 @@ namespace Unmanaged
 		char* _what;
 	};
 
-	class CExceptionFile : CException
+	class CExceptionFile : public CException
 	{
 	public:
 		// Create an ddefault exception
@@ -49,7 +49,7 @@ namespace Unmanaged
 		static const char* Message;
 	};
 
-	class CExceptionMemory : CException
+	class CExceptionMemory : public CException
 	{
 	public:
 		// Create an default exception
@@ -63,7 +63,7 @@ namespace Unmanaged
 		static const char* Message;
 	};
 
-	class CExceptionNoRaw : CException
+	class CExceptionNoRaw : public CException
 	{
 	public:
 		// Create an default exception
@@ -74,7 +74,7 @@ namespace Unmanaged
 		static const char* Message;
 	};
 
-	class CExceptionNoThumbnail : CException
+	class CExceptionNoThumbnail : public CException
 	{
 	public:
 		// Create an default exception
@@ -85,7 +85,7 @@ namespace Unmanaged
 		static const char* Message;
 	};
 
-	class CExceptionInvalidImageRequest : CException
+	class CExceptionInvalidImageRequest : public CException
 	{
 	public:
 		// Create an default exception
@@ -96,7 +96,7 @@ namespace Unmanaged
 		static const char* Message;
 	};
 
-	class CExceptionJpegError : CException
+	class CExceptionJpegError : public CException
 	{
 	public:
 		// Create an default exception
@@ -107,7 +107,7 @@ namespace Unmanaged
 		static const char* Message;
 	};
 
-	class CExceptionDecoderTableOverflow : CException
+	class CExceptionDecoderTableOverflow : public CException
 	{
 	public:
 		// Create an default exception

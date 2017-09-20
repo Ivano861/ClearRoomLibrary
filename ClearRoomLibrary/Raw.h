@@ -20,6 +20,7 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 #include "CRaw.h"
 #include "SimpleInfo.h"
 #include "ImageLoader.h"
+#include "Options.h"
 
 using namespace System;
 using namespace Unmanaged;
@@ -35,6 +36,8 @@ namespace ClearRoomLibrary
 		SimpleInfo^ GetInfo();
 		ImageLoader^ GetImageRaw();
 		array<System::Byte>^ GetImage();
+
+		property Options^ Options { ClearRoomLibrary::Options^ get(); }
 
 	private:
 		//Private members

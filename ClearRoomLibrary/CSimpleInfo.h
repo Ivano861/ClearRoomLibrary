@@ -18,6 +18,7 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
 #include "CReader.h"
+#include "COptions.h"
 #include "CWriter.h"
 #include "tiffIfd.h"
 #include "ph1.h"
@@ -28,7 +29,7 @@ namespace Unmanaged
 	class CSimpleInfo
 	{
 	public:
-		CSimpleInfo(CReader* reader);
+		CSimpleInfo(CReader* reader, COptions* options);
 		~CSimpleInfo();
 
 		void GetInfo();
@@ -85,6 +86,16 @@ namespace Unmanaged
 		char* memmem(char* haystack, size_t haystacklen, char* needle, size_t needlelen);
 		char* strcasestr(char* haystack, const char* needle);
 
+	private:
+		unsigned _tiffFlip;
+		float _cMatrix[3][4];
+		unsigned _shotOrder;
+		unsigned _exifCfa;
+		unsigned _tiffNifds;
+		unsigned _dataError;
+		char _xtransAbs[6][6];
+		TiffIFD _tiffIfd[10];
+
 	public:
 
 		// TODO: is private
@@ -100,6 +111,7 @@ namespace Unmanaged
 		};
 
 		CReader* _reader;
+		COptions* _options;
 
 		static const size_t LenMake = 64;
 		static const size_t LenModel = 64;
@@ -107,11 +119,6 @@ namespace Unmanaged
 		static const size_t LenArtist = 64;
 		static const size_t LenCDesc = 5;
 		static const size_t LenDesc = 512;
-
-		char* _metaData;
-		unsigned short* _rawImage;
-		unsigned short(*_image)[4];
-		unsigned* _profile;
 
 		char _make[LenMake];
 		char _model[LenModel];
@@ -130,7 +137,6 @@ namespace Unmanaged
 		unsigned _colors;
 		unsigned _flip;
 
-		unsigned _tiffFlip;
 		unsigned _filters;
 		unsigned short _rawHeight;
 		unsigned short _rawWidth;
@@ -139,44 +145,34 @@ namespace Unmanaged
 
 		float _canonEV;
 
-		unsigned _shotSelect = 0;
-		double _gamma[6] = { 0.45,4.5,0,0,0,0 };
-		bool _halfSize = false;
-		int _useCameraWB = 0;
-		int _useCameraMatrix = 1;
+		double _gamma[6];
 
 		double _pixelAspect;
 		float _camMul[4];
 		float _preMul[4];
-		float _cMatrix[3][4];
 		float _rgbCam[3][4];
 		unsigned short _cBlack[4102];
 		off_t _thumbOffset;
 		off_t _metaOffset;
 		off_t _profileOffset;
-		unsigned _shotOrder;
 		unsigned _kodakCbpp;
-		unsigned _exifCfa;
 		unsigned _uniqueId;
 		unsigned _thumbLength;
 		unsigned _metaLength;
 		unsigned _profileLength;
 		unsigned _thumbMisc;
 		unsigned _fujiLayout;
-		unsigned _tiffNifds;
 		unsigned _tiffSamples;
 		unsigned _tiffBps;
 		unsigned _tiffCompress;
 		unsigned _black;
 		unsigned _maximum;
-		unsigned _mixGreen;
 		unsigned _rawColor;
 		unsigned _zeroIsBad;
 		unsigned _zeroAfterFF;
 		unsigned _isRaw;
 		unsigned _dngVersion;
 		unsigned _isFoveon;
-		unsigned _dataError;
 		unsigned _tileWidth;
 		unsigned _tileLength;
 		unsigned _gpsData[32];
@@ -187,18 +183,12 @@ namespace Unmanaged
 		unsigned short _curve[0x10000];
 		unsigned short _cr2Slice[3];
 		unsigned short _srawMul[4];
-		unsigned short _shrink;
-		unsigned short _iheight;
-		unsigned short _iwidth;
 		unsigned short _fujiWidth;
 		unsigned short _thumbWidth;
 		unsigned short _thumbHeight;
 		char _xtrans[6][6];
-		char _xtransAbs[6][6];
 		int _mask[8][4];
-		int _histogram[4][0x2000];
 
-		TiffIFD _tiffIfd[10];
 		Ph1 _ph1;
 
 		LoadRawType _loadRaw;

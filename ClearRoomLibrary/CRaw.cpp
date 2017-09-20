@@ -21,7 +21,7 @@ along with ClearRoomLibrary.  If not, see <http://www.gnu.org/licenses/>.
 
 using namespace Unmanaged;
 
-CRaw::CRaw(const char* fileName) : _info(nullptr)
+CRaw::CRaw(const char* fileName) : _info(nullptr), _load(nullptr)
 {
 	_options = new COptions();
 	_reader = new CReader(fileName);
@@ -61,9 +61,15 @@ CSimpleInfo& CRaw::Info()
 	return *_info;
 }
 
+CImageLoader& CRaw::Load()
+{
+	return *_load;
+}
+
 CSimpleInfo& CRaw::GetInfo()
 {
-	_info = new CSimpleInfo(_reader);
+	_info = new CSimpleInfo(_reader, _options);
+	memcpy(_info->_gamma, _options->_gamma, sizeof _info->_gamma);
 	_info->GetInfo();
 	return *(_info);
 }

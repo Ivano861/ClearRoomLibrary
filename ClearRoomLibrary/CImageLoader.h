@@ -35,11 +35,20 @@ namespace Unmanaged
 		void LoadImageRaw();
 		void LoadImageThumbnail();
 
+		unsigned short _iheight;
+		unsigned short _iwidth;
+		unsigned short(*_image)[4];
 	private:
 		COptions* _options;
 		CSimpleInfo* _info;
 		CReader* _reader;
 		CWriter* _writer;
+		unsigned short _shrink;
+		unsigned short* _rawImage;
+		char* _metaData;
+		unsigned* _profile;
+		int _histogram[4][0x2000];
+		unsigned _mixGreen;
 
 		void LoadRaw();
 		void PackedLoadRaw();
@@ -116,9 +125,9 @@ namespace Unmanaged
 		void RemoveZeroes();
 		void BadPixels(const char *cfname);
 		void Subtract(const char *fname);
-//#ifdef COLORCHECK
+#ifdef COLORCHECK
 		void Colorcheck();
-//#endif
+#endif
 		void ScaleColors();
 		void WaveletDenoise();
 		void HatTransform(float *temp, float *base, int st, int size, int sc);
@@ -132,7 +141,7 @@ namespace Unmanaged
 		void Cielab(unsigned short rgb[3], short lab[3]);
 
 		/* RESTRICTED code starts here */
-		// TODO: variables
+#ifdef NO_RESTRICTED_DCRAW
 		decode _firstDecode[2048];
 		decode* _secondDecode;
 		decode* _freeDecode;
@@ -151,12 +160,13 @@ namespace Unmanaged
 		void FoveonMakeCurves(short **curvep, float dq[3], float div[3], float filt);
 		int FoveonApplyCurve(short *curve, int i);
 		void FoveonInterpolate();
+#else
+		void FoveonThumb();
+		void FoveonSdLoadRaw();
+		void FoveonDpLoadRaw();
+		void FoveonInterpolate();
+#endif // NO_RESTRICTED_DCRAW
 		/* RESTRICTED code ends here */
-
-
-
-
-
 
 		void PpmThumb();
 		void Ppm16Thumb();
@@ -164,12 +174,12 @@ namespace Unmanaged
 		void RolleiThumb();
 		void WritePpmTiff();
 
-
-
 		void MedianFilter();
 		void BlendHighlights();
 		void RecoverHighlights();
+#ifndef NO_LCMS
 		void ApplyProfile(const char *input, const char *output);
+#endif
 		void ConvertToRGB();
 		void FujiRotate();
 		void Stretch();
