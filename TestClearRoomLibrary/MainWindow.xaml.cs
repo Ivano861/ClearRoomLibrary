@@ -1,10 +1,12 @@
-﻿using System.Windows;
+﻿using System;
+using System.Windows;
 using Microsoft.Win32;
 using System.IO;
 using ClearRoomLibrary;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Windows.Media.Imaging;
+using System.Collections.Generic;
 
 namespace TestClearRoomLibrary
 {
@@ -59,21 +61,109 @@ namespace TestClearRoomLibrary
 
             using (Raw raw = new Raw(FilenameSelected.Text))
             {
-                using (SimpleInfo simple = raw.GetInfo())
-                {
-                    string make = simple.Make;
-                    string model = simple.Model;
-                    string model2 = simple.Model2;
-                    string artist = simple.Artist;
-                    string description = simple.Description;
-                }
-                using (ImageLoader simple = raw.GetImageRaw())
-                {
+                //raw.Options.Threshold = 12.6f;
+                //uint[] t = raw.Options.AverageAreaWhiteBalance;
+                //t[0] = 10;
+                //t[1] = 10;
+                //t[2] = 100;
+                //t[3] = 100;
+                //raw.Options.AverageAreaWhiteBalance = t;
+                //raw.Options.CameraWhiteBalance = true;
+                //double[] ab = raw.Options.CorrectAberration;
+                //raw.Options.Quality = 3;
 
+                try
+                {
+                    using (SimpleInfo simple = raw.GetInfo())
+                    {
+                        string make = simple.Make;
+                        string model = simple.Model;
+                        string model2 = simple.Model2;
+                        string artist = simple.Artist;
+                        string description = simple.Description;
+                    }
+                    using (ImageLoader simple = raw.GetImageRaw())
+                    {
+                        return;
+                        byte[] buffer = raw.GetImage();
+
+                        //image.Source = null;
+                        //System.GC.Collect();
+                        //GC.WaitForPendingFinalizers();
+
+                        using (MemoryStream ms = new MemoryStream(buffer))
+                        {
+                            ////// Try creating a new image with a custom palette.
+                            ////List<System.Windows.Media.Color> colors = new List<System.Windows.Media.Color>();
+                            ////colors.Add(System.Windows.Media.Colors.Red);
+                            ////colors.Add(System.Windows.Media.Colors.Blue);
+                            ////colors.Add(System.Windows.Media.Colors.Green);
+                            ////BitmapPalette myPalette = new BitmapPalette(colors);
+
+                            /*
+                            BitmapSource bitmapSource = BitmapSource.Create(5634, 3753, 600, 600, System.Windows.Media.PixelFormats.Rgb48, BitmapPalettes.Gray256, buffer, 5634 * 8);
+                            bitmapSource.Freeze();
+                            image.Source = bitmapSource;
+                            */
+
+                            System.Runtime.InteropServices.GCHandle pinnedArray = System.Runtime.InteropServices.GCHandle.Alloc(buffer, System.Runtime.InteropServices.GCHandleType.Pinned);
+                            IntPtr pointer = pinnedArray.AddrOfPinnedObject();
+                            // Do your stuff...
+                            Bitmap b = new Bitmap(5634, 3753, 5634 * 8, PixelFormat.Format32bppRgb, pinnedArray.AddrOfPinnedObject());
+
+                            System.Windows.Media.Imaging.BitmapSource bs = System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(b.GetHbitmap(), IntPtr.Zero, System.Windows.Int32Rect.Empty, BitmapSizeOptions.FromWidthAndHeight(b.Width, b.Height));
+                            image.Source = bs;
+
+                            b.Dispose();
+                            pinnedArray.Free();
+
+                            //BitmapImage bitmap = new BitmapImage();
+                            //bitmap.BeginInit();
+                            //bitmap.CreateOptions = BitmapCreateOptions.PreservePixelFormat;
+                            //bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                            ////    bitmap.DecodePixelHeight = 3753;
+                            ////    bitmap.DecodePixelWidth= 5634;
+                            ////    bitmap.UriSource = null;
+                            //bitmap.StreamSource = ms;
+                            ////////bitmap.StreamSource = ms;
+                            ////////bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                            //bitmap.EndInit();
+                            //bitmap.Freeze();
+                            //    //// Assign the Source property of your image
+                            //    image.Source = bitmap;// Source;
+                            ////bitmapSource = null;
+                            ////System.GC.Collect();
+                            ////GC.WaitForPendingFinalizers();
+                        }
+                    }
+                    //raw.Dispose();
                 }
-                //raw.Dispose();
+                catch (Exception ex)
+                {
+                    MessageBox.Show(ex.Message);
+                }
             }
         }
+
+        // import this using System.Runtime.InteropServices;
+        //private unsafe byte[] BmpToBytes_Unsafe(Bitmap bmp)
+        //{
+        //    BitmapData bData = bmp.LockBits(new Rectangle(new System.Drawing.Point(), bmp.Size),
+        //        ImageLockMode.ReadOnly,
+        //        PixelFormat.Format24bppRgb);
+        //    // number of bytes in the bitmap
+        //    int byteCount = bData.Stride * bmp.Height;
+        //    byte[] bmpBytes = new byte[byteCount];
+
+        //    // Copy the locked bytes from memory
+        //    System.Runtime.InteropServices.Marshal.Copy(bData.Scan0, bmpBytes, 0, byteCount);
+
+        //    // don't forget to unlock the bitmap!!
+        //    bmp.UnlockBits(bData);
+
+        //    return bmpBytes;
+        //}
+
 
         void CreateBitmap()
         {
